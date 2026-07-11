@@ -166,6 +166,11 @@ target_sources(ProjectV PRIVATE
         voxel/VoxelLodDownsample.cpp
         voxel/NanoVdb.cpp
         voxel/VoxelWorld.cpp
+        voxel/VoxelWorldPreset.cpp
+        voxel/VoxelWorldSnapshot.cpp
+        voxel/VoxelWorldFluid.cpp
+        voxel/VoxelWorldLod.cpp
+        voxel/VoxelWorldStatic.cpp
         voxel/ChunkStreamer.cpp
         voxel/SceneConfig.cpp
 )

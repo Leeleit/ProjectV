@@ -37,6 +37,11 @@ add_executable(ProjectVTests
         ../src/voxel/VoxelMaterials.cpp
         ../src/voxel/VoxelRaycast.cpp
         ../src/voxel/VoxelWorld.cpp
+        ../src/voxel/VoxelWorldPreset.cpp
+        ../src/voxel/VoxelWorldSnapshot.cpp
+        ../src/voxel/VoxelWorldFluid.cpp
+        ../src/voxel/VoxelWorldLod.cpp
+        ../src/voxel/VoxelWorldStatic.cpp
 )
 
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" PROJECTV_TESTS_SOURCE_DIR_CMAKE)
@@ -407,6 +412,11 @@ add_executable(ProjectVFluidCATests
         FluidCATests.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld_Walk.cpp
@@ -728,6 +738,11 @@ add_executable(ProjectVAsyncComputeTests
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanWorldGenPipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/render/HizCulling.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
@@ -866,6 +881,11 @@ add_executable(ProjectVPhysicsGreedyMergerTests
         PhysicsGreedyMergerTests.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
@@ -947,6 +967,11 @@ add_executable(ProjectVPhysicsIncrementalJoltTests
         PhysicsIncrementalJoltTests.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
@@ -985,6 +1010,11 @@ add_executable(ProjectVPhysicsSyncTests
         PhysicsSyncTests.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
