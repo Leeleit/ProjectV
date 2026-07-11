@@ -50,7 +50,7 @@ std::filesystem::path GetResolvedInputReplaySnapshotPath()
 	return GetInputReplayDirectoryPath() / "latest.projectv.replay.snapshot.bin";
 }
 
-// noinspection CppDFAConstantParameter
+// noinspection DfaConstantParameter
 bool EnsureParentDirectoryExists(const std::filesystem::path &path, const std::string_view step)
 {
 	const std::filesystem::path parentPath = path.parent_path();
@@ -280,7 +280,7 @@ bool StartInputReplayRecording(
 	capture.walkAutoJumpDelayEnabled = walkAutoJumpDelayEnabled;
 	capture.frames.reserve(512);
 
-	// noinspection CppDFAUnreachableCode, CppDFAConstantFunctionResult
+	// noinspection DfaUnreachableCode, DfaConstantFunctionResult
 	if (!EnsureParentDirectoryExists(capture.snapshotPath, "StartInputReplayRecording.CreateDirectories")) {
 		return false;
 	}
@@ -358,7 +358,7 @@ bool LoadLatestInputReplay(InputState *input)
 
 	InputReplayCapture capture{};
 	const std::string replayPath = GetInputReplayPath();
-	// noinspection CppDFAUnreachableCode, CppDFAConstantFunctionResult
+	// noinspection DfaUnreachableCode, DfaConstantFunctionResult
 	if (!LoadInputReplayCapture(replayPath, &capture)) {
 		return false;
 	}

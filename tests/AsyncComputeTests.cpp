@@ -114,13 +114,10 @@ void TestSubmitHzbAsyncCullToComputeQueueRejectsNullCommandBuffer(TestContext &c
 
 void TestHzbBuildTimelineSemaphoreDefaultsNull(TestContext &context)
 {
+	(void)context;
 	constexpr VulkanContextState contextState{};
-	if constexpr (contextState.hzbBuildTimelineSemaphore != VK_NULL_HANDLE) {
-		context.Fail(__LINE__, "default hzbBuildTimelineSemaphore must be VK_NULL_HANDLE");
-	}
-	if constexpr (contextState.hzbBuildLastTimelineValue != 0u) {
-		context.Fail(__LINE__, "default hzbBuildLastTimelineValue must be 0");
-	}
+	static_assert(contextState.hzbBuildTimelineSemaphore == VK_NULL_HANDLE, "default hzbBuildTimelineSemaphore must be VK_NULL_HANDLE");
+	static_assert(contextState.hzbBuildLastTimelineValue == 0u, "default hzbBuildLastTimelineValue must be 0");
 }
 
 void TestRecordHzbAsyncCullPassRejectsEmptySceneFrameResources(TestContext &context)

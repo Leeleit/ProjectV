@@ -31,15 +31,10 @@ std::array<uint8_t, 256> MakeIdentityLookup()
 
 void TestStructAlignmentContract(TestContext &context)
 {
-	if constexpr (sizeof(projectv::voxel::nanovdb::NanoVdbUpper) != 8u) {
-		context.Fail(__LINE__, "NanoVdbUpper must remain 8 bytes for GPU upload contract");
-	}
-	if constexpr (sizeof(projectv::voxel::nanovdb::NanoVdbLower) != 16u) {
-		context.Fail(__LINE__, "NanoVdbLower must remain 16 bytes for GPU upload contract");
-	}
-	if constexpr (sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) != 24u) {
-		context.Fail(__LINE__, "NanoVdbLeaf must remain 24 bytes for GPU upload contract");
-	}
+	(void)context;
+	static_assert(sizeof(projectv::voxel::nanovdb::NanoVdbUpper) == 8u, "NanoVdbUpper must remain 8 bytes for GPU upload contract");
+	static_assert(sizeof(projectv::voxel::nanovdb::NanoVdbLower) == 16u, "NanoVdbLower must remain 16 bytes for GPU upload contract");
+	static_assert(sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) == 24u, "NanoVdbLeaf must remain 24 bytes for GPU upload contract");
 }
 
 void TestPackEmptyFlatten(TestContext &context)
@@ -197,41 +192,28 @@ void TestVersionedUploadTrigger(TestContext &context)
 
 void TestCapacityBudgetContract(TestContext &context)
 {
+	(void)context;
 	constexpr uint64_t initialUpperBytes = sizeof(projectv::voxel::nanovdb::NanoVdbUpper) * 1u;
 	constexpr uint64_t initialLowerBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLower) * 64u;
 	constexpr uint64_t initialLeafBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) * 64u;
 	constexpr uint64_t initialMaterialBytes = sizeof(uint8_t) * 64u;
 
-	if constexpr (initialUpperBytes != 8u) {
-		context.Fail(__LINE__, "Initial upper capacity must be 8 bytes (1 entry)");
-	}
-	if constexpr (initialLowerBytes != 1024u) {
-		context.Fail(__LINE__, "Initial lower capacity must be 1024 bytes (64 entries)");
-	}
-	if constexpr (initialLeafBytes != 1536u) {
-		context.Fail(__LINE__, "Initial leaf capacity must be 1536 bytes (64 entries)");
-	}
-	if constexpr (initialMaterialBytes != 64u) {
-		context.Fail(__LINE__, "Initial material capacity must be 64 bytes (64 entries)");
-	}
+	static_assert(initialUpperBytes == 8u, "Initial upper capacity must be 8 bytes (1 entry)");
+	static_assert(initialLowerBytes == 1024u, "Initial lower capacity must be 1024 bytes (64 entries)");
+	static_assert(initialLeafBytes == 1536u, "Initial leaf capacity must be 1536 bytes (64 entries)");
+	static_assert(initialMaterialBytes == 64u, "Initial material capacity must be 64 bytes (64 entries)");
 }
 
 void TestComputeGrownNanoVdbCapacityZeroCurrent(TestContext &context)
 {
-	const uint64_t grown = projectv::voxel::nanovdb::ComputeGrownNanoVdbCapacityForTest(0u, 1024u);
-	if (grown != 1024u) {
-		std::fprintf(stderr, "grown=%llu expected=1024\n", static_cast<unsigned long long>(grown));
-		context.Fail(__LINE__, "Zero current capacity must return required capacity (floor 1)");
-	}
+	(void)context;
+	static_assert(projectv::voxel::nanovdb::ComputeGrownNanoVdbCapacityForTest(0u, 1024u) == 1024u, "Zero current capacity must return required capacity (floor 1)");
 }
 
 void TestComputeGrownNanoVdbCapacitySmallerRequired(TestContext &context)
 {
-	const uint64_t grown = projectv::voxel::nanovdb::ComputeGrownNanoVdbCapacityForTest(2048u, 1024u);
-	if (grown != 2048u) {
-		std::fprintf(stderr, "grown=%llu expected=2048\n", static_cast<unsigned long long>(grown));
-		context.Fail(__LINE__, "Smaller required must keep current capacity");
-	}
+	(void)context;
+	static_assert(projectv::voxel::nanovdb::ComputeGrownNanoVdbCapacityForTest(2048u, 1024u) == 2048u, "Smaller required must keep current capacity");
 }
 
 void TestComputeGrownNanoVdbCapacityLargerRequired(TestContext &context)

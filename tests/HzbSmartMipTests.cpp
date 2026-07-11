@@ -213,7 +213,7 @@ void TestComputePerChunkMipLevelsFromAabbs(SmartMipTestContext &test)
 	}
 }
 
-uint32_t ComputeBlendWidthForChunkMipLocal(
+constexpr uint32_t ComputeBlendWidthForChunkMipLocal(
 	const uint32_t projectedExtentXTexels,
 	const uint32_t projectedExtentYTexels,
 	const uint32_t mipLevel,
@@ -236,16 +236,14 @@ uint32_t ComputeBlendWidthForChunkMipLocal(
 
 void TestBlendWidthZeroMaxBlendWidthReturnsZero(SmartMipTestContext &test)
 {
-	if (ComputeBlendWidthForChunkMipLocal(64u, 64u, 3u, 0u) != 0u) {
-		test.Fail(__LINE__, "maxBlendWidth=0 must return 0");
-	}
+	(void)test;
+	static_assert(ComputeBlendWidthForChunkMipLocal(64u, 64u, 3u, 0u) == 0u, "maxBlendWidth=0 must return 0");
 }
 
 void TestBlendWidthZeroMipReturnsZero(SmartMipTestContext &test)
 {
-	if (ComputeBlendWidthForChunkMipLocal(64u, 64u, 0u, 16u) != 0u) {
-		test.Fail(__LINE__, "mipLevel=0 must return 0 (no blend needed at full res)");
-	}
+	(void)test;
+	static_assert(ComputeBlendWidthForChunkMipLocal(64u, 64u, 0u, 16u) == 0u, "mipLevel=0 must return 0 (no blend needed at full res)");
 }
 
 void TestBlendWidthIsBoundedByMax(SmartMipTestContext &test)

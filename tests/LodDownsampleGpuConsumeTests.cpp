@@ -79,9 +79,8 @@ void TestRefreshLodDownsampledBuffersRejectsNullContext(TestContext &context)
 
 void TestLodPayloadWordStrideMatchesConstant(TestContext &context)
 {
-	if constexpr (projectv::render::kLodPayloadWordStride != 16u) {
-		context.Fail(__LINE__, "kLodPayloadWordStride must be 16 for chunkSize=8, LOD 1");
-	}
+	(void)context;
+	static_assert(projectv::render::kLodPayloadWordStride == 16u, "kLodPayloadWordStride must be 16 for chunkSize=8, LOD 1");
 }
 
 void TestLodPayloadWordOffsetForChunkScalesLinearly(TestContext &context)

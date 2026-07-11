@@ -16,7 +16,7 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 	if (render->worldGenPipelineEnabled) {
 		return true;
 	}
-	// noinspection CppDFAConstantConditions, CppDFAUnreachableCode
+	// noinspection DfaConstantConditions, DfaUnreachableCode
 	if (!context || !render) {
 		return false;
 	}

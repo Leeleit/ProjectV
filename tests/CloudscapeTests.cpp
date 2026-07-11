@@ -45,20 +45,15 @@ void TestCloudscapeEnvZeroIsOff(TestContext &context)
 
 void TestCloudscapePushConstantsSize(TestContext &context)
 {
-	if constexpr (sizeof(projectv::render::CloudscapePushConstants) != 64u) {
-		std::fprintf(stderr, "sizeof(CloudscapePushConstants)=%zu expected=64\n", sizeof(projectv::render::CloudscapePushConstants));
-		context.Fail(__LINE__, "CloudscapePushConstants must remain 64 bytes");
-	}
+	(void)context;
+	static_assert(sizeof(projectv::render::CloudscapePushConstants) == 64u, "CloudscapePushConstants must remain 64 bytes");
 }
 
 void TestCloudscapeConstants(TestContext &context)
 {
-	if constexpr (projectv::render::kCloudscapeNoiseTextureSize != 128u) {
-		context.Fail(__LINE__, "kCloudscapeNoiseTextureSize must be 128 (Schneider Nubis 2017 reference)");
-	}
-	if constexpr (projectv::render::kCloudscapeRaymarchStepCount != 24u) {
-		context.Fail(__LINE__, "kCloudscapeRaymarchStepCount must be 24 (Schneider Nubis 2017 reference)");
-	}
+	(void)context;
+	static_assert(projectv::render::kCloudscapeNoiseTextureSize == 128u, "kCloudscapeNoiseTextureSize must be 128 (Schneider Nubis 2017 reference)");
+	static_assert(projectv::render::kCloudscapeRaymarchStepCount == 24u, "kCloudscapeRaymarchStepCount must be 24 (Schneider Nubis 2017 reference)");
 }
 
 void TestCreateCloudscapeResourcesRejectsNullContext(TestContext &context)

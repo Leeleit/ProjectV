@@ -114,7 +114,7 @@ void DestroyVolumetricFogFroxelImage(
 	VulkanContextState *context,
 	RenderState *render)
 {
-	// noinspection CppDFAConstantConditions
+	// noinspection DfaConstantConditions, DfaUnreachableCode
 	if (context == nullptr || render == nullptr || context->device == VK_NULL_HANDLE) {
 		return;
 	}

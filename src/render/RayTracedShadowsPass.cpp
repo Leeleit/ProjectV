@@ -6,7 +6,7 @@
 
 namespace projectv::render {
 
-// noinspection CppDFAConstantFunctionResult
+// noinspection DfaConstantFunctionResult
 bool RayTracedShadows::RecordRayTracedShadowPass(
 	const VkCommandBuffer commandBuffer,
 	const VulkanContextState &context,
@@ -210,7 +210,7 @@ void RayTracedShadows::RecordDebugReport() const noexcept
 #endif
 }
 
-// noinspection CppDFAConstantFunctionResult
+// noinspection DfaConstantFunctionResult
 bool RecordRayTracedShadowPass(
 	const VkCommandBuffer commandBuffer,
 	RayTracedShadows *rayTracedShadows,

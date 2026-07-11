@@ -45,45 +45,31 @@ void TestVolumetricFogEnvZeroIsOff(TestContext &context)
 
 void TestVolumetricFogPushConstantsSize(TestContext &context)
 {
-	if constexpr (sizeof(projectv::render::VolumetricFogPushConstants) != 64u) {
-		std::fprintf(stderr, "sizeof(VolumetricFogPushConstants)=%zu expected=64\n", sizeof(projectv::render::VolumetricFogPushConstants));
-		context.Fail(__LINE__, "VolumetricFogPushConstants must remain 64 bytes");
-	}
+	(void)context;
+	static_assert(sizeof(projectv::render::VolumetricFogPushConstants) == 64u, "VolumetricFogPushConstants must remain 64 bytes");
 }
 
 void TestVolumetricFogFroxelConstants(TestContext &context)
 {
-	if constexpr (projectv::render::kVolumetricFogFroxelWidth != 160u) {
-		context.Fail(__LINE__, "kVolumetricFogFroxelWidth must be 160 (Wronski 2014 720p reference)");
-	}
-	if constexpr (projectv::render::kVolumetricFogFroxelHeight != 90u) {
-		context.Fail(__LINE__, "kVolumetricFogFroxelHeight must be 90 (Wronski 2014 720p reference)");
-	}
-	if constexpr (projectv::render::kVolumetricFogFroxelDepth != 64u) {
-		context.Fail(__LINE__, "kVolumetricFogFroxelDepth must be 64 (Wronski 2014 default)");
-	}
-	if constexpr (projectv::render::kVolumetricFogRaymarchStepCount != 12u) {
-		context.Fail(__LINE__, "kVolumetricFogRaymarchStepCount must be 12 (per-frostbite pattern)");
-	}
+	(void)context;
+	static_assert(projectv::render::kVolumetricFogFroxelWidth == 160u, "kVolumetricFogFroxelWidth must be 160 (Wronski 2014 720p reference)");
+	static_assert(projectv::render::kVolumetricFogFroxelHeight == 90u, "kVolumetricFogFroxelHeight must be 90 (Wronski 2014 720p reference)");
+	static_assert(projectv::render::kVolumetricFogFroxelDepth == 64u, "kVolumetricFogFroxelDepth must be 64 (Wronski 2014 default)");
+	static_assert(projectv::render::kVolumetricFogRaymarchStepCount == 12u, "kVolumetricFogRaymarchStepCount must be 12 (per-frostbite pattern)");
 }
 
 void TestVolumetricFogDispatchDimensions(TestContext &context)
 {
+	(void)context;
 	// Phase 5 Wronski slab ray-march dispatch: (W/8, H/8, D/4) workgroups
 	// for the 160x90x64 froxel grid. Workgroup-local size is 8x8x4 per
 	// `src/shaders/volumetric_fog.comp` `local_size_x/y/z`. The shader
 	// bounds-checks against `imageSize(fogFroxel)` so the truncated dispatch
 	// (W=20, H=11, D=16) safely ignores the 2 extra height-row froxels —
 	// matches Wronski 2014 720p reference without over-allocating.
-	if constexpr (projectv::render::kVolumetricFogFroxelWidth / 8u != 20u) {
-		context.Fail(__LINE__, "kVolumetricFogFroxelWidth/8 should be 20 workgroups");
-	}
-	if constexpr (projectv::render::kVolumetricFogFroxelHeight / 8u != 11u) {
-		context.Fail(__LINE__, "kVolumetricFogFroxelHeight/8 should be 11 workgroups (Wronski 720p)");
-	}
-	if constexpr (projectv::render::kVolumetricFogFroxelDepth / 4u != 16u) {
-		context.Fail(__LINE__, "kVolumetricFogFroxelDepth/4 should be 16 workgroups");
-	}
+	static_assert(projectv::render::kVolumetricFogFroxelWidth / 8u == 20u, "kVolumetricFogFroxelWidth/8 should be 20 workgroups");
+	static_assert(projectv::render::kVolumetricFogFroxelHeight / 8u == 11u, "kVolumetricFogFroxelHeight/8 should be 11 workgroups (Wronski 720p)");
+	static_assert(projectv::render::kVolumetricFogFroxelDepth / 4u == 16u, "kVolumetricFogFroxelDepth/4 should be 16 workgroups");
 }
 
 void TestCreateVolumetricFogResourcesRejectsNullContext(TestContext &context)

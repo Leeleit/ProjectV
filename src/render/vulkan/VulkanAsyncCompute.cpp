@@ -321,7 +321,7 @@ bool RecordHzbAsyncCullPass(
 	if (render.hizCullingPipeline == VK_NULL_HANDLE) {
 		return false;
 	}
-	// noinspection CppDFAUnreachableCode
+	// noinspection DfaUnreachableCode
 	if (render.sceneFrameResources.empty()) {
 		return false;
 	}

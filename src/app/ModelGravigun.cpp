@@ -129,7 +129,7 @@ void TickModelGravigun(
 			}
 			float tNear = 0.0f;
 			float tFar = 0.0f;
-			// noinspection CppDFAConstantConditions, CppDFAUnreachableCode
+			// noinspection DfaConstantConditions, DfaUnreachableCode
 			if (RayAabbIntersect(ray,
 								 glm::vec3(inst.worldAabbMin[0], inst.worldAabbMin[1], inst.worldAabbMin[2]),
 								 glm::vec3(inst.worldAabbMax[0], inst.worldAabbMax[1], inst.worldAabbMax[2]),
@@ -141,7 +141,7 @@ void TickModelGravigun(
 				}
 			}
 		}
-		// noinspection CppDFAConstantConditions
+		// noinspection DfaConstantConditions
 		if (hasBest) {
 			state->pickedInstanceIndex = static_cast<int>(bestIndex);
 

@@ -45,10 +45,8 @@ void TestVctGpuPipelineEnvZeroIsOff(TestContext &context)
 
 void TestVoxelizePushConstantsSize(TestContext &context)
 {
-	if constexpr (sizeof(projectv::render::VoxelizePushConstants) != 48u) {
-		std::fprintf(stderr, "sizeof(VoxelizePushConstants)=%zu expected=48\n", sizeof(projectv::render::VoxelizePushConstants));
-		context.Fail(__LINE__, "VoxelizePushConstants must remain 48 bytes (16-byte align for SSBO)");
-	}
+	(void)context;
+	static_assert(sizeof(projectv::render::VoxelizePushConstants) == 48u, "VoxelizePushConstants must remain 48 bytes (16-byte align for SSBO)");
 }
 
 void TestCreateVoxelizePipelinesRejectsNullContext(TestContext &context)

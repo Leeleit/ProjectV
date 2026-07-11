@@ -9,6 +9,7 @@ import projectv.math;
 
 namespace {
 
+// noinspection DfaUnreachableFunctionCall
 void Expect(const bool condition, const char *label)
 {
 	if (!condition) {

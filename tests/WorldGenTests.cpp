@@ -55,25 +55,20 @@ void TestEnvGateOn(WorldGenTestContext &test)
 
 void TestWorldGenPushConstantContract(WorldGenTestContext &test)
 {
-	if constexpr (sizeof(projectv::render::WorldGenPushConstants) != 64u) {
-		test.Fail(__LINE__, "WorldGenPushConstants must remain 64 bytes (4 vec4 + 1 uint + 3 reserved)");
-	}
+	(void)test;
+	static_assert(sizeof(projectv::render::WorldGenPushConstants) == 64u, "WorldGenPushConstants must remain 64 bytes (4 vec4 + 1 uint + 3 reserved)");
 	constexpr projectv::render::WorldGenPushConstants defaults{};
-	if constexpr (defaults.chunkOriginAndChunkSize[0] || defaults.chunkOriginAndChunkSize[1] ||
-		defaults.chunkOriginAndChunkSize[2] || defaults.chunkOriginAndChunkSize[3]) {
-		test.Fail(__LINE__, "default chunkOriginAndChunkSize must be zero-initialized");
-	}
-	if constexpr (defaults.seed != 0u) {
-		test.Fail(__LINE__, "default seed must be zero");
-	}
+	static_assert(defaults.chunkOriginAndChunkSize[0] == 0u && defaults.chunkOriginAndChunkSize[1] == 0u &&
+				  defaults.chunkOriginAndChunkSize[2] == 0u && defaults.chunkOriginAndChunkSize[3] == 0u,
+		"default chunkOriginAndChunkSize must be zero-initialized");
+	static_assert(defaults.seed == 0u, "default seed must be zero");
 }
 
 void TestWorldGenVoxelBufferBytesPerChunkContract(WorldGenTestContext &test)
 {
+	(void)test;
 	constexpr VkDeviceSize expected = sizeof(uint32_t) * 8u * 8u * 8u;
-	if constexpr (projectv::render::kWorldGenVoxelBufferBytesPerChunk != expected) {
-		test.Fail(__LINE__, "kWorldGenVoxelBufferBytesPerChunk must equal 8*8*8 uint32 = 2048 bytes per chunk");
-	}
+	static_assert(projectv::render::kWorldGenVoxelBufferBytesPerChunk == expected, "kWorldGenVoxelBufferBytesPerChunk must equal 8*8*8 uint32 = 2048 bytes per chunk");
 }
 
 void TestWorldGenDispatchSkipOnZeroActiveChunks(WorldGenTestContext &test)
@@ -99,9 +94,7 @@ void TestWorldGenSeedTickVariability(WorldGenTestContext &test)
 	constexpr uint64_t tickB = 1001u;
 	constexpr uint32_t seedA = tickA;
 	constexpr uint32_t seedB = tickB;
-	if constexpr (seedA == seedB) {
-		test.Fail(__LINE__, "Cast to uint32 must preserve tick difference for typical tick range");
-	}
+	static_assert(seedA != seedB, "Cast to uint32 must preserve tick difference for typical tick range");
 }
 
 }  // namespace

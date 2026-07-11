@@ -55,10 +55,8 @@ void TestSkyAtmosphereEnvOffString(TestContext &context)
 
 void TestSkyAtmospherePushConstantsSize(TestContext &context)
 {
-	if constexpr (sizeof(projectv::render::SkyAtmospherePushConstants) != 64u) {
-		std::fprintf(stderr, "sizeof(SkyAtmospherePushConstants)=%zu expected=64\n", sizeof(projectv::render::SkyAtmospherePushConstants));
-		context.Fail(__LINE__, "SkyAtmospherePushConstants must remain 64 bytes (16-byte align for push constants)");
-	}
+	(void)context;
+	static_assert(sizeof(projectv::render::SkyAtmospherePushConstants) == 64u, "SkyAtmospherePushConstants must remain 64 bytes (16-byte align for push constants)");
 }
 
 void TestCreateSkyAtmospherePipelinesRejectsNullContext(TestContext &context)

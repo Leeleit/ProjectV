@@ -9,7 +9,7 @@
 #include <algorithm>
 
 namespace {
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 bool IsSolidInteractionMaterial(const VoxelMaterial material)
 {
 	switch (material) {
@@ -25,7 +25,7 @@ bool IsSolidInteractionMaterial(const VoxelMaterial material)
 	return false;
 }
 
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 void PopulateChunkSelectionInfo(
 	const VoxelWorld &world,
 	const Int3 voxel,
@@ -115,7 +115,7 @@ void ClearInteractionActions(InputState *input)
 	input->placePressed = false;
 }
 
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 bool CanPlaceInteractionVoxel(
 	const VoxelRaycastHit &hit,
 	const CameraState &camera,
@@ -125,7 +125,7 @@ bool CanPlaceInteractionVoxel(
 		   !DoesPhysicsCharacterOverlapVoxel(physics, camera, hit.placementVoxel);
 }
 
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 bool CanPlaceInteractionVoxelBox(
 	const Int3 first,
 	const Int3 second,
@@ -233,7 +233,7 @@ void RefreshPickedPlacementMaterial(
 	}
 }
 
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 bool ApplyAnchoredPaintInteraction(
 	const VoxelRaycastHit &hit,
 	const CameraState &camera,
@@ -261,7 +261,7 @@ bool ApplyAnchoredPaintInteraction(
 	return false;
 }
 
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 bool ApplyAnchoredEraseInteraction(
 	const VoxelRaycastHit &hit,
 	const InputState &input,
@@ -278,7 +278,7 @@ bool ApplyAnchoredEraseInteraction(
 	return FillVoxelBox(world, interaction.mutationAnchorVoxel, hit.voxel, VoxelMaterial::Air) > 0;
 }
 
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 bool ApplyClassicInteraction(
 	const VoxelRaycastHit &hit,
 	const CameraState &camera,
@@ -304,7 +304,7 @@ bool ApplyClassicInteraction(
 	return false;
 }
 
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 bool ApplyPaintInteraction(
 	const VoxelRaycastHit &hit,
 	const CameraState &camera,
@@ -337,7 +337,7 @@ bool ApplyPaintInteraction(
 	return false;
 }
 
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 bool ApplyEraseInteraction(
 	const VoxelRaycastHit &hit,
 	const InputState &input,
@@ -357,7 +357,7 @@ bool ApplyEraseInteraction(
 	return false;
 }
 
-// noinspection CppDFAUnreachableFunctionCall
+// noinspection DfaUnreachableFunctionCall
 bool ApplyFillInteraction(
 	const VoxelRaycastHit &hit,
 	const InputState &input,
@@ -449,7 +449,7 @@ void UpdateVoxelInteraction(
 	UpdateMutationAnchorState(*input, *interaction);
 	RefreshPickedPlacementMaterial(*input, hit, *interaction);
 
-	// noinspection CppDFAUnreachableCode
+	// noinspection DfaUnreachableCode
 	if (allowEditing && ApplyEditorInteraction(hit, camera, *input, physics, *world, *interaction)) {
 		hit = raycast();
 		interaction->selection = BuildInteractionSelection(hit, world);

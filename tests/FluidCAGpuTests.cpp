@@ -62,26 +62,14 @@ void TestFluidCaPipelineRequestedExplicit(TestContext &context)
 
 void TestFluidCaPushConstantsSize(TestContext &context)
 {
-	if constexpr (sizeof(projectv::render::FluidCaPushConstants) != 48u) {
-		std::fprintf(
-			stderr,
-			"Test failure at line %d: FluidCaPushConstants size expected 48 bytes (got %zu)\n",
-			__LINE__,
-			sizeof(projectv::render::FluidCaPushConstants));
-		++context.failures;
-	}
+	(void)context;
+	static_assert(sizeof(projectv::render::FluidCaPushConstants) == 48u, "FluidCaPushConstants size expected 48 bytes");
 }
 
 void TestFluidCaGpuFrameStatsSize(TestContext &context)
 {
-	if constexpr (sizeof(projectv::render::FluidCaGpuFrameStats) != 16u) {
-		std::fprintf(
-			stderr,
-			"Test failure at line %d: FluidCaGpuFrameStats size expected 16 bytes (got %zu)\n",
-			__LINE__,
-			sizeof(projectv::render::FluidCaGpuFrameStats));
-		++context.failures;
-	}
+	(void)context;
+	static_assert(sizeof(projectv::render::FluidCaGpuFrameStats) == 16u, "FluidCaGpuFrameStats size expected 16 bytes");
 }
 
 void TestFluidCaPushConstantsPropagation(TestContext &context)

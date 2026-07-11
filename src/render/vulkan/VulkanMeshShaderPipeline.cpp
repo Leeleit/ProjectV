@@ -660,7 +660,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 
 	vkDestroyShaderModule(context->device, fragmentModule, nullptr);
 
-	// noinspection CppDFAConstantConditions, CppDFAUnreachableCode
+	// noinspection DfaConstantConditions, DfaUnreachableCode
 	if (!RefreshMeshShaderResourceBindings(context, render)) {
 		DestroyMeshShaderPipelines(context, render);
 		return false;
