@@ -1,0 +1,74 @@
+#pragma once
+
+#include <cstdint>
+
+// EVIL: tuned per-actor constants — see agent/knowledge.md §20 for walk-authority contract
+constexpr float kWalkCapsuleRadius = 0.35f;
+constexpr float kWalkCapsuleHalfHeight = 0.55f;
+constexpr float kWalkEyeHeight = 1.6f;
+constexpr float kWalkSneakCapsuleHalfHeight = 0.45f;
+constexpr float kWalkSneakEyeHeight = 1.45f;
+constexpr float kWalkMoveSpeed = 4.5f;
+constexpr float kWalkSneakMoveSpeedMultiplier = 0.45f;
+constexpr float kWalkBoostMultiplier = 1.8f;
+constexpr float kWalkSlowMultiplier = 0.35f;
+constexpr float kWalkJumpSpeed = 8.0f;
+// EVIL: lifts spawn by 5cm to prevent physics engine from claiming we're already penetrating ground at spawn
+constexpr float kWalkSpawnClearance = 0.05f;
+// EVIL: caps sneak capsule penetration depth before forced ejection
+constexpr float kWalkSneakShapeMaxPenetrationDepth = 0.05f;
+constexpr float kWalkJumpRealisticAirBrakeDeceleration = 14.0f;
+constexpr float kWalkJumpRealisticAirReacceleration = 10.0f;
+constexpr float kWalkJumpMinecraftAirBrakeDeceleration = 14.0f;
+constexpr float kWalkJumpMinecraftAirControlAcceleration = 12.0f;
+constexpr uint32_t kWalkAutoJumpDelayFrames = 12;
+constexpr float kWalkStickToFloorDistance = 0.25f;
+constexpr float kWalkStairsStepUpHeight = 0.4f;
+constexpr float kWalkAutoJumpMinRise = kWalkStairsStepUpHeight + 0.05f;
+constexpr float kWalkAutoJumpMaxRise = 1.05f;
+constexpr float kWalkCameraAirRiseSmoothingMaxPerTick = 0.12f;
+constexpr float kWalkPredictiveContactDistance = 0.02f;
+constexpr float kWalkFootSupportSampleRadius = kWalkCapsuleRadius * 0.8f;
+constexpr float kWalkFootSupportProbeDepth = 0.08f;
+constexpr uint32_t kWalkFootSupportSampleGridResolution = 4;
+constexpr float kWalkFootSupportGroundedScore = 0.7f;
+constexpr float kWalkFootSupportEdgeGraceScore = 0.2f;
+constexpr float kWalkFootSupportMovingEdgeGraceScore = 0.5f;
+constexpr float kWalkGroundSupportRadius = 0.2f;
+constexpr float kWalkGroundTakeoffSupportRadius = kWalkCapsuleRadius + 0.05f;
+constexpr float kWalkGroundTakeoffSnapMaxDrop = 0.05f;
+constexpr float kWalkRestingEdgeHoldMaxHorizontalDrift = 0.02f;
+constexpr float kWalkSneakSupportSampleRadius = kWalkFootSupportSampleRadius;
+[[maybe_unused]] constexpr float kWalkSneakSupportProbeDepth = 0.08f;
+constexpr float kWalkSneakSupportRegionExtent = 0.39f;
+constexpr float kWalkSneakBackoffInset = 0.01f;
+constexpr float kWalkSneakOutwardDriftEpsilon = 0.001f;
+constexpr float kWalkSneakStickProbeLift = 0.05f;
+constexpr float kWalkSneakStickToFloorDistance = 0.08f;
+constexpr float kWalkSneakStickPositiveVelocityEpsilon = 0.15f;
+constexpr float kWalkSneakStickMinimumDrop = 0.01f;
+constexpr float kWalkJumpLockedSupportCeilingReprojectMaxDistance = kWalkCapsuleRadius + kWalkSneakStickToFloorDistance;
+constexpr float kWalkJumpLockedSupportMaxRiseAboveReference = 2.5f;
+constexpr float kWalkJumpLockedSupportMaxDropBelowReference = 0.45f;
+constexpr float kWalkJumpLockedSupportSourceWallMaxUpDot = 0.55f;
+constexpr float kWalkJumpLockedSupportContactVoxelEpsilon = 0.02f;
+constexpr float kWalkCollisionEpsilon = 0.001f;
+constexpr float kWalkPenetrationResolveEpsilon = 0.0005f;
+constexpr float kWalkGroundProbeEpsilon = 0.001f;
+constexpr float kWalkHorizontalSubstepDistance = 0.05f;
+constexpr uint32_t kWalkEdgeGraceFrames = 4;
+constexpr uint32_t kWalkGroundTakeoffGraceFrames = 12;
+constexpr uint32_t kWalkGroundReturnAnchorFrames = 48;
+constexpr float kWalkGroundReturnRestoreMaxDrop = 0.65f;
+constexpr float kWalkGroundReturnSnapMaxDrop = 0.05f;
+constexpr float kWalkGroundReturnSupportMaxRise = 0.08f;
+constexpr uint32_t kWalkSneakSupportGraceFrames = 3;
+constexpr uint32_t kWalkLedgeReleaseGraceFrames = 4;
+constexpr float kWalkGroundTakeoffGraceMaxDrift = 0.65f;
+constexpr float kWalkGroundTakeoffLandingMaxDrift = 0.25f;
+constexpr float kWalkSupportContactMaxHeightAboveFeet = 0.1f;
+constexpr float kCreativeMoveSpeedMultiplier = 1.0f;
+constexpr float kCreativeBoostMultiplier = 3.0f;
+constexpr float kCreativeSlowMultiplier = 0.25f;
+constexpr float kCreativeCollisionMaxStepDistance = 0.05f;
+constexpr uint32_t kCreativeCollisionMaxSubsteps = 32;

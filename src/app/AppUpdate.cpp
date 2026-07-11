@@ -479,9 +479,6 @@ bool ProcessInputActions(
 		debug->showDirtyChunkOverlay = !debug->showDirtyChunkOverlay;
 	}
 
-	if (ConsumeInputActionPressed(*input, InputAction::ToggleCascadeSplitPlanes)) {
-		debug->showCascadeSplitPlanes = !debug->showCascadeSplitPlanes;
-	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleCursorHitNormal)) {
 		debug->showCursorHitNormal = !debug->showCursorHitNormal;
 	}

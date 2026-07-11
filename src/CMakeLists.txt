@@ -107,6 +107,8 @@ target_sources(ProjectV PRIVATE
         ecs/EcsWorld.cpp
         physics/GreedyPhysicsMerger.cpp
         physics/PhysicsWorld.cpp
+        physics/PhysicsWorld_Walk.cpp
+        physics/walk/WalkInternals.cpp
         core/RuntimeDiagnostics.cpp
         core/RuntimeProbe.cpp
         core/RepoRoot.cpp

@@ -23,6 +23,8 @@ add_executable(ProjectVTests
         ../src/ecs/EcsWorld.cpp
         ../src/physics/GreedyPhysicsMerger.cpp
         ../src/physics/PhysicsWorld.cpp
+        ../src/physics/PhysicsWorld_Walk.cpp
+        ../src/physics/walk/WalkInternals.cpp
         ../src/debug/DebugHud.cpp
         ../src/debug/DebugOverlays.cpp
         ../src/platform/PlatformEvents.cpp
@@ -407,6 +409,8 @@ add_executable(ProjectVFluidCATests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld_Walk.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/walk/WalkInternals.cpp
         ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
@@ -727,6 +731,8 @@ add_executable(ProjectVAsyncComputeTests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld_Walk.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/walk/WalkInternals.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
@@ -863,6 +869,8 @@ add_executable(ProjectVPhysicsGreedyMergerTests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld_Walk.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/walk/WalkInternals.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
@@ -942,6 +950,8 @@ add_executable(ProjectVPhysicsIncrementalJoltTests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld_Walk.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/walk/WalkInternals.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
@@ -978,6 +988,8 @@ add_executable(ProjectVPhysicsSyncTests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/NanoVdb.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld_Walk.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/walk/WalkInternals.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp

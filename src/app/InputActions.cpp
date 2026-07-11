@@ -18,9 +18,6 @@ constexpr bool IsInputActionReplayRecordable(const InputAction action)
 	case InputAction::CycleToneMapOperator:
 	case InputAction::CycleLightingDebugView:
 	case InputAction::ResetLightingDebugControls:
-	case InputAction::CycleShadowTuningTarget:
-	case InputAction::DecreaseShadowTuningValue:
-	case InputAction::IncreaseShadowTuningValue:
 	case InputAction::CaptureScreenshot:
 	case InputAction::ToggleInputReplayRecording:
 	case InputAction::PlayLastInputReplay:
@@ -146,9 +143,6 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::CycleToneMapOperator, SDL_SCANCODE_N);
 	BindAction(input, InputAction::CycleLightingDebugView, SDL_SCANCODE_B);
 	BindAction(input, InputAction::ResetLightingDebugControls, SDL_SCANCODE_V);
-	BindAction(input, InputAction::CycleShadowTuningTarget, SDL_SCANCODE_O);
-	BindAction(input, InputAction::DecreaseShadowTuningValue, SDL_SCANCODE_U);
-	BindAction(input, InputAction::IncreaseShadowTuningValue, SDL_SCANCODE_I);
 	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_R);
 	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_Y);
 	BindAction(input, InputAction::ToggleMutationAnchor, SDL_SCANCODE_X);
@@ -156,7 +150,6 @@ void InitializeInputState(InputState &input)
 
 	BindAction(input, InputAction::PickModel, SDL_SCANCODE_F);
 
-	BindAction(input, InputAction::ToggleCascadeSplitPlanes, SDL_SCANCODE_L);
 	BindAction(input, InputAction::ToggleCursorHitNormal, SDL_SCANCODE_Z);
 	BindAction(input, InputAction::DecreaseTimeScale, SDL_SCANCODE_LEFTBRACKET);
 	BindAction(input, InputAction::IncreaseTimeScale, SDL_SCANCODE_RIGHTBRACKET);
