@@ -286,26 +286,26 @@ bool IsChunkVisibleCPU(const CpuGreedyChunkDesc &chunk, const CpuChunkCullingPar
 		static_cast<float>(chunk.chunkOrigin[1]) + halfExt[1],
 		static_cast<float>(chunk.chunkOrigin[2]) + halfExt[2]};
 	const float toCenter[3] = {
-		center[0] - c.cameraX,
-		center[1] - c.cameraY,
-		center[2] - c.cameraZ};
+		center[0] - culling.cameraX,
+		center[1] - culling.cameraY,
+		center[2] - culling.cameraZ};
 
-	const float forward[3] = {c.cameraForwardX, c.cameraForwardY, c.cameraForwardZ};
-	const float right[3] = {c.cameraRightX, c.cameraRightY, c.cameraRightZ};
-	const float up[3] = {c.cameraUpX, c.cameraUpY, c.cameraUpZ};
-	const float tanHFov = std::max(c.tanHalfVerticalFov, 0.0f);
-	const float tanHWid = std::max(c.tanHalfHorizontalFov, 0.0f);
+	const float forward[3] = {culling.cameraForwardX, culling.cameraForwardY, culling.cameraForwardZ};
+	const float right[3] = {culling.cameraRightX, culling.cameraRightY, culling.cameraRightZ};
+	const float up[3] = {culling.cameraUpX, culling.cameraUpY, culling.cameraUpZ};
+	const float tanHFov = std::max(culling.tanHalfVerticalFov, 0.0f);
+	const float tanHWid = std::max(culling.tanHalfHorizontalFov, 0.0f);
 
 	const float dotAbsFwdHalf = std::abs(forward[0]) * halfExt[0] + std::abs(forward[1]) * halfExt[1] + std::abs(forward[2]) * halfExt[2];
 	const float chunkRadius = std::sqrt(halfExt[0] * halfExt[0] + halfExt[1] * halfExt[1] + halfExt[2] * halfExt[2]);
-	const float nearPlane = std::max(c.nearPlane, 0.0f);
+	const float nearPlane = std::max(culling.nearPlane, 0.0f);
 	const float fwdDist = toCenter[0] * forward[0] + toCenter[1] * forward[1] + toCenter[2] * forward[2];
 	if (fwdDist + dotAbsFwdHalf < nearPlane) {
 		return false;
 	}
 
-	if (c.maxDistance > 0.0f) {
-		const float maxCenterDist = c.maxDistance + chunkRadius;
+	if (culling.maxDistance > 0.0f) {
+		const float maxCenterDist = culling.maxDistance + chunkRadius;
 		const float toCenterLenSq = toCenter[0] * toCenter[0] + toCenter[1] * toCenter[1] + toCenter[2] * toCenter[2];
 		if (toCenterLenSq > maxCenterDist * maxCenterDist) {
 			return false;
