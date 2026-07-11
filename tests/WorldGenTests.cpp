@@ -59,8 +59,8 @@ void TestWorldGenPushConstantContract(WorldGenTestContext &test)
 		test.Fail(__LINE__, "WorldGenPushConstants must remain 64 bytes (4 vec4 + 1 uint + 3 reserved)");
 	}
 	constexpr projectv::render::WorldGenPushConstants defaults{};
-	if constexpr (defaults.chunkOriginAndChunkSize[0] != 0 || defaults.chunkOriginAndChunkSize[1] != 0 ||
-		defaults.chunkOriginAndChunkSize[2] != 0 || defaults.chunkOriginAndChunkSize[3] != 0) {
+	if constexpr (defaults.chunkOriginAndChunkSize[0] || defaults.chunkOriginAndChunkSize[1] ||
+		defaults.chunkOriginAndChunkSize[2] || defaults.chunkOriginAndChunkSize[3]) {
 		test.Fail(__LINE__, "default chunkOriginAndChunkSize must be zero-initialized");
 	}
 	if constexpr (defaults.seed != 0u) {
@@ -97,8 +97,8 @@ void TestWorldGenSeedTickVariability(WorldGenTestContext &test)
 	}
 	constexpr uint64_t tickA = 1000u;
 	constexpr uint64_t tickB = 1001u;
-	constexpr uint32_t seedA = static_cast<uint32_t>(tickA);
-	constexpr uint32_t seedB = static_cast<uint32_t>(tickB);
+	constexpr uint32_t seedA = tickA;
+	constexpr uint32_t seedB = tickB;
 	if constexpr (seedA == seedB) {
 		test.Fail(__LINE__, "Cast to uint32 must preserve tick difference for typical tick range");
 	}

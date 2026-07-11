@@ -90,8 +90,8 @@ float Fbm2D(float x, float y, int octaves)
 
 std::vector<uint8_t> GenerateCloudscapeNoiseR8()
 {
-	std::vector<uint8_t> data(static_cast<std::size_t>(projectv::render::kCloudscapeNoiseTextureSize *
-							  projectv::render::kCloudscapeNoiseTextureSize));
+	std::vector<uint8_t> data(projectv::render::kCloudscapeNoiseTextureSize *
+							  projectv::render::kCloudscapeNoiseTextureSize);
 	for (uint32_t y = 0; y < projectv::render::kCloudscapeNoiseTextureSize; ++y) {
 		for (uint32_t x = 0; x < projectv::render::kCloudscapeNoiseTextureSize; ++x) {
 			const float u = static_cast<float>(x) / static_cast<float>(projectv::render::kCloudscapeNoiseTextureSize);

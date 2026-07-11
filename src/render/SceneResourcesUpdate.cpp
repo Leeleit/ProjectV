@@ -49,7 +49,7 @@ bool UpdateSceneResources(
 	const bool fluidOnlyChunkRebuilds = world->voxelWorld->editVersion == render->lastNanoVdbSyncedEditVersion;
 	if ((!render->completedChunkRebuildIndices.empty() && !fluidOnlyChunkRebuilds) ||
 		render->sceneNanoVdbVersion == 0u) {
-		const std::array<uint8_t, 256> materialLookup = []() {
+		const std::array<uint8_t, 256> materialLookup = [] {
 			std::array<uint8_t, 256> lookup{};
 			for (uint32_t i = 0; i < 256; ++i) {
 				lookup[i] = static_cast<uint8_t>(i);

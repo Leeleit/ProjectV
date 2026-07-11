@@ -111,9 +111,9 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	if (!m_rtxSbt.Initialize(
 			context,
 			m_rtxPipeline.GetPipeline(),
-			projectv::render::RtxShadowPipeline::GetRayGenGroupIndex(),
-			projectv::render::RtxShadowPipeline::GetMissGroupIndex(),
-			projectv::render::RtxShadowPipeline::GetHitGroupIndex())) {
+			RtxShadowPipeline::GetRayGenGroupIndex(),
+			RtxShadowPipeline::GetMissGroupIndex(),
+			RtxShadowPipeline::GetHitGroupIndex())) {
 		m_rtxSbt.Shutdown(context);
 		m_rtxPipeline.Shutdown(context);
 		return false;

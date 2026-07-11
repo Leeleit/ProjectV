@@ -28,7 +28,7 @@ bool IsGreedyPhysicsMeshEnabled()
 
 namespace {
 
-inline bool IsSolidAt(const VoxelWorld &world, const int x, const int y, const int z)
+	bool IsSolidAt(const VoxelWorld &world, const int x, const int y, const int z)
 {
 	if (x < world.min.x || y < world.min.y || z < world.min.z ||
 		x >= world.maxExclusive.x || y >= world.maxExclusive.y || z >= world.maxExclusive.z) {

@@ -70,7 +70,7 @@ void TestSlotEncoding(TestContext &context)
 
 	constexpr uint32_t nodeSlot = 42u;
 	ExpectTrue(context, !projectv::voxel::IsSparse64Leaf(nodeSlot), __LINE__, "raw index is not leaf");
-	ExpectEqualI(context, 42, static_cast<int>(projectv::voxel::Sparse64NodeIndex(nodeSlot)), __LINE__, "node index preserved");
+	ExpectEqualI(context, 42, static_cast<int>(projectv::voxel::Sparse64NodeIndex(nodeSlot)), __LINE__, "node index preserved");  // noinspection CppRedundantCastExpression
 }
 
 void TestEmptyTree(TestContext &context)
@@ -81,7 +81,7 @@ void TestEmptyTree(TestContext &context)
 	ExpectEqualI(context, 8, tree.SideZ(), __LINE__, "sideZ=8");
 	ExpectEqualI(context, 2, tree.MaxDepth(), __LINE__, "8x8x8 -> depth 2");
 	ExpectTrue(context, tree.IsEmpty(), __LINE__, "fresh tree is empty");
-	ExpectEqualI(context, 0, static_cast<int>(tree.NodeCount()), __LINE__, "fresh tree has 0 nodes");
+	ExpectEqualI(context, 0, tree.NodeCount(), __LINE__, "fresh tree has 0 nodes");
 	for (int z = 0; z < 8; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {
@@ -100,7 +100,7 @@ void TestSetSingleCell(TestContext &context)
 	projectv::voxel::Sparse64Tree tree(8, 8, 8);
 	tree.SetCell(3, 5, 7, 1);
 	ExpectTrue(context, !tree.IsEmpty(), __LINE__, "tree non-empty after SetCell");
-	ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(3, 5, 7)), __LINE__, "cell (3,5,7) = 1");
+	ExpectEqualI(context, 1, tree.GetCell(3, 5, 7), __LINE__, "cell (3,5,7) = 1");
 	for (int z = 0; z < 8; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {
@@ -189,11 +189,11 @@ void TestSetThenClear(TestContext &context)
 {
 	projectv::voxel::Sparse64Tree tree(8, 8, 8);
 	tree.SetCell(2, 2, 2, 5);
-	ExpectEqualI(context, 5, static_cast<int>(tree.GetCell(2, 2, 2)), __LINE__, "set 5");
+	ExpectEqualI(context, 5, tree.GetCell(2, 2, 2), __LINE__, "set 5");
 	tree.SetCell(2, 2, 2, 0);
-	ExpectEqualI(context, 0, static_cast<int>(tree.GetCell(2, 2, 2)), __LINE__, "cleared to 0");
+	ExpectEqualI(context, 0, tree.GetCell(2, 2, 2), __LINE__, "cleared to 0");
 	tree.SetCell(2, 2, 2, 7);
-	ExpectEqualI(context, 7, static_cast<int>(tree.GetCell(2, 2, 2)), __LINE__, "set 7 after clear");
+	ExpectEqualI(context, 7, tree.GetCell(2, 2, 2), __LINE__, "set 7 after clear");
 }
 
 void TestOutOfBounds(TestContext &context)
@@ -235,11 +235,11 @@ void TestLargerTree(TestContext &context)
 	tree.SetCell(15, 15, 15, 3);
 	tree.SetCell(16, 16, 16, 4);
 	tree.SetCell(7, 23, 11, 5);
-	ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(0, 0, 0)), __LINE__, "32^3 (0,0,0)");
-	ExpectEqualI(context, 2, static_cast<int>(tree.GetCell(31, 31, 31)), __LINE__, "32^3 (31,31,31)");
-	ExpectEqualI(context, 3, static_cast<int>(tree.GetCell(15, 15, 15)), __LINE__, "32^3 (15,15,15)");
-	ExpectEqualI(context, 4, static_cast<int>(tree.GetCell(16, 16, 16)), __LINE__, "32^3 (16,16,16)");
-	ExpectEqualI(context, 5, static_cast<int>(tree.GetCell(7, 23, 11)), __LINE__, "32^3 (7,23,11)");
+	ExpectEqualI(context, 1, tree.GetCell(0, 0, 0), __LINE__, "32^3 (0,0,0)");
+	ExpectEqualI(context, 2, tree.GetCell(31, 31, 31), __LINE__, "32^3 (31,31,31)");
+	ExpectEqualI(context, 3, tree.GetCell(15, 15, 15), __LINE__, "32^3 (15,15,15)");
+	ExpectEqualI(context, 4, tree.GetCell(16, 16, 16), __LINE__, "32^3 (16,16,16)");
+	ExpectEqualI(context, 5, tree.GetCell(7, 23, 11), __LINE__, "32^3 (7,23,11)");
 	if (tree.GetCell(0, 0, 1) != 0) {
 		context.Fail(__LINE__, "32^3 (0,0,1) = 0");
 	}
@@ -383,14 +383,14 @@ void TestSubNodeSplitting(TestContext &context)
 {
 	projectv::voxel::Sparse64Tree tree(8, 8, 8);
 	tree.SetCell(0, 0, 0, 5);
-	ExpectEqualI(context, 2, static_cast<int>(tree.NodeCount()), __LINE__, "2 nodes after first SetCell (root+mid)");
+	ExpectEqualI(context, 2, tree.NodeCount(), __LINE__, "2 nodes after first SetCell (root+mid)");
 
 	tree.SetCell(4, 0, 0, 5);
-	ExpectEqualI(context, 3, static_cast<int>(tree.NodeCount()), __LINE__, "3 nodes after second SetCell in different sub-volume");
+	ExpectEqualI(context, 3, tree.NodeCount(), __LINE__, "3 nodes after second SetCell in different sub-volume");
 
 	tree.SetCell(0, 0, 0, 6);
-	ExpectEqualI(context, 6, static_cast<int>(tree.GetCell(0, 0, 0)), __LINE__, "overwrite within same sub-volume");
-	ExpectEqualI(context, 5, static_cast<int>(tree.GetCell(4, 0, 0)), __LINE__, "other sub-volume unchanged");
+	ExpectEqualI(context, 6, tree.GetCell(0, 0, 0), __LINE__, "overwrite within same sub-volume");
+	ExpectEqualI(context, 5, tree.GetCell(4, 0, 0), __LINE__, "other sub-volume unchanged");
 }
 
 void TestNonAirCount(TestContext &context)
@@ -412,8 +412,8 @@ void TestDedupOffBaseline(TestContext &context)
 	ExpectTrue(context, !tree.IsDeduplicationEnabled(), __LINE__, "dedup OFF by default");
 	tree.SetCell(0, 0, 0, 1);
 	tree.SetCell(1, 1, 1, 2);
-	ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(0, 0, 0)), __LINE__, "dedup-off (0,0,0)");
-	ExpectEqualI(context, 2, static_cast<int>(tree.GetCell(1, 1, 1)), __LINE__, "dedup-off (1,1,1)");
+	ExpectEqualI(context, 1, tree.GetCell(0, 0, 0), __LINE__, "dedup-off (0,0,0)");
+	ExpectEqualI(context, 2, tree.GetCell(1, 1, 1), __LINE__, "dedup-off (1,1,1)");
 }
 
 void TestDedupExplicitMerge(TestContext &context)
@@ -438,8 +438,8 @@ void TestCopyOnWriteOnMutation(TestContext &context)
 	const size_t nodesBefore = tree.NodeCount();
 	ExpectTrue(context, nodesBefore > 0, __LINE__, "tree has nodes after edits");
 	tree.SetCell(0, 0, 0, 2);
-	ExpectEqualI(context, 2, static_cast<int>(tree.GetCell(0, 0, 0)), __LINE__, "after mutation cell (0,0,0)");
-	ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(7, 7, 7)), __LINE__, "other cell unchanged");
+	ExpectEqualI(context, 2, tree.GetCell(0, 0, 0), __LINE__, "after mutation cell (0,0,0)");
+	ExpectEqualI(context, 1, tree.GetCell(7, 7, 7), __LINE__, "other cell unchanged");
 	const size_t nodesAfter = tree.NodeCount();
 	ExpectTrue(context, nodesAfter >= nodesBefore, __LINE__, "mutation may add nodes (COW)");
 }
@@ -459,11 +459,11 @@ void TestHomogeneousCollapseSmall(TestContext &context)
 	for (int z = 0; z < 4; ++z) {
 		for (int y = 0; y < 4; ++y) {
 			for (int x = 0; x < 4; ++x) {
-				ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(x, y, z)), __LINE__, "all cells material 1");
+				ExpectEqualI(context, 1, tree.GetCell(x, y, z), __LINE__, "all cells material 1");
 			}
 		}
 	}
-	ExpectEqualI(context, 64, static_cast<int>(tree.NonAirCount()), __LINE__, "NonAirCount 64");
+	ExpectEqualI(context, 64, tree.NonAirCount(), __LINE__, "NonAirCount 64");
 }
 
 void TestHomogeneousExpansionOnSingleEdit(TestContext &context)
@@ -480,12 +480,12 @@ void TestHomogeneousExpansionOnSingleEdit(TestContext &context)
 	tree.SetCell(1, 1, 1, 2);
 	ExpectTrue(context, !projectv::voxel::IsSparse64Homogeneous(tree.RootSlot()), __LINE__, "after 1 different edit -> heterogeneous root");
 	ExpectTrue(context, tree.LiveNodeCount() > 0, __LINE__, "live node allocated on expansion");
-	ExpectEqualI(context, 2, static_cast<int>(tree.GetCell(1, 1, 1)), __LINE__, "edited cell material 2");
+	ExpectEqualI(context, 2, tree.GetCell(1, 1, 1), __LINE__, "edited cell material 2");
 	for (int z = 0; z < 4; ++z) {
 		for (int y = 0; y < 4; ++y) {
 			for (int x = 0; x < 4; ++x) {
 				if (x == 1 && y == 1 && z == 1) continue;
-				ExpectEqualI(context, 1, static_cast<int>(tree.GetCell(x, y, z)), __LINE__, "other cells still material 1");
+				ExpectEqualI(context, 1, tree.GetCell(x, y, z), __LINE__, "other cells still material 1");
 			}
 		}
 	}
@@ -503,7 +503,7 @@ void TestHomogeneousCascadeSixteen(TestContext &context)
 	}
 	ExpectTrue(context, projectv::voxel::IsSparse64Homogeneous(tree.RootSlot()), __LINE__, "16x16x16 fully filled -> homogeneous at every level");
 	ExpectTrue(context, tree.LiveNodeCount() == 0, __LINE__, "16x16x16 homogeneous cascade -> 0 live nodes");
-	ExpectEqualI(context, 4096, static_cast<int>(tree.NonAirCount()), __LINE__, "16x16x16 NonAirCount 4096");
+	ExpectEqualI(context, 4096, tree.NonAirCount(), __LINE__, "16x16x16 NonAirCount 4096");
 }
 
 void TestHomogeneousRecollapseAfterEdit(TestContext &context)

@@ -196,7 +196,7 @@ bool CreateRtxShadowMaskFallbackOnly(VulkanContextState *context, RenderState *r
 void DestroyRtxShadowMaskFallbackOnly(VulkanContextState *context, RenderState *render) noexcept;
 
 void CollectNonBuiltBlasChunksForRayTracing(
-	const struct VoxelWorld &world,
+	const VoxelWorld &world,
 	const std::vector<VkDeviceAddress> &blasDeviceAddresses,
 	std::vector<uint32_t> *outChunkIndices);
 

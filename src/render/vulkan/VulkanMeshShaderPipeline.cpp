@@ -103,8 +103,8 @@ bool IsMeshShaderPipelineRequested()
 
 namespace {
 std::array<float, 4> MakeFrustumPlane(
-	const projectv::math::Vec3 &normal,
-	const projectv::math::Vec3 &cameraPos,
+	const math::Vec3 &normal,
+	const math::Vec3 &cameraPos,
 	float offset)
 {
 	const float w = -projectv::math::dot(cameraPos, normal) - offset;
@@ -119,25 +119,25 @@ MeshCullPushConstants BuildMeshCullPushConstants(
 	MeshCullPushConstants result{};
 	result.dispatchParams = {chunkDescriptorCount, 0u, 0u, 0u};
 
-	const projectv::math::Vec3 cameraPos{
+	const math::Vec3 cameraPos{
 		parameters.cameraPositionAndMaxDistance.x,
 		parameters.cameraPositionAndMaxDistance.y,
 		parameters.cameraPositionAndMaxDistance.z,
 		0.0f,
 	};
-	const projectv::math::Vec3 forward{
+	const math::Vec3 forward{
 		parameters.cameraForwardAndTanHalfVerticalFov.x,
 		parameters.cameraForwardAndTanHalfVerticalFov.y,
 		parameters.cameraForwardAndTanHalfVerticalFov.z,
 		0.0f,
 	};
-	const projectv::math::Vec3 right{
+	const math::Vec3 right{
 		parameters.cameraRightAndTanHalfHorizontalFov.x,
 		parameters.cameraRightAndTanHalfHorizontalFov.y,
 		parameters.cameraRightAndTanHalfHorizontalFov.z,
 		0.0f,
 	};
-	const projectv::math::Vec3 up{
+	const math::Vec3 up{
 		parameters.cameraUpAndNearPlane.x,
 		parameters.cameraUpAndNearPlane.y,
 		parameters.cameraUpAndNearPlane.z,
@@ -148,25 +148,25 @@ MeshCullPushConstants BuildMeshCullPushConstants(
 	const float nearPlane = std::max(parameters.cameraUpAndNearPlane.w, 0.0f);
 	const float maxDistance = parameters.cameraPositionAndMaxDistance.w;
 
-	const projectv::math::Vec3 leftNormal{
+	const math::Vec3 leftNormal{
 		forward.x * tanHalfHFov + right.x,
 		forward.y * tanHalfHFov + right.y,
 		forward.z * tanHalfHFov + right.z,
 		0.0f,
 	};
-	const projectv::math::Vec3 rightNormal{
+	const math::Vec3 rightNormal{
 		forward.x * tanHalfHFov - right.x,
 		forward.y * tanHalfHFov - right.y,
 		forward.z * tanHalfHFov - right.z,
 		0.0f,
 	};
-	const projectv::math::Vec3 bottomNormal{
+	const math::Vec3 bottomNormal{
 		forward.x * tanHalfVFov + up.x,
 		forward.y * tanHalfVFov + up.y,
 		forward.z * tanHalfVFov + up.z,
 		0.0f,
 	};
-	const projectv::math::Vec3 topNormal{
+	const math::Vec3 topNormal{
 		forward.x * tanHalfVFov - up.x,
 		forward.y * tanHalfVFov - up.y,
 		forward.z * tanHalfVFov - up.z,
@@ -178,7 +178,7 @@ MeshCullPushConstants BuildMeshCullPushConstants(
 	result.frustumPlanes[2] = MakeFrustumPlane(bottomNormal, cameraPos, 0.0f);
 	result.frustumPlanes[3] = MakeFrustumPlane(topNormal, cameraPos, 0.0f);
 	result.frustumPlanes[4] = MakeFrustumPlane(forward, cameraPos, -nearPlane);
-	result.frustumPlanes[5] = MakeFrustumPlane(projectv::math::Vec3{-forward.x, -forward.y, -forward.z, 0.0f}, cameraPos, -maxDistance);
+	result.frustumPlanes[5] = MakeFrustumPlane(math::Vec3{-forward.x, -forward.y, -forward.z, 0.0f}, cameraPos, -maxDistance);
 	return result;
 }
 

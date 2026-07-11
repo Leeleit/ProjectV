@@ -18,7 +18,7 @@ struct TestContext {
 
 void TestQueueChunkRebuildRequestRejectsNullPhysics(TestContext &context)
 {
-	QueueChunkRebuildRequest(static_cast<PhysicsState *>(nullptr), 0u);
+	QueueChunkRebuildRequest(nullptr, 0u);
 }
 
 void TestQueueChunkRebuildRequestAppendsToQueue(TestContext &context)

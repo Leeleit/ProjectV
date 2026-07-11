@@ -197,14 +197,14 @@ bool RecordAsyncComputePass(
 					frameResources.worldGenVoxelMappedData,
 					0,
 					static_cast<size_t>(worldGenChunkCount) *
-						static_cast<size_t>(projectv::render::kWorldGenVoxelBufferBytesPerChunk));
+						static_cast<size_t>(kWorldGenVoxelBufferBytesPerChunk));
 			}
 			WorldGenPushConstants worldGenPush{};
 			worldGenPush.chunkOriginAndChunkSize = {
 				0,
 				0,
 				0,
-				static_cast<int32_t>(voxelWorld->chunkSize),
+				voxelWorld->chunkSize,
 			};
 			worldGenPush.chunkCountAndFlags = {
 				worldGenChunkCount,

@@ -337,7 +337,7 @@ inline JPH::RVec3 ToRVec3(const std::array<float, 3> &value)
 }
 
 template <typename Vector3>
-inline std::array<float, 3> ToArray(const Vector3 &value)
+	std::array<float, 3> ToArray(const Vector3 &value)
 {
 	return {
 		static_cast<float>(value.GetX()),

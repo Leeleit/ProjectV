@@ -127,7 +127,7 @@ bool RefreshLodDownsampledBuffers(
 				const uint8_t lod = i < world.chunks.size() ? world.chunks[i].lodLevel : 0u;
 				const uint8_t outExtent = lod == 0u
 					? 0u
-					: static_cast<uint8_t>(projectv::voxel::LodDownsampledExtentForLod(lod, static_cast<uint8_t>(chunkSize)));
+					: static_cast<uint8_t>(voxel::LodDownsampledExtentForLod(lod, static_cast<uint8_t>(chunkSize)));
 				static_cast<uint32_t *>(frameResources.chunkLodLevelsMappedData)[i] =
 					EncodeChunkLodMetadata(lod, outExtent);
 				if (lod > 0u) {
@@ -153,7 +153,7 @@ bool RefreshLodDownsampledBuffers(
 				if (chunk.lodLevel == 0u) {
 					continue;
 				}
-				projectv::voxel::DownsampleChunkForLodSurfacePreserve(
+				voxel::DownsampleChunkForLodSurfacePreserve(
 					world,
 					i,
 					chunk.lodLevel,
