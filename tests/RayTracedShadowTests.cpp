@@ -76,9 +76,10 @@ void TestConfigZeroSizedAfterShutdown()
 
 void TestComputeBlasBuildScratchSize()
 {
-	const projectv::render::RayTracedShadows shadows{};
-	PROJECTV_RTX_EXPECT(shadows.ComputeBlasBuildScratchSize(0u) == 0u, "scratch size for zero primitives must be zero");
-	const VkDeviceSize nonZero = shadows.ComputeBlasBuildScratchSize(8192u);
+	PROJECTV_RTX_EXPECT(
+		projectv::render::RayTracedShadows::ComputeBlasBuildScratchSize(0u) == 0u,
+		"scratch size for zero primitives must be zero");
+	const VkDeviceSize nonZero = projectv::render::RayTracedShadows::ComputeBlasBuildScratchSize(8192u);
 	PROJECTV_RTX_EXPECT(nonZero > 0u, "scratch size for non-zero primitives must be positive");
 }
 
@@ -268,7 +269,7 @@ void TestRtxSunShadowRayHelperExistsInShader()
 	if (!fp.good()) {
 		return;
 	}
-	const std::string sourceText{ std::istreambuf_iterator<char>(fp), std::istreambuf_iterator<char>() };
+	const std::string sourceText{std::istreambuf_iterator(fp), std::istreambuf_iterator<char>()};
 	PROJECTV_RTX_EXPECT(
 		sourceText.find("rtxShadowMask") != std::string::npos,
 		"voxel.frag must reference rtxShadowMask (binding 18) for 5.2.E voxel-aware shadow consume");
@@ -494,10 +495,9 @@ void TestRtxShadowShaderFilesExistInBuildDirectory()
 								 "/voxel_rtx_shadow.rmiss.spv" }) {
 		const std::string path = baseDir + suffix;
 		std::ifstream file{ path, std::ios::binary };
-		const std::string message = "RTX shadow shader binary missing: " + path;
 		PROJECTV_RTX_EXPECT(
 			file.good(),
-			message.c_str());
+			"RTX shadow shader binary missing: " + path);
 	}
 }
 
@@ -524,7 +524,7 @@ void TestRtxShadowIntersectionShaderUsesVoxelDdaPattern()
 			"voxel_rtx_shadow.rint source not found");
 		return;
 	}
-	std::string sourceText{ std::istreambuf_iterator<char>(source), std::istreambuf_iterator<char>() };
+	std::string sourceText{std::istreambuf_iterator(source), std::istreambuf_iterator<char>()};
 	PROJECTV_RTX_EXPECT(
 		sourceText.find("gl_InstanceCustomIndexEXT") != std::string::npos,
 		"voxel_rtx_shadow.rint must read chunk index from gl_InstanceCustomIndexEXT");

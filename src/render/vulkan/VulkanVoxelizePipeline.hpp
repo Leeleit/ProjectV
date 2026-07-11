@@ -45,4 +45,4 @@ bool BuildVctClipmapMipChain(
 	VkCommandBuffer commandBuffer,
 	RenderState &render);
 
-}  // namespace projectv::render
+} // namespace projectv::render

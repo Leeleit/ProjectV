@@ -7,8 +7,6 @@
 
 namespace projectv::render {
 
-
-
 bool RtxShadowSBT::Initialize(
 	const VulkanContextState &context,
 	const VkPipeline rayTracingPipeline,
@@ -50,13 +48,11 @@ bool RtxShadowSBT::Initialize(
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.size = totalSize;
-	bufferInfo.usage = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR
-					 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	bufferInfo.usage = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	VmaAllocationCreateInfo allocInfo{};
 	allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-	allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-					  | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+	allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 	if (vmaCreateBuffer(context.allocator, &bufferInfo, &allocInfo, &m_buffer, &m_allocation, nullptr) != VK_SUCCESS) {
 		runtime::LogVkFailure("RtxShadowSBT.vmaCreateBuffer", VK_ERROR_INITIALIZATION_FAILED);
 		return false;
@@ -70,17 +66,17 @@ bool RtxShadowSBT::Initialize(
 
 	const uint32_t groupCount = hitGroupIndex + 1u;
 	std::vector<uint8_t> handles(static_cast<size_t>(groupCount) * handleSize, 0u);
-	if (vkGetRayTracingShaderGroupHandlesKHR(
+	PV_CHECK_OR_RETURN(
+		vkGetRayTracingShaderGroupHandlesKHR(
 			context.device,
 			rayTracingPipeline,
 			0u,
 			groupCount,
 			handles.size(),
-			handles.data()) != VK_SUCCESS) {
-		runtime::LogVkFailure("RtxShadowSBT.vkGetRayTracingShaderGroupHandlesKHR", VK_ERROR_INITIALIZATION_FAILED);
-		Shutdown(context);
-		return false;
-	}
+			handles.data()) == VK_SUCCESS,
+		"Render",
+		"RtxShadowSBT.vkGetRayTracingShaderGroupHandlesKHR",
+		"failed to retrieve ray tracing shader group handles");
 
 	auto writeHandle = [&](uint8_t *base, const VkDeviceSize regionStart, const uint32_t groupIndex, const uint32_t stride) {
 		uint8_t *dst = base + regionStart;
@@ -95,7 +91,7 @@ bool RtxShadowSBT::Initialize(
 
 	vmaFlushAllocation(context.allocator, m_allocation, 0u, totalSize);
 
-	const VkBufferDeviceAddressInfo addressInfo { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, m_buffer };
+	const VkBufferDeviceAddressInfo addressInfo{VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, m_buffer};
 	m_deviceAddress = vkGetBufferDeviceAddress(context.device, &addressInfo);
 	if (m_deviceAddress == 0u) {
 		runtime::LogVkFailure("RtxShadowSBT.vkGetBufferDeviceAddress", VK_ERROR_INITIALIZATION_FAILED);
@@ -103,11 +99,11 @@ bool RtxShadowSBT::Initialize(
 		return false;
 	}
 
-	m_raygenRegion = VkStridedDeviceAddressRegionKHR{ m_deviceAddress, raygenStride, raygenSize };
-	m_missRegion = VkStridedDeviceAddressRegionKHR{ m_deviceAddress + raygenSize, missStride, missSize };
+	m_raygenRegion = VkStridedDeviceAddressRegionKHR{m_deviceAddress, raygenStride, raygenSize};
+	m_missRegion = VkStridedDeviceAddressRegionKHR{m_deviceAddress + raygenSize, missStride, missSize};
 	m_hitRegion = VkStridedDeviceAddressRegionKHR{
-		m_deviceAddress + raygenSize + missSize, hitStride, hitSize };
-	m_callableRegion = VkStridedDeviceAddressRegionKHR{ 0u, 0u, 0u };
+		m_deviceAddress + raygenSize + missSize, hitStride, hitSize};
+	m_callableRegion = VkStridedDeviceAddressRegionKHR{0u, 0u, 0u};
 
 	SDL_Log(
 		"Render: RtxShadowSBT: ready (size=%llu bytes, rgen=%llu miss=%llu hit=%llu)",
@@ -133,4 +129,4 @@ void RtxShadowSBT::Shutdown(const VulkanContextState &context) noexcept
 	m_callableRegion = {};
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

@@ -11,7 +11,6 @@ import projectv.string_id;
 
 #include <SDL3/SDL.h>
 
-
 #include <string>
 #include <vector>
 
@@ -49,7 +48,6 @@ struct AudioPlaylistRefreshRequest {
 struct FluidCATickState {
 	float accumulatorSeconds = 0.0f;
 };
-
 
 struct BenchmarkTickResult {
 	bool quitAfterFrame = false;
@@ -281,7 +279,6 @@ void TickFluidCASystem(EcsState *ecs)
 	}
 	(void)ecs->impl.world.progress();
 }
-
 
 void TickBenchmarkAutomationSystem(EcsState *ecs)
 {

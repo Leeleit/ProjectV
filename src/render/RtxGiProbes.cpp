@@ -37,14 +37,12 @@ struct VolumeDescGpu {
 
 static_assert(sizeof(VolumeDescGpu) == 64, "VolumeDescGpu must be 64 bytes to match std430 layout");
 
-}  // namespace
+} // namespace
 
 bool IsRtxGiProbeFieldEnabled(const VulkanContextState &context) noexcept
 {
 	return context.rayTracing.accelerationStructure && context.rayTracing.rayQuery;
 }
-
-
 
 bool RtxGiProbes::Initialize(
 	const VulkanContextState &context,
@@ -216,8 +214,7 @@ bool RtxGiProbes::AllocateTextures(
 			&irradianceAllocInfo,
 			&m_config.irradianceImage,
 			&m_config.irradianceAllocation,
-			nullptr)
-		!= VK_SUCCESS) {
+			nullptr) != VK_SUCCESS) {
 		runtime::LogRuntimeFailure(
 			"Render",
 			"RtxGiProbes.AllocateTextures.irradiance",
@@ -307,8 +304,7 @@ bool RtxGiProbes::AllocateTextures(
 			&distanceAllocInfo,
 			&m_config.distanceImage,
 			&m_config.distanceAllocation,
-			nullptr)
-		!= VK_SUCCESS) {
+			nullptr) != VK_SUCCESS) {
 		runtime::LogRuntimeFailure(
 			"Render",
 			"RtxGiProbes.AllocateTextures.distance",
@@ -341,7 +337,7 @@ bool RtxGiProbes::AllocateTextures(
 	};
 
 	constexpr VkExtent3D probeDataExtent{1, 1, 1};
-	const VkImageCreateInfo probeDataImageInfo{
+	constexpr VkImageCreateInfo probeDataImageInfo{
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
@@ -366,8 +362,7 @@ bool RtxGiProbes::AllocateTextures(
 			&probeDataAllocInfo,
 			&m_config.probeDataImage,
 			&m_config.probeDataAllocation,
-			nullptr)
-		!= VK_SUCCESS) {
+			nullptr) != VK_SUCCESS) {
 		runtime::LogRuntimeFailure(
 			"Render",
 			"RtxGiProbes.AllocateTextures.probeData",
@@ -424,8 +419,7 @@ bool RtxGiProbes::AllocateBuffer(const VulkanContextState &context)
 			&allocInfo,
 			&m_config.volumeDescBuffer,
 			&m_config.volumeDescAllocation,
-			nullptr)
-		!= VK_SUCCESS) {
+			nullptr) != VK_SUCCESS) {
 		runtime::LogRuntimeFailure(
 			"Render",
 			"RtxGiProbes.AllocateBuffer",
@@ -547,4 +541,4 @@ void DestroyRtxGiProbeResources(VulkanContextState *context, RenderState *render
 	}
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

@@ -8,7 +8,6 @@ namespace {
 
 struct TestContext {
 	int failures = 0;
-	// noinspection DfaConstantParameter
 	void Fail(const int line, const std::string_view message)
 	{
 		std::fprintf(stderr, "Test failure at line %d: %.*s\n", line, static_cast<int>(message.size()), message.data());
@@ -16,27 +15,26 @@ struct TestContext {
 	}
 };
 
-// noinspection DfaConstantParameter
-void ExpectFalse(TestContext &context, const bool condition, const int line, const std::string_view expr)
-{
-	if (condition) {
-		context.Fail(line, expr);
-	}
-}
+#define EXPECT_FALSE(context, condition, line, expr) \
+	do {                                             \
+		if (condition) {                             \
+			(context).Fail(line, expr);              \
+		}                                            \
+	} while (false)
 
-// noinspection DfaConstantParameter
-void ExpectEqualUInt(TestContext &context, const uint32_t expected, const uint32_t actual, const int line, const std::string_view expr)
-{
-	if (expected != actual) {
-		std::fprintf(stderr, "Test failure at line %d: %.*s (expected %u, got %u)\n", line, static_cast<int>(expr.size()), expr.data(), expected, actual);
-		++context.failures;
-	}
-}
+#define EXPECT_EQUAL_UINT(context, expected, actual, line, expr)                                                                                                 \
+	do {                                                                                                                                                         \
+		if ((expected) != (actual)) {                                                                                                                            \
+			const std::string_view _expr = (expr);                                                                                                               \
+			std::fprintf(stderr, "Test failure at line %d: %.*s (expected %u, got %u)\n", line, static_cast<int>(_expr.size()), _expr.data(), expected, actual); \
+			++(context).failures;                                                                                                                                \
+		}                                                                                                                                                        \
+	} while (false)
 
 void TestMeshShaderPipelineRequestedDefaultOff(TestContext &context)
 {
 	const bool requested = projectv::render::IsMeshShaderPipelineRequested();
-	ExpectFalse(context, requested, __LINE__, "PROJECTV_MESH_SHADER_PIPELINE unset -> false");
+	EXPECT_FALSE(context, requested, __LINE__, "PROJECTV_MESH_SHADER_PIPELINE unset -> false");
 }
 
 void TestBuildMeshCullPushConstantsDispatchParams(TestContext &context)
@@ -49,7 +47,7 @@ void TestBuildMeshCullPushConstantsDispatchParams(TestContext &context)
 
 	const auto [dispatchParams, frustumPlanes] =
 		projectv::render::BuildMeshCullPushConstants(parameters, 256u);
-	ExpectEqualUInt(context, 256u, dispatchParams[0], __LINE__, "dispatchParams[0] = chunk count");
+	EXPECT_EQUAL_UINT(context, 256u, dispatchParams[0], __LINE__, "dispatchParams[0] = chunk count");
 }
 
 void TestBuildMeshCullPushConstantsFrustumForwardPlane(TestContext &context)

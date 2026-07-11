@@ -80,7 +80,7 @@ void TestCreateVolumetricFogResourcesRejectsNullContext(TestContext &context)
 	}
 }
 
-void TestDestroyVolumetricFogResourcesRejectsNull(TestContext &context)
+void TestDestroyVolumetricFogResourcesRejectsNull()
 {
 	projectv::render::DestroyVolumetricFogResources(nullptr, nullptr);
 }
@@ -115,7 +115,7 @@ int main()
 	TestVolumetricFogFroxelConstants(context);
 	TestVolumetricFogDispatchDimensions(context);
 	TestCreateVolumetricFogResourcesRejectsNullContext(context);
-	TestDestroyVolumetricFogResourcesRejectsNull(context);
+	TestDestroyVolumetricFogResourcesRejectsNull();
 	TestRecordVolumetricFogAccumulationPassRejectsNullCommandBuffer(context);
 	TestRecordVolumetricFogAccumulationPassRejectsBadFrameIndex(context);
 

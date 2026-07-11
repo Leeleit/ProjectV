@@ -2,7 +2,6 @@
 
 #include <vulkan/vulkan.h> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
-#include <array>
 #include <cstdint>
 
 #include "core/Types.hpp"
@@ -16,7 +15,7 @@ struct RtxShadowPipelineConfig {
 };
 
 class RtxShadowPipeline {
-public:
+  public:
 	RtxShadowPipeline() = default;
 	~RtxShadowPipeline() = default;
 
@@ -38,7 +37,7 @@ public:
 	[[nodiscard]] static uint32_t GetMissGroupIndex() noexcept { return 1u; }
 	[[nodiscard]] static uint32_t GetHitGroupIndex() noexcept { return 2u; }
 
-private:
+  private:
 	VkShaderModule m_rayGenModule = VK_NULL_HANDLE;
 	VkShaderModule m_intersectionModule = VK_NULL_HANDLE;
 	VkShaderModule m_closestHitModule = VK_NULL_HANDLE;
@@ -48,4 +47,4 @@ private:
 	VkPipeline m_pipeline = VK_NULL_HANDLE;
 };
 
-}  // namespace projectv::render
+} // namespace projectv::render

@@ -8,7 +8,7 @@ struct VulkanContextState;
 struct SwapchainState;
 struct RenderState;
 
-void LogGraphicsPipelineVkFailure(const char *step, const VkResult result);
+void LogGraphicsPipelineVkFailure(const char *step, VkResult result);
 void LogGraphicsPipelineTextFailure(const char *step, const char *detail);
 VkShaderModule CreateShaderModule(VkDevice device, const std::vector<char> &code);
 bool SupportsDepthAttachment(VkPhysicalDevice physicalDevice, VkFormat format);

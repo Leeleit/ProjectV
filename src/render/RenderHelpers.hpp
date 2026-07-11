@@ -28,38 +28,38 @@ class ScopedPassTimer {
 };
 
 void TransitionImage(
-	const VkCommandBuffer cmd,
-	const VkImage image,
-	const VkImageAspectFlags aspectMask,
-	const VkImageLayout oldLayout,
-	const VkImageLayout newLayout,
-	const VkPipelineStageFlags2 srcStageMask,
-	const VkAccessFlags2 srcAccessMask,
-	const VkPipelineStageFlags2 dstStageMask,
-	const VkAccessFlags2 dstAccessMask,
-	const uint32_t layerCount = 1u);
+	VkCommandBuffer cmd,
+	VkImage image,
+	VkImageAspectFlags aspectMask,
+	VkImageLayout oldLayout,
+	VkImageLayout newLayout,
+	VkPipelineStageFlags2 srcStageMask,
+	VkAccessFlags2 srcAccessMask,
+	VkPipelineStageFlags2 dstStageMask,
+	VkAccessFlags2 dstAccessMask,
+	uint32_t layerCount = 1u);
 
 bool ShouldCaptureScreenshot(const RenderState &render);
 
 void RecordShadowCommands(
 	RenderState &render,
 	const FrameRenderData &frameRenderData,
-	const VkCommandBuffer cmd);
+	VkCommandBuffer cmd);
 
 void RecordDebugOverlayCommands(
 	RenderState &render,
 	const SwapchainState &swapchain,
 	const FrameRenderData &frameRenderData,
-	const VkCommandBuffer cmd);
+	VkCommandBuffer cmd);
 
 void RecordDebugHudCommands(
 	RenderState &render,
 	const FrameRenderData &frameRenderData,
-	const VkCommandBuffer cmd);
+	VkCommandBuffer cmd);
 
 void RecordVoxelMeshingCommands(
 	RenderState &render,
 	const FrameRenderData &frameRenderData,
-	const VkCommandBuffer cmd);
+	VkCommandBuffer cmd);
 
 } // namespace projectv::render

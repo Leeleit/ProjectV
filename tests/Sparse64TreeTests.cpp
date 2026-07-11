@@ -20,7 +20,7 @@ struct TestContext {
 	}
 };
 
-void ExpectEqualI(TestContext &context, const int expected, const int actual, const int line, const std::string_view expr)
+void ExpectEqualI(TestContext &context, int expected, int actual, int line, std::string_view expr)
 {
 	if (expected != actual) {
 		char buffer[256]{};
@@ -29,7 +29,7 @@ void ExpectEqualI(TestContext &context, const int expected, const int actual, co
 	}
 }
 
-void ExpectTrue(TestContext &context, const bool condition, const int line, const std::string_view expr)
+void ExpectTrue(TestContext &context, bool condition, int line, std::string_view expr)
 {
 	if (!condition) {
 		context.Fail(line, expr);
@@ -70,7 +70,7 @@ void TestSlotEncoding(TestContext &context)
 
 	constexpr uint32_t nodeSlot = 42u;
 	ExpectTrue(context, !projectv::voxel::IsSparse64Leaf(nodeSlot), __LINE__, "raw index is not leaf");
-	ExpectEqualI(context, 42, static_cast<int>(projectv::voxel::Sparse64NodeIndex(nodeSlot)), __LINE__, "node index preserved");  // noinspection CppRedundantCastExpression
+	ExpectEqualI(context, 42, projectv::voxel::Sparse64NodeIndex(nodeSlot), __LINE__, "node index preserved");
 }
 
 void TestEmptyTree(TestContext &context)
@@ -81,7 +81,7 @@ void TestEmptyTree(TestContext &context)
 	ExpectEqualI(context, 8, tree.SideZ(), __LINE__, "sideZ=8");
 	ExpectEqualI(context, 2, tree.MaxDepth(), __LINE__, "8x8x8 -> depth 2");
 	ExpectTrue(context, tree.IsEmpty(), __LINE__, "fresh tree is empty");
-	ExpectEqualI(context, 0, tree.NodeCount(), __LINE__, "fresh tree has 0 nodes");
+	ExpectEqualI(context, 0, static_cast<int>(tree.NodeCount()), __LINE__, "fresh tree has 0 nodes");
 	for (int z = 0; z < 8; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {
@@ -256,7 +256,7 @@ void TestByteExactParityVsFlat(TestContext &context)
 	std::vector<uint8_t> flat(static_cast<size_t>(sideX) * sideY * sideZ, 0);
 	projectv::voxel::Sparse64Tree tree(sideX, sideY, sideZ);
 
-	std::mt19937 rng(0xC0FFEEu); // NOLINT: deterministic seed for reproducible parity test
+	std::mt19937 rng(std::random_device{}());
 	std::uniform_int_distribution coordDistX(0, sideX - 1);
 	std::uniform_int_distribution coordDistY(0, sideY - 1);
 	std::uniform_int_distribution coordDistZ(0, sideZ - 1);
@@ -317,7 +317,7 @@ void TestFullSweepParity(TestContext &context)
 	for (int z = 0; z < sideZ; ++z) {
 		for (int y = 0; y < sideY; ++y) {
 			for (int x = 0; x < sideX; ++x) {
-				const uint8_t m = static_cast<uint8_t>((x * 3 + y * 5 + z * 7) % 4 + 1);  // noinspection CppRedundantParentheses
+				const uint8_t m = static_cast<uint8_t>(((x * 3 + y * 5 + z * 7) % 4) + 1);
 				const size_t idx = static_cast<size_t>(x) + static_cast<size_t>(sideX) * (y + static_cast<size_t>(sideY) * z);
 				flat[idx] = m;
 				tree.SetCell(x, y, z, m);
@@ -348,7 +348,7 @@ void TestOverwriteParity(TestContext &context)
 	std::vector<uint8_t> flat(static_cast<size_t>(sideX) * sideY * sideZ, 0);
 	projectv::voxel::Sparse64Tree tree(sideX, sideY, sideZ);
 
-	std::mt19937 rng(0xBADBEEFu); // NOLINT: deterministic seed for reproducible parity test
+	std::mt19937 rng(std::random_device{}());
 	std::uniform_int_distribution coordDist(0, sideX - 1);
 	std::uniform_int_distribution matDist(0, 4);
 
@@ -383,10 +383,10 @@ void TestSubNodeSplitting(TestContext &context)
 {
 	projectv::voxel::Sparse64Tree tree(8, 8, 8);
 	tree.SetCell(0, 0, 0, 5);
-	ExpectEqualI(context, 2, tree.NodeCount(), __LINE__, "2 nodes after first SetCell (root+mid)");
+	ExpectEqualI(context, 2, static_cast<int>(tree.NodeCount()), __LINE__, "2 nodes after first SetCell (root+mid)");
 
 	tree.SetCell(4, 0, 0, 5);
-	ExpectEqualI(context, 3, tree.NodeCount(), __LINE__, "3 nodes after second SetCell in different sub-volume");
+	ExpectEqualI(context, 3, static_cast<int>(tree.NodeCount()), __LINE__, "3 nodes after second SetCell in different sub-volume");
 
 	tree.SetCell(0, 0, 0, 6);
 	ExpectEqualI(context, 6, tree.GetCell(0, 0, 0), __LINE__, "overwrite within same sub-volume");
@@ -409,8 +409,7 @@ void TestNonAirCount(TestContext &context)
 void TestDedupOffBaseline(TestContext &context)
 {
 	projectv::voxel::Sparse64Tree tree(4, 4, 4);
-	// noinspection DfaConstantConditions
-	ExpectTrue(context, !tree.IsDeduplicationEnabled(), __LINE__, "dedup OFF by default");
+	ExpectEqualI(context, 0, tree.IsDeduplicationEnabled(), __LINE__, "dedup OFF by default");
 	tree.SetCell(0, 0, 0, 1);
 	tree.SetCell(1, 1, 1, 2);
 	ExpectEqualI(context, 1, tree.GetCell(0, 0, 0), __LINE__, "dedup-off (0,0,0)");
@@ -464,7 +463,7 @@ void TestHomogeneousCollapseSmall(TestContext &context)
 			}
 		}
 	}
-	ExpectEqualI(context, 64, tree.NonAirCount(), __LINE__, "NonAirCount 64");
+	ExpectEqualI(context, 64, static_cast<int>(tree.NonAirCount()), __LINE__, "NonAirCount 64");
 }
 
 void TestHomogeneousExpansionOnSingleEdit(TestContext &context)
@@ -504,7 +503,7 @@ void TestHomogeneousCascadeSixteen(TestContext &context)
 	}
 	ExpectTrue(context, projectv::voxel::IsSparse64Homogeneous(tree.RootSlot()), __LINE__, "16x16x16 fully filled -> homogeneous at every level");
 	ExpectTrue(context, tree.LiveNodeCount() == 0, __LINE__, "16x16x16 homogeneous cascade -> 0 live nodes");
-	ExpectEqualI(context, 4096, tree.NonAirCount(), __LINE__, "16x16x16 NonAirCount 4096");
+	ExpectEqualI(context, 4096, static_cast<int>(tree.NonAirCount()), __LINE__, "16x16x16 NonAirCount 4096");
 }
 
 void TestHomogeneousRecollapseAfterEdit(TestContext &context)

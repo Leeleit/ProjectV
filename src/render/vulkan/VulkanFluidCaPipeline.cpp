@@ -82,7 +82,7 @@ VkShaderModule CreateFluidCaShaderModule(const VkDevice device, const std::vecto
 	}
 	return shaderModule;
 }
-}  // namespace
+} // namespace
 
 namespace projectv::render {
 
@@ -202,7 +202,7 @@ bool CreateFluidCaPipelines(VulkanContextState *context, RenderState *render)
 	}
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->fluidCaPipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "FluidCaPipelineLayout");
 
-	const VkComputePipelineCreateInfo pipelineInfo {
+	const VkComputePipelineCreateInfo pipelineInfo{
 		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
 		.stage =
 			{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -516,7 +516,7 @@ bool SubmitFluidCaToComputeQueue(
 	PV_PROFILE_ZONE_N("SubmitFluidCaToComputeQueue");
 	PV_CHECK_OR_RETURN(
 		context && context->dedicatedComputeQueue != VK_NULL_HANDLE &&
-		context->renderTimelineSemaphore != VK_NULL_HANDLE,
+			context->renderTimelineSemaphore != VK_NULL_HANDLE,
 		"Render",
 		"SubmitFluidCaToComputeQueue.Preconditions",
 		"dedicated compute queue or timeline semaphore unavailable");
@@ -603,4 +603,4 @@ bool ReadFluidCaFrameStats(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

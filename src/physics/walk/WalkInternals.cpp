@@ -1,8 +1,6 @@
 #include "physics/walk/WalkInternals.hpp"
 #include "physics/PhysicsWorld_Internal.hpp"
 
-#include <ranges>
-
 int GetWalkSneakSupportVoxelY(const WalkSneakSupportRegion &region)
 {
 	return FloorToVoxel(
@@ -47,7 +45,8 @@ bool IsPhysicsStaticWorldBodyId(const PhysicsState &physics, const JPH::BodyID &
 	if (bodyId == physics.staticWorldBodyId) {
 		return true;
 	}
-	for (const JPH::BodyID chunkBodyId : physics.chunkStaticBodies | std::views::values) {
+	for (const auto &[chunkIndex, chunkBodyId] : physics.chunkStaticBodies) {
+		(void)chunkIndex;
 		if (chunkBodyId == bodyId) {
 			return true;
 		}
@@ -309,41 +308,41 @@ void PlotBroadphaseDiagnostics(const PhysicsState &physics)
 }
 
 
+JPH::RefConst<JPH::Shape> CreateWalkCharacterShape(const float capsuleHalfHeight, const char *step)
+{
+	const JPH::RotatedTranslatedShapeSettings characterShapeSettings(
+		JPH::Vec3(0.0f, capsuleHalfHeight + kWalkCapsuleRadius, 0.0f),
+		JPH::Quat::sIdentity(),
+		new JPH::CapsuleShape(capsuleHalfHeight, kWalkCapsuleRadius));
+	const JPH::ShapeSettings::ShapeResult characterShapeResult = characterShapeSettings.Create();
+	if (!characterShapeResult.IsValid()) {
+		runtime::LogRuntimeFailure(
+			"Physics",
+			step,
+			characterShapeResult.GetError());
+		return nullptr;
+	}
+
+	return characterShapeResult.Get();
+}
+
 bool EnsureWalkCharacter(PhysicsState &physics)
 {
 	if (physics.walkCharacter != nullptr) {
 		return true;
 	}
 
-	const auto ensureShape = [&](const float capsuleHalfHeight,
-								 JPH::RefConst<JPH::Shape> &outShape,
-								 const char *step) -> bool {
-		if (outShape != nullptr) {
-			return true;
-		}
-
-		const JPH::RotatedTranslatedShapeSettings characterShapeSettings(
-			JPH::Vec3(0.0f, capsuleHalfHeight + kWalkCapsuleRadius, 0.0f),
-			JPH::Quat::sIdentity(),
-			new JPH::CapsuleShape(capsuleHalfHeight, kWalkCapsuleRadius));
-		const JPH::ShapeSettings::ShapeResult characterShapeResult = characterShapeSettings.Create();
-		if (!characterShapeResult.IsValid()) {
-			runtime::LogRuntimeFailure(
-				"Physics",
-				step,
-				characterShapeResult.GetError());
+	if (physics.walkStandingShape == nullptr) {
+		physics.walkStandingShape = CreateWalkCharacterShape(kWalkCapsuleHalfHeight, "EnsureWalkCharacter.CreateStandingShape");
+		if (physics.walkStandingShape == nullptr) {
 			return false;
 		}
-
-		outShape = characterShapeResult.Get();
-		return true;
-	};
-
-	if (!ensureShape(kWalkCapsuleHalfHeight, physics.walkStandingShape, "EnsureWalkCharacter.CreateStandingShape")) {
-		return false;
 	}
-	if (!ensureShape(kWalkSneakCapsuleHalfHeight, physics.walkSneakShape, "EnsureWalkCharacter.CreateSneakShape")) {
-		return false;
+	if (physics.walkSneakShape == nullptr) {
+		physics.walkSneakShape = CreateWalkCharacterShape(kWalkSneakCapsuleHalfHeight, "EnsureWalkCharacter.CreateSneakShape");
+		if (physics.walkSneakShape == nullptr) {
+			return false;
+		}
 	}
 
 	const JPH::Ref characterSettings = new JPH::CharacterVirtualSettings();
@@ -363,7 +362,7 @@ bool EnsureWalkCharacter(PhysicsState &physics)
 	physics.walkCharacter->SetListener(&physics.walkContactListener);
 	physics.walkCharacterInitialized = false;
 	physics.walkSneakActive = false;
-	return physics.walkCharacter != nullptr;
+	return true;
 }
 
 [[maybe_unused]] JPH::CharacterVirtual::ExtendedUpdateSettings BuildWalkUpdateSettings()
@@ -2208,15 +2207,13 @@ bool RebuildCharacterFromCamera(
 			return true;
 		}
 
-		// noinspection DfaUnreachableCode, DfaUnusedValue, DfaUnreadVariable
-		const std::array topDownProbeOrigin{
-			camera.position[0],
-			std::max(camera.position[1] + 16.0f, static_cast<float>(world.maxExclusive.y) + 16.0f),
-			camera.position[2],
-		};
 		if (TryBuildWalkSpawnFromRay(
 				physics,
-				topDownProbeOrigin,
+				{
+					camera.position[0],
+					std::max(camera.position[1] + 16.0f, static_cast<float>(world.maxExclusive.y) + 16.0f),
+					camera.position[2],
+				},
 				std::max(48.0f, static_cast<float>(world.height) + 48.0f),
 				&feetPosition)) {
 			ApplyWalkCharacterState(physics, world, camera, feetPosition);

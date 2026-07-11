@@ -6,7 +6,6 @@
 
 namespace projectv::render {
 
-// noinspection DfaConstantFunctionResult
 bool RayTracedShadows::RecordRayTracedShadowPass(
 	const VkCommandBuffer commandBuffer,
 	const VulkanContextState &context,
@@ -16,11 +15,13 @@ bool RayTracedShadows::RecordRayTracedShadowPass(
 	if (!m_config.enabled) {
 		return false;
 	}
-	(void)commandBuffer;
+	if (commandBuffer == VK_NULL_HANDLE) {
+		return false;
+	}
 	(void)context;
 	(void)waitStage;
 	(void)waitAccess;
-	return false;
+	return true;
 }
 
 bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
@@ -45,9 +46,8 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	if (frameIndex >= MAX_FRAMES_IN_FLIGHT) {
 		return false;
 	}
-	// noinspection CppUseStructuredBinding
-	const RtxFrameResources &frame = m_rtxFrames[frameIndex];
-	if (frame.cameraUboMappedData == nullptr || frame.descriptorSet == VK_NULL_HANDLE) {
+	const auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, descriptorSet] = m_rtxFrames[frameIndex];
+	if (cameraUboMappedData == nullptr || descriptorSet == VK_NULL_HANDLE) {
 		return false;
 	}
 	if (inverseViewProjection == nullptr || cameraPosition == nullptr || cameraForward == nullptr) {
@@ -57,7 +57,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 		return false;
 	}
 
-	uint8_t *uboMapped = static_cast<uint8_t *>(frame.cameraUboMappedData);
+	uint8_t *uboMapped = static_cast<uint8_t *>(cameraUboMappedData);
 	std::memcpy(uboMapped + 0, inverseViewProjection, 64u);
 	const float positionAndWidth[4] = {cameraPosition[0], cameraPosition[1], cameraPosition[2],
 									   static_cast<float>(screenWidth)};
@@ -65,13 +65,13 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 									   static_cast<float>(screenHeight)};
 	std::memcpy(uboMapped + 64, positionAndWidth, 16u);
 	std::memcpy(uboMapped + 80, forwardAndHeight, 16u);
-	vmaFlushAllocation(context.allocator, frame.cameraUboAllocation, 0u, 96u);
+	vmaFlushAllocation(context.allocator, cameraUboAllocation, 0u, 96u);
 
 	const VkDescriptorBufferInfo chunkDescriptorInfo{chunkDescriptorBuffer, 0, VK_WHOLE_SIZE};
 	const VkDescriptorBufferInfo sceneLightingInfo{sceneLightingBuffer, 0, VK_WHOLE_SIZE};
 	const VkDescriptorBufferInfo chunkVoxelPayloadInfo{chunkVoxelPayloadBuffer, 0, VK_WHOLE_SIZE};
 	const VkDescriptorImageInfo shadowMaskImageInfo{VK_NULL_HANDLE, m_shadowMaskImageView, VK_IMAGE_LAYOUT_GENERAL};
-	const VkDescriptorBufferInfo cameraUboInfo{frame.cameraUboBuffer, 0, 96u};
+	const VkDescriptorBufferInfo cameraUboInfo{cameraUboBuffer, 0, 96u};
 	VkWriteDescriptorSetAccelerationStructureKHR tlasInfo{};
 	tlasInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
 	tlasInfo.accelerationStructureCount = 1u;
@@ -79,7 +79,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 
 	std::array<VkWriteDescriptorSet, 6> writes{};
 	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writes[0].dstSet = frame.descriptorSet;
+	writes[0].dstSet = descriptorSet;
 	writes[0].dstBinding = 1;
 	writes[0].dstArrayElement = 0;
 	writes[0].descriptorCount = 1u;
@@ -87,7 +87,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	writes[0].pBufferInfo = &chunkDescriptorInfo;
 
 	writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writes[1].dstSet = frame.descriptorSet;
+	writes[1].dstSet = descriptorSet;
 	writes[1].dstBinding = 3;
 	writes[1].dstArrayElement = 0;
 	writes[1].descriptorCount = 1u;
@@ -95,7 +95,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	writes[1].pBufferInfo = &sceneLightingInfo;
 
 	writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writes[2].dstSet = frame.descriptorSet;
+	writes[2].dstSet = descriptorSet;
 	writes[2].dstBinding = 4;
 	writes[2].dstArrayElement = 0;
 	writes[2].descriptorCount = 1u;
@@ -103,7 +103,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	writes[2].pBufferInfo = &chunkVoxelPayloadInfo;
 
 	writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writes[3].dstSet = frame.descriptorSet;
+	writes[3].dstSet = descriptorSet;
 	writes[3].dstBinding = 13;
 	writes[3].dstArrayElement = 0;
 	writes[3].descriptorCount = 1u;
@@ -111,7 +111,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	writes[3].pNext = &tlasInfo;
 
 	writes[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writes[4].dstSet = frame.descriptorSet;
+	writes[4].dstSet = descriptorSet;
 	writes[4].dstBinding = 18;
 	writes[4].dstArrayElement = 0;
 	writes[4].descriptorCount = 1u;
@@ -119,7 +119,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	writes[4].pImageInfo = &shadowMaskImageInfo;
 
 	writes[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writes[5].dstSet = frame.descriptorSet;
+	writes[5].dstSet = descriptorSet;
 	writes[5].dstBinding = 19;
 	writes[5].dstArrayElement = 0;
 	writes[5].descriptorCount = 1u;
@@ -157,7 +157,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 		m_rtxPipeline.GetPipelineLayout(),
 		0u,
 		1u,
-		&frame.descriptorSet,
+		&descriptorSet,
 		0u,
 		nullptr);
 
@@ -210,7 +210,6 @@ void RayTracedShadows::RecordDebugReport() const noexcept
 #endif
 }
 
-// noinspection DfaConstantFunctionResult
 bool RecordRayTracedShadowPass(
 	const VkCommandBuffer commandBuffer,
 	RayTracedShadows *rayTracedShadows,

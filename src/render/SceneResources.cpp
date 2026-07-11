@@ -326,7 +326,7 @@ bool CreateSceneResources(
 
 		constexpr VkDeviceSize chunkAabbStrideBytes = sizeof(PackedSceneChunkAabb);
 		const VkDeviceSize chunkAabbBufferBytes = chunkAabbStrideBytes *
-			world->voxelWorld->chunks.size();
+												  world->voxelWorld->chunks.size();
 		if (chunkAabbBufferBytes > 0) {
 			VmaAllocationInfo chunkAabbAllocationInfo{};
 			if (!CreateBuffer(
@@ -350,7 +350,9 @@ bool CreateSceneResources(
 		}
 
 		const uint32_t visibilityMaskWordCount = (static_cast<uint32_t>(
-			world->voxelWorld->chunks.size()) + 31u) / 32u;
+													  world->voxelWorld->chunks.size()) +
+												  31u) /
+												 32u;
 		if (visibilityMaskWordCount > 0u) {
 			VmaAllocationInfo visibilityMaskAllocationInfo{};
 			if (!CreateBuffer(
@@ -522,8 +524,8 @@ bool CreateSceneResources(
 		}
 
 		const uint32_t chunkVoxelCount = static_cast<uint32_t>(world->voxelWorld->chunkSize) *
-			static_cast<uint32_t>(world->voxelWorld->chunkSize) *
-			static_cast<uint32_t>(world->voxelWorld->chunkSize);
+										 static_cast<uint32_t>(world->voxelWorld->chunkSize) *
+										 static_cast<uint32_t>(world->voxelWorld->chunkSize);
 		const VkDeviceSize fluidCaPingPongBytes = std::max<VkDeviceSize>(
 			sizeof(uint32_t) * 4u * std::max(chunkVoxelCount, 1u) * std::max(fluidCaMaxActiveChunks, 1u),
 			sizeof(uint32_t) * 4u);
@@ -533,11 +535,11 @@ bool CreateSceneResources(
 
 		for (uint32_t pingPong = 0u; pingPong < 2u; ++pingPong) {
 			VkBuffer &targetBuffer = pingPong == 0u ? frameResources.fluidCaSourceBuffer
-													   : frameResources.fluidCaDestinationBuffer;
+													: frameResources.fluidCaDestinationBuffer;
 			VmaAllocation &targetAllocation = pingPong == 0u ? frameResources.fluidCaSourceAllocation
-																 : frameResources.fluidCaDestinationAllocation;
+															 : frameResources.fluidCaDestinationAllocation;
 			void *&targetMappedData = pingPong == 0u ? frameResources.fluidCaSourceMappedData
-														: frameResources.fluidCaDestinationMappedData;
+													 : frameResources.fluidCaDestinationMappedData;
 			VmaAllocationInfo pingPongAllocationInfo{};
 			if (!CreateBuffer(
 					context,
@@ -653,7 +655,7 @@ bool CreateSceneResources(
 		}
 
 		const VkDeviceSize kWorldGenVoxelBufferBytes = sizeof(uint32_t) * 8u * 8u * 8u *
-			std::max(world->voxelWorld->chunks.size(), static_cast<size_t>(1u));
+													   std::max(world->voxelWorld->chunks.size(), static_cast<size_t>(1u));
 		{
 			VmaAllocationInfo worldGenVoxelAllocationInfo{};
 			if (!CreateBuffer(

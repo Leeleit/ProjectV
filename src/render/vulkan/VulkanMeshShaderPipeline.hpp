@@ -53,4 +53,4 @@ bool RecordMeshShaderDraw(
 	const MeshDrawPushConstants &drawPushConstants,
 	uint32_t chunkCount);
 
-}  // namespace projectv::render
+} // namespace projectv::render

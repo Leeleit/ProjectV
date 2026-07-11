@@ -309,8 +309,8 @@ bool UploadSceneFrameResources(
 }
 
 bool RefreshChunkAabbBuffer(
-	std::span<const VoxelChunk>const  chunks,
-	std::span<const PackedSceneChunkDescriptor>const  descriptors,
+	const std::span<const VoxelChunk> chunks,
+	const std::span<const PackedSceneChunkDescriptor> descriptors,
 	SceneFrameResources &frameResources)
 {
 	(void)descriptors;
@@ -421,7 +421,7 @@ bool GrowNanoVdbBuffer(
 		mappedData = nullptr;
 		capacityBytes = 0u;
 	}
-	const VmaAllocationCreateInfo allocationCreateInfo {};
+	constexpr VmaAllocationCreateInfo allocationCreateInfo{};
 	VkBufferCreateInfo bufferCreateInfo{};
 	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferCreateInfo.size = newCapacityBytes;

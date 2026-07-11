@@ -103,21 +103,21 @@ std::expected<ChunkData, ChunkStreamError> ReadChunkBinaryFile(
 		return std::unexpected(ChunkStreamError::FileReadFailed);
 	}
 	const uint32_t magic = static_cast<uint32_t>(header[0]) |
-		static_cast<uint32_t>(header[1]) << 8 |
-		static_cast<uint32_t>(header[2]) << 16 |
-		static_cast<uint32_t>(header[3]) << 24;
+						   static_cast<uint32_t>(header[1]) << 8 |
+						   static_cast<uint32_t>(header[2]) << 16 |
+						   static_cast<uint32_t>(header[3]) << 24;
 	if (magic != kChunkFileHeaderMagic) {
 		return std::unexpected(ChunkStreamError::FileReadFailed);
 	}
 
 	const uint64_t voxelByteCount = static_cast<uint64_t>(header[8]) |
-		static_cast<uint64_t>(header[9]) << 8 |
-		static_cast<uint64_t>(header[10]) << 16 |
-		static_cast<uint64_t>(header[11]) << 24 |
-		static_cast<uint64_t>(header[12]) << 32 |
-		static_cast<uint64_t>(header[13]) << 40 |
-		static_cast<uint64_t>(header[14]) << 48 |
-		static_cast<uint64_t>(header[15]) << 56;
+									static_cast<uint64_t>(header[9]) << 8 |
+									static_cast<uint64_t>(header[10]) << 16 |
+									static_cast<uint64_t>(header[11]) << 24 |
+									static_cast<uint64_t>(header[12]) << 32 |
+									static_cast<uint64_t>(header[13]) << 40 |
+									static_cast<uint64_t>(header[14]) << 48 |
+									static_cast<uint64_t>(header[15]) << 56;
 	if (voxelByteCount > static_cast<uint64_t>(16u) * 1024u * 1024u) {
 		return std::unexpected(ChunkStreamError::FileReadFailed);
 	}
@@ -126,7 +126,7 @@ std::expected<ChunkData, ChunkStreamError> ReadChunkBinaryFile(
 	data.voxelBytes.resize(voxelByteCount);
 	if (voxelByteCount > 0u) {
 		file.read(reinterpret_cast<char *>(data.voxelBytes.data()),
-			static_cast<std::streamsize>(data.voxelBytes.size()));
+				  static_cast<std::streamsize>(data.voxelBytes.size()));
 		if (static_cast<uint64_t>(file.gcount()) != voxelByteCount) {
 			return std::unexpected(ChunkStreamError::FileReadFailed);
 		}
@@ -175,12 +175,12 @@ bool WriteChunkBinaryFile(
 	file.write(reinterpret_cast<const char *>(header.data()), header.size());
 	if (!voxelBytes.empty()) {
 		file.write(reinterpret_cast<const char *>(voxelBytes.data()),
-			static_cast<std::streamsize>(voxelBytes.size()));
+				   static_cast<std::streamsize>(voxelBytes.size()));
 	}
 	return file.good();
 }
 
-}  // namespace
+} // namespace
 
 std::string GetChunkStreamerCachePath()
 {
@@ -223,7 +223,7 @@ std::expected<ChunkData, ChunkStreamError> TryDequeueChunkData()
 	return data;
 }
 
-void ProcessPendingRequests(const std::stop_token& stopToken)
+void ProcessPendingRequests(const std::stop_token &stopToken)
 {
 	const std::string cachePath = GetChunkStreamerCachePathFromEnvironment();
 	while (!stopToken.stop_requested()) {
@@ -231,7 +231,7 @@ void ProcessPendingRequests(const std::stop_token& stopToken)
 		{
 			const std::lock_guard lock(GetQueueMutex());
 			if (!GetPendingQueue().empty()) {
-				for (auto it = GetPendingQueue().begin(); it != GetPendingQueue().end(); ) {
+				for (auto it = GetPendingQueue().begin(); it != GetPendingQueue().end();) {
 					localPending.push_back(*it);
 					it = GetPendingQueue().erase(it);
 				}
@@ -372,10 +372,10 @@ uint32_t PreloadChunksAroundCamera(
 					continue;
 				}
 				const size_t linearIndex = static_cast<size_t>(gz) *
-					static_cast<size_t>(std::max(gridHeight, 1)) *
-					static_cast<size_t>(std::max(gridWidth, 1)) +
-					static_cast<size_t>(gy) * static_cast<size_t>(std::max(gridWidth, 1)) +
-					static_cast<size_t>(gx);
+											   static_cast<size_t>(std::max(gridHeight, 1)) *
+											   static_cast<size_t>(std::max(gridWidth, 1)) +
+										   static_cast<size_t>(gy) * static_cast<size_t>(std::max(gridWidth, 1)) +
+										   static_cast<size_t>(gx);
 				if (linearIndex >= world.chunks.size()) {
 					continue;
 				}
@@ -391,4 +391,4 @@ uint32_t PreloadChunksAroundCamera(
 	return enqueued;
 }
 
-}  // namespace projectv::voxel
+} // namespace projectv::voxel

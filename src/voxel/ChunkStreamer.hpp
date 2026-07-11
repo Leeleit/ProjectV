@@ -1,12 +1,9 @@
 #pragma once
 
-#include "voxel/Sparse64Tree.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include "voxel/VoxelWorld.hpp"
 
-#include <atomic>
 #include <cstdint>
 #include <expected>
-#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -51,7 +48,7 @@ void StopChunkStreamerWorker();
 
 bool IsChunkStreamerWorkerActive();
 
-void ProcessPendingRequests(const std::stop_token& stopToken);
+void ProcessPendingRequests(const std::stop_token &stopToken);
 
 std::string GetChunkStreamerCachePath();
 
@@ -70,4 +67,4 @@ uint32_t PreloadChunksAroundCamera(
 	float cameraZ,
 	uint32_t radiusChunks);
 
-}  // namespace projectv::voxel
+} // namespace projectv::voxel

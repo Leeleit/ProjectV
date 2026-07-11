@@ -15,45 +15,44 @@ struct TestContext {
 	}
 };
 
-// noinspection DfaConstantParameter
-void ExpectFalse(TestContext &context, const bool condition, const int line, const std::string_view expr)
-{
-	if (condition) {
-		context.Fail(line, expr);
-	}
-}
+#define EXPECT_FALSE(context, condition, line, expr) \
+	do {                                             \
+		if (condition) {                             \
+			(context).Fail(line, expr);              \
+		}                                            \
+	} while (false)
 
-// noinspection DfaConstantParameter
-void ExpectEqualUInt(TestContext &context, const uint32_t expected, const uint32_t actual, const int line, const std::string_view expr)
-{
-	if (expected != actual) {
-		std::fprintf(stderr, "Test failure at line %d: %.*s (expected %u, got %u)\n", line, static_cast<int>(expr.size()), expr.data(), expected, actual);
-		++context.failures;
-	}
-}
+#define EXPECT_EQUAL_UINT(context, expected, actual, line, expr)                                                                                                 \
+	do {                                                                                                                                                         \
+		if ((expected) != (actual)) {                                                                                                                            \
+			const std::string_view _expr = (expr);                                                                                                               \
+			std::fprintf(stderr, "Test failure at line %d: %.*s (expected %u, got %u)\n", line, static_cast<int>(_expr.size()), _expr.data(), expected, actual); \
+			++(context).failures;                                                                                                                                \
+		}                                                                                                                                                        \
+	} while (false)
 
 void TestHzbDisabledByDefault(TestContext &context)
 {
 	const bool enabled = projectv::render::IsHzbCullingEnabled();
-	ExpectFalse(context, enabled, __LINE__, "HZB culling disabled without env");
+	EXPECT_FALSE(context, enabled, __LINE__, "HZB culling disabled without env");
 }
 
 void TestComputeHzbMipLevelCountSquare(TestContext &context)
 {
 	const uint32_t levels = projectv::render::ComputeHzbMipLevelCount(1024u, 1024u);
-	ExpectEqualUInt(context, 11u, levels, __LINE__, "1024x1024 -> 11 mip levels (1+log2(1024))");
+	EXPECT_EQUAL_UINT(context, 11u, levels, __LINE__, "1024x1024 -> 11 mip levels (1+log2(1024))");
 }
 
 void TestComputeHzbMipLevelCountNonSquare(TestContext &context)
 {
 	const uint32_t levels = projectv::render::ComputeHzbMipLevelCount(800u, 600u);
-	ExpectEqualUInt(context, 10u, levels, __LINE__, "800x600 -> 10 mip levels (1+log2(600))");
+	EXPECT_EQUAL_UINT(context, 10u, levels, __LINE__, "800x600 -> 10 mip levels (1+log2(600))");
 }
 
 void TestComputeHzbMipLevelCountTiny(TestContext &context)
 {
 	const uint32_t levels = projectv::render::ComputeHzbMipLevelCount(1u, 1u);
-	ExpectEqualUInt(context, 1u, levels, __LINE__, "1x1 -> 1 mip level");
+	EXPECT_EQUAL_UINT(context, 1u, levels, __LINE__, "1x1 -> 1 mip level");
 }
 
 }  // namespace

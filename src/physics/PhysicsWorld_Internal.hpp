@@ -57,7 +57,7 @@ constexpr JPH::ObjectLayer Moving = 1;
 constexpr JPH::BroadPhaseLayer StaticBroadPhase{0};
 constexpr JPH::BroadPhaseLayer MovingBroadPhase{1};
 constexpr uint32_t BroadPhaseLayerCount = 2;
-}
+} // namespace PhysicsLayers
 
 struct Float3 {
 	float x = 0.0f;
@@ -337,7 +337,7 @@ inline JPH::RVec3 ToRVec3(const std::array<float, 3> &value)
 }
 
 template <typename Vector3>
-	std::array<float, 3> ToArray(const Vector3 &value)
+std::array<float, 3> ToArray(const Vector3 &value)
 {
 	return {
 		static_cast<float>(value.GetX()),

@@ -46,7 +46,7 @@ struct RtxGiProbeConfig {
 };
 
 class RtxGiProbes {
-public:
+  public:
 	RtxGiProbes() = default;
 	~RtxGiProbes() = default;
 
@@ -92,11 +92,11 @@ public:
 		const FrameRenderData &renderData);
 
 	[[nodiscard]] bool RecordUpdatePass(
-		VkCommandBuffer commandBuffer,
+		const VkCommandBuffer commandBuffer,
 		const VulkanContextState &context,
-		VkAccelerationStructureKHR tlas)
+		const VkAccelerationStructureKHR tlas)
 	{
-		const FrameRenderData dummy {};
+		const FrameRenderData dummy{};
 		return RecordUpdatePass(
 			commandBuffer,
 			context,
@@ -111,7 +111,7 @@ public:
 
 	[[nodiscard]] static float SampleIrradianceTestValue(uint32_t probeIndex) noexcept;
 
-private:
+  private:
 	bool AllocateTextures(
 		const VulkanContextState &context,
 		uint32_t probeCountPerAxis,
@@ -160,12 +160,12 @@ bool RecordRtxGiProbeUpdatePass(
 	const FrameRenderData &renderData);
 
 inline bool RecordRtxGiProbeUpdatePass(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RtxGiProbes *probes,
 	const VulkanContextState &context,
-	VkAccelerationStructureKHR tlas)
+	const VkAccelerationStructureKHR tlas)
 {
-	const FrameRenderData dummy {};
+	const FrameRenderData dummy{};
 	return RecordRtxGiProbeUpdatePass(
 		commandBuffer,
 		probes,
@@ -179,4 +179,4 @@ inline bool RecordRtxGiProbeUpdatePass(
 		dummy);
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

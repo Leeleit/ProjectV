@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -13,7 +12,7 @@ namespace projectv::voxel::nanovdb {
 inline constexpr uint32_t kNanoVdbInvalidIndex = 0xFFFFFFFFu;
 inline constexpr uint32_t kNanoVdbMaxLevelCount = 8u;
 
-constexpr uint64_t ComputeGrownNanoVdbCapacityForTest(uint64_t currentCapacityBytes, uint64_t requiredCapacityBytes)
+inline constexpr uint64_t ComputeGrownNanoVdbCapacityForTest(const uint64_t currentCapacityBytes, const uint64_t requiredCapacityBytes)
 {
 	if (currentCapacityBytes == 0u) {
 		return requiredCapacityBytes == 0u ? 1u : requiredCapacityBytes;
@@ -112,4 +111,4 @@ inline void PackNanoVdbFlattenData(
 	}
 }
 
-}  // namespace projectv::voxel::nanovdb
+} // namespace projectv::voxel::nanovdb

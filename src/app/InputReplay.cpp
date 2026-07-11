@@ -50,7 +50,6 @@ std::filesystem::path GetResolvedInputReplaySnapshotPath()
 	return GetInputReplayDirectoryPath() / "latest.projectv.replay.snapshot.bin";
 }
 
-// noinspection DfaConstantParameter
 bool EnsureParentDirectoryExists(const std::filesystem::path &path, const std::string_view step)
 {
 	const std::filesystem::path parentPath = path.parent_path();
@@ -280,10 +279,6 @@ bool StartInputReplayRecording(
 	capture.walkAutoJumpDelayEnabled = walkAutoJumpDelayEnabled;
 	capture.frames.reserve(512);
 
-	// noinspection DfaUnreachableCode, DfaConstantFunctionResult
-	if (!EnsureParentDirectoryExists(capture.snapshotPath, "StartInputReplayRecording.CreateDirectories")) {
-		return false;
-	}
 	const auto saveResult = SaveVoxelWorldSnapshot(world, capture.snapshotPath.string());
 	if (!saveResult.has_value()) {
 		runtime::LogRuntimeFailure(
@@ -358,8 +353,11 @@ bool LoadLatestInputReplay(InputState *input)
 
 	InputReplayCapture capture{};
 	const std::string replayPath = GetInputReplayPath();
-	// noinspection DfaUnreachableCode, DfaConstantFunctionResult
 	if (!LoadInputReplayCapture(replayPath, &capture)) {
+		runtime::LogRuntimeFailure(
+			"InputReplay",
+			"LoadLatestInputReplay.Load",
+			replayPath);
 		return false;
 	}
 

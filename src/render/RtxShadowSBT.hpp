@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
@@ -9,7 +8,7 @@
 namespace projectv::render {
 
 class RtxShadowSBT {
-public:
+  public:
 	RtxShadowSBT() = default;
 	~RtxShadowSBT() = default;
 
@@ -32,7 +31,7 @@ public:
 	[[nodiscard]] const VkStridedDeviceAddressRegionKHR &GetHitRegion() const noexcept { return m_hitRegion; }
 	[[nodiscard]] const VkStridedDeviceAddressRegionKHR &GetCallableRegion() const noexcept { return m_callableRegion; }
 
-private:
+  private:
 	VkBuffer m_buffer = VK_NULL_HANDLE;
 	VmaAllocation m_allocation = nullptr;
 	VkDeviceAddress m_deviceAddress = 0u;
@@ -44,4 +43,4 @@ private:
 	VkStridedDeviceAddressRegionKHR m_callableRegion{};
 };
 
-}  // namespace projectv::render
+} // namespace projectv::render

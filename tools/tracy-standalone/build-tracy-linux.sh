@@ -60,7 +60,7 @@ echo "[tracy-standalone] Build dir             : $BUILD_DIR_FULL"
 echo "[tracy-standalone] CPM source cache      : $CPM_SOURCE_CACHE"
 echo "[tracy-standalone] Compiler              : $COMPILER"
 echo "[tracy-standalone] Note                  : Tracy UI build on Linux may fail at tidy-html5 step"
-echo "                                              (upstream wolfpld/tracy bug — see 'agent/knowledge.md')."
+echo "                                              (upstream wolfpld/tracy bug — see $(agent/knowledge.md))."
 
 # Configure. Tracy profiler's CMakeLists.txt has its own project()
 # call (project(tracy-profiler)), so we can't add_subdirectory it

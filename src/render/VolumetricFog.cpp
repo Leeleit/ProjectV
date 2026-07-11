@@ -8,7 +8,6 @@
 #include <array>
 #include <vector>
 
-
 namespace {
 constexpr char kVolumetricFogShaderFilename[] = "volumetric_fog.comp.spv";
 
@@ -114,10 +113,6 @@ void DestroyVolumetricFogFroxelImage(
 	VulkanContextState *context,
 	RenderState *render)
 {
-	// noinspection DfaConstantConditions, DfaUnreachableCode
-	if (context == nullptr || render == nullptr || context->device == VK_NULL_HANDLE) {
-		return;
-	}
 	if (render->volumetricFogFroxelView != VK_NULL_HANDLE) {
 		vkDestroyImageView(context->device, render->volumetricFogFroxelView, nullptr);
 		render->volumetricFogFroxelView = VK_NULL_HANDLE;

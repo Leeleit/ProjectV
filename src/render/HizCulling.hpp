@@ -33,7 +33,7 @@ bool IsHzbSmartMipEnabled();
 
 bool IsHzbSmartBlendWidthEnabled();
 
-uint32_t ComputeHzbMipLevelCount(const uint32_t baseWidth, const uint32_t baseHeight);
+uint32_t ComputeHzbMipLevelCount(uint32_t baseWidth, uint32_t baseHeight);
 
 uint32_t ComputeBlendWidthForChunkMip(
 	uint32_t projectedExtentXTexels,
@@ -112,4 +112,4 @@ void WritePerChunkMipAndBlendWidthsToBuffer(
 	const uint32_t *mipAndBlendWidths,
 	uint32_t chunkCount);
 
-}  // namespace projectv::render
+} // namespace projectv::render

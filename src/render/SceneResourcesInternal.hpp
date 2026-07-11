@@ -18,7 +18,7 @@
 constexpr uint32_t kVoxelMaterialsPerWord = 4u;
 
 VoxelSceneLighting BuildSceneLighting(const VoxelWorld &world, const RenderState &render);
-void RefreshSceneLightingBuffer(const VoxelWorld &world, RenderState &render, const VkExtent2D renderExtent);
+void RefreshSceneLightingBuffer(const VoxelWorld &world, RenderState &render, VkExtent2D renderExtent);
 bool CreateBuffer(VulkanContextState *context, VkDeviceSize size, VkBufferUsageFlags usage, const VmaAllocationCreateInfo &allocationInfo, VkBuffer *outBuffer, VmaAllocation *outAllocation, VmaAllocationInfo *outAllocationInfo);
 uint32_t GetChunkVoxelCount(const VoxelChunk &chunk);
 uint32_t GetChunkVoxelWordCount(const VoxelChunk &chunk);

@@ -2,6 +2,7 @@
 
 #include "benchmark/benchmark.h"
 
+#include <cstdint>
 #include <vector>
 
 namespace {
@@ -9,10 +10,9 @@ namespace {
 using projectv::voxel::CpuGreedyInput;
 using projectv::voxel::GenerateCpuGreedyMesh;
 
-// noinspection DfaConstantParameter
 struct Xorshift32 {
 	uint32_t state;
-	explicit Xorshift32(uint32_t seed) : state(seed ? seed : 1u) {}
+	explicit Xorshift32(const uint32_t seed) : state(seed ? seed : 1u) {}
 	uint32_t Next()
 	{
 		uint32_t x = state;
@@ -40,10 +40,9 @@ struct Xorshift32 {
 	}
 };
 
-// noinspection DfaConstantParameter
-std::vector<uint8_t> MakeRandomChunk(const int size, const uint32_t seed)
+std::vector<uint8_t> MakeRandomChunk(const int size)
 {
-	Xorshift32 rng(seed);
+	Xorshift32 rng(42u);
 	std::vector<uint8_t> voxels(static_cast<size_t>(size) * static_cast<size_t>(size) * static_cast<size_t>(size));
 	for (auto &v : voxels) {
 		v = rng.NextMaterial();
@@ -75,7 +74,7 @@ CpuGreedyInput MakeInput(const std::vector<uint8_t> &voxels, const int size)
 
 void BM_GreedyMeshRandom8(benchmark::State &state)
 {
-	const auto voxels = MakeRandomChunk(8, 42u);
+	const auto voxels = MakeRandomChunk(8);
 	const auto input = MakeInput(voxels, 8);
 	for ([[maybe_unused]] auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
@@ -86,7 +85,7 @@ BENCHMARK(BM_GreedyMeshRandom8);
 
 void BM_GreedyMeshRandom16(benchmark::State &state)
 {
-	const auto voxels = MakeRandomChunk(16, 42u);
+	const auto voxels = MakeRandomChunk(16);
 	const auto input = MakeInput(voxels, 16);
 	for ([[maybe_unused]] auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
@@ -97,7 +96,7 @@ BENCHMARK(BM_GreedyMeshRandom16);
 
 void BM_GreedyMeshRandom32(benchmark::State &state)
 {
-	const auto voxels = MakeRandomChunk(32, 42u);
+	const auto voxels = MakeRandomChunk(32);
 	const auto input = MakeInput(voxels, 32);
 	for ([[maybe_unused]] auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);

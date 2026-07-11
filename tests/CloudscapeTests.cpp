@@ -64,7 +64,7 @@ void TestCreateCloudscapeResourcesRejectsNullContext(TestContext &context)
 	}
 }
 
-void TestDestroyCloudscapeResourcesRejectsNull(TestContext &context)
+void TestDestroyCloudscapeResourcesRejectsNull()
 {
 	projectv::render::DestroyCloudscapeResources(nullptr, nullptr);
 }
@@ -107,7 +107,7 @@ int main()
 	TestCloudscapePushConstantsSize(context);
 	TestCloudscapeConstants(context);
 	TestCreateCloudscapeResourcesRejectsNullContext(context);
-	TestDestroyCloudscapeResourcesRejectsNull(context);
+	TestDestroyCloudscapeResourcesRejectsNull();
 	TestRecordCloudscapeRaymarchPassRejectsNullCommandBuffer(context);
 	TestRecordCloudscapeRaymarchPassRejectsBadFrameIndex(context);
 	TestRecordCloudscapeRaymarchPassRejectsZeroExtent(context);

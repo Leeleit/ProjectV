@@ -30,4 +30,4 @@ bool ProbeHardwareRayTracingSupport(
 	VkPhysicalDevice physicalDevice,
 	HardwareRayTracingSupport *outSupport);
 
-}  // namespace projectv::render
+} // namespace projectv::render

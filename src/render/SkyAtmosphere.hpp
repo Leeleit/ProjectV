@@ -11,11 +11,11 @@ namespace projectv::render {
 
 inline bool IsSkyAtmosphereEnabled()
 {
-	const char *value = std::getenv("PROJECTV_SKY");
-	if (value == nullptr || value[0] == '\0') {
-		return false;
-	}
-	return value[0] == 'O' && value[1] == 'N';
+	static const bool enabled = [] {
+		const char *value = std::getenv("PROJECTV_SKY");
+		return value != nullptr && value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
+	}();
+	return enabled;
 }
 
 struct SkyAtmospherePushConstants {
@@ -53,15 +53,15 @@ constexpr VkFormat kMultiScatteringLutFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 // R=680nm, G=550nm, B=440nm wavelengths). Same as sky_atmosphere.frag analytical
 // path — keep consistent with closed precomputed-atmospheric-sky experiment.
 namespace sky_atmosphere_constants {
-	constexpr float kPlanetRadius = 6371000.0f;
-	constexpr float kAtmosphereHeight = 100000.0f;
-	constexpr float kRayleighBetaR = 5.8e-6f;
-	constexpr float kRayleighBetaG = 13.5e-6f;
-	constexpr float kRayleighBetaB = 33.1e-6f;
-	constexpr float kMieBeta = 0.005f;
-	constexpr float kMieG = 0.8f;
-	constexpr int kRaymarchStepCount = 16;
-}
+constexpr float kPlanetRadius = 6371000.0f;
+constexpr float kAtmosphereHeight = 100000.0f;
+constexpr float kRayleighBetaR = 5.8e-6f;
+constexpr float kRayleighBetaG = 13.5e-6f;
+constexpr float kRayleighBetaB = 33.1e-6f;
+constexpr float kMieBeta = 0.005f;
+constexpr float kMieG = 0.8f;
+constexpr int kRaymarchStepCount = 16;
+} // namespace sky_atmosphere_constants
 
 bool IsSkyLutPrecomputeEnabled();
 bool CreateSkyLutResources(VulkanContextState *context, RenderState *render);
@@ -87,4 +87,4 @@ bool RecordSkyAtmospherePass(
 	VkExtent2D extent,
 	uint32_t frameIndex);
 
-}  // namespace projectv::render
+} // namespace projectv::render

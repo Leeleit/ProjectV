@@ -19,7 +19,7 @@ bool IsGreedyPhysicsMeshEnabledFromEnvironment()
 	return value[0] == 'O' && value[1] == 'N';
 }
 
-}  // namespace
+} // namespace
 
 bool IsGreedyPhysicsMeshEnabled()
 {
@@ -28,7 +28,7 @@ bool IsGreedyPhysicsMeshEnabled()
 
 namespace {
 
-	bool IsSolidAt(const VoxelWorld &world, const int x, const int y, const int z)
+bool IsSolidAt(const VoxelWorld &world, const int x, const int y, const int z)
 {
 	if (x < world.min.x || y < world.min.y || z < world.min.z ||
 		x >= world.maxExclusive.x || y >= world.maxExclusive.y || z >= world.maxExclusive.z) {
@@ -47,7 +47,7 @@ namespace {
 	return false;
 }
 
-}  // namespace
+} // namespace
 
 uint32_t GreedyMergeSolidVoxelsInBounds(
 	const VoxelWorld &world,
@@ -78,15 +78,14 @@ uint32_t GreedyMergeSolidVoxelsInBounds(
 	const size_t strideZ = static_cast<size_t>(endY - startY) * strideY;
 	std::vector<uint8_t> consumed(
 		static_cast<size_t>(endX - startX) *
-		static_cast<size_t>(endY - startY) *
-		static_cast<size_t>(endZ - startZ),
+			static_cast<size_t>(endY - startY) *
+			static_cast<size_t>(endZ - startZ),
 		0u);
 
 	const auto at = [&](const int x, const int y, const int z) -> uint8_t & {
-		return consumed[
-			static_cast<size_t>(z - startZ) * strideZ +
-			static_cast<size_t>(y - startY) * strideY +
-			static_cast<size_t>(x - startX) * strideX];
+		return consumed[static_cast<size_t>(z - startZ) * strideZ +
+						static_cast<size_t>(y - startY) * strideY +
+						static_cast<size_t>(x - startX) * strideX];
 	};
 
 	for (int z = startZ; z < endZ; ++z) {
@@ -177,11 +176,12 @@ uint32_t GreedyMergeSolidVoxelsInBounds(
 			}
 		}
 		assert(sumBoxVolume == solidVoxelCount &&
-			"GreedyMergeSolidVoxelsInBounds: merged box volume must equal solid voxel count (no gaps/overlaps)");
+			   "GreedyMergeSolidVoxelsInBounds: merged box volume must equal solid voxel count (no gaps/overlaps)");
 	}
 #endif
 
-	return static_cast<uint32_t>(outBoxes.size());
+	const uint32_t mergedBoxCount = static_cast<uint32_t>(outBoxes.size());
+	return mergedBoxCount;
 }
 
-}  // namespace projectv::physics
+} // namespace projectv::physics

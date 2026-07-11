@@ -22,7 +22,7 @@ import projectv.string_id;
 namespace projectv::render {
 class RayTracedShadows;
 class RtxGiProbes;
-}  // namespace projectv::render
+} // namespace projectv::render
 
 #include "vk_mem_alloc.h"
 
@@ -669,7 +669,6 @@ struct SimulationState {
 	float fluidAccumulatorSeconds = 0.0f;
 	uint32_t fluidGpuTicksPending = 0u;
 };
-
 
 struct DebugState {
 	DebugStats stats{};

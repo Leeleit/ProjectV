@@ -54,50 +54,50 @@ class ScopedPassTimer {
 
 // Internal declarations for functions that cross TU boundaries
 void RecordShadowCommands(
-    RenderState &render,
-    const FrameRenderData &frameRenderData,
-    const VkCommandBuffer cmd);
+	RenderState &render,
+	const FrameRenderData &frameRenderData,
+	VkCommandBuffer cmd);
 
 void RecordDebugOverlayCommands(
-    RenderState &render,
-    const SwapchainState &swapchain,
-    const FrameRenderData &frameRenderData,
-    const VkCommandBuffer cmd);
+	RenderState &render,
+	const SwapchainState &swapchain,
+	const FrameRenderData &frameRenderData,
+	VkCommandBuffer cmd);
 
 void RecordDebugHudCommands(
-    RenderState &render,
-    const FrameRenderData &frameRenderData,
-    const VkCommandBuffer cmd);
+	RenderState &render,
+	const FrameRenderData &frameRenderData,
+	VkCommandBuffer cmd);
 
 void TransitionImage(
-    const VkCommandBuffer cmd,
-    const VkImage image,
-    const VkImageAspectFlags aspectMask,
-    const VkImageLayout oldLayout,
-    const VkImageLayout newLayout,
-    const VkPipelineStageFlags2 srcStageMask,
-    const VkAccessFlags2 srcAccessMask,
-    const VkPipelineStageFlags2 dstStageMask,
-    const VkAccessFlags2 dstAccessMask,
-    uint32_t layerCount = 1u);
+	VkCommandBuffer cmd,
+	VkImage image,
+	VkImageAspectFlags aspectMask,
+	VkImageLayout oldLayout,
+	VkImageLayout newLayout,
+	VkPipelineStageFlags2 srcStageMask,
+	VkAccessFlags2 srcAccessMask,
+	VkPipelineStageFlags2 dstStageMask,
+	VkAccessFlags2 dstAccessMask,
+	uint32_t layerCount = 1u);
 
 void RecordGraphicsCommands(
-    RenderState &render,
-    const SwapchainState &swapchain,
-    const FrameRenderData &frameRenderData,
-    const VulkanContextState &context,
-    const VkCommandBuffer cmd,
-    uint32_t imageIndex);
+	RenderState &render,
+	const SwapchainState &swapchain,
+	const FrameRenderData &frameRenderData,
+	const VulkanContextState &context,
+	VkCommandBuffer cmd,
+	uint32_t imageIndex);
 
 bool ShouldCaptureScreenshot(const RenderState &render);
 void RecordSwapchainScreenshotCopy(
-    const SwapchainState &swapchain,
-    RenderState &render,
-    const VkCommandBuffer cmd,
-    uint32_t imageIndex);
+	const SwapchainState &swapchain,
+	RenderState &render,
+	VkCommandBuffer cmd,
+	uint32_t imageIndex);
 bool SaveRequestedScreenshot(
-    VulkanContextState &context,
-    RenderState &render,
-    VkFence inFlightFence,
-    VkExtent2D captureExtent,
-    VkFormat captureFormat);
+	VulkanContextState &context,
+	RenderState &render,
+	VkFence inFlightFence,
+	VkExtent2D captureExtent,
+	VkFormat captureFormat);

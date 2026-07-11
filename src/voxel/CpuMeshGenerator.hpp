@@ -17,4 +17,4 @@ struct CpuMeshInput {
 
 std::vector<PackedSceneVoxelFace> GenerateCpuChunkMeshXPositive(const CpuMeshInput &input);
 
-}
+} // namespace projectv::voxel

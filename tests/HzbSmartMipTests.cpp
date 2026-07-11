@@ -45,16 +45,15 @@ uint32_t ComputePerChunkMipLevelCpu(
 	return std::min(capped, maxMipLevel);
 }
 
-// noinspection DfaConstantParameter
 uint32_t ComputePerChunkMipLevelsFromAabbs(
 	const std::vector<std::array<float, 4>> &chunkCenters,
 	const std::vector<std::array<float, 4>> &chunkHalfExtents,
 	const std::array<float, 16> &viewProjection,
-	const uint32_t baseWidth,
-	const uint32_t baseHeight,
-	const uint32_t maxMipLevel,
 	std::vector<uint32_t> &outMipLevels)
 {
+	constexpr uint32_t baseWidth = 1920u;
+	constexpr uint32_t baseHeight = 1080u;
+	constexpr uint32_t maxMipLevel = 6u;
 	const size_t count = std::min(chunkCenters.size(), chunkHalfExtents.size());
 	outMipLevels.assign(count, 0u);
 	if (count == 0u) {
@@ -198,9 +197,6 @@ void TestComputePerChunkMipLevelsFromAabbs(SmartMipTestContext &test)
 		centers,
 		halfExtents,
 		viewProjection,
-		1920u,
-		1080u,
-		6u,
 		outMipLevels);
 	if (count != 2u) {
 		test.Fail(__LINE__, "Expected 2 chunks processed");
@@ -214,7 +210,6 @@ void TestComputePerChunkMipLevelsFromAabbs(SmartMipTestContext &test)
 	}
 }
 
-// noinspection DfaConstantParameter
 constexpr uint32_t ComputeBlendWidthForChunkMipLocal(
 	const uint32_t projectedExtentXTexels,
 	const uint32_t projectedExtentYTexels,
@@ -232,7 +227,7 @@ constexpr uint32_t ComputeBlendWidthForChunkMipLocal(
 		return 0u;
 	}
 	const uint32_t texelsAtMip = std::max<uint32_t>(maxExtent >> std::min<uint32_t>(mipLevel, 16u), 1u);
-	const uint32_t frac = maxExtent & (1u << std::min<uint32_t>(mipLevel, 16u)) - 1u;  // noinspection CppRedundantParentheses
+	const uint32_t frac = maxExtent & ((1u << std::min<uint32_t>(mipLevel, 16u)) - 1u);
 	return std::min<uint32_t>(texelsAtMip / 4u + frac / 8u, maxBlendWidth);
 }
 
@@ -250,10 +245,8 @@ void TestBlendWidthZeroMipReturnsZero(SmartMipTestContext &test)
 
 void TestBlendWidthIsBoundedByMax(SmartMipTestContext &test)
 {
-	const uint32_t result = ComputeBlendWidthForChunkMipLocal(64u, 64u, 3u, 4u);
-	if (result > 4u) {
-		test.Fail(__LINE__, "Blend width must never exceed maxBlendWidth");
-	}
+	(void)test;
+	static_assert(ComputeBlendWidthForChunkMipLocal(64u, 64u, 3u, 4u) <= 4u, "Blend width must never exceed maxBlendWidth");
 }
 
 void WritePerChunkMipAndBlendWidthsToBuffer(

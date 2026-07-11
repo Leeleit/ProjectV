@@ -30,4 +30,4 @@ bool SignalTimelineSemaphoreOnQueue(
 
 bool DestroyTimelineSemaphore(VkDevice device, VkSemaphore semaphore);
 
-}  // namespace projectv::render
+} // namespace projectv::render

@@ -22,11 +22,14 @@ static_assert(sizeof(WorldGenPushConstants) == 64);
 
 inline bool IsWorldGenGpuPipelineRequested()
 {
-	const char *value = std::getenv("PROJECTV_WORLD_GEN_GPU");
-	if (value == nullptr) {
-		return true;
-	}
-	return value[0] == 'O' && value[1] == 'N';
+	static const bool requested = [] {
+		const char *value = std::getenv("PROJECTV_WORLD_GEN_GPU");
+		if (value == nullptr) {
+			return true;
+		}
+		return value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
+	}();
+	return requested;
 }
 
 inline constexpr VkDeviceSize kWorldGenVoxelBufferBytesPerChunk = sizeof(uint32_t) * 8u * 8u * 8u;
@@ -48,4 +51,4 @@ bool RecordWorldGenDispatch(
 	const WorldGenPushConstants &pushConstants,
 	uint32_t activeChunkCount);
 
-}  // namespace projectv::render
+} // namespace projectv::render

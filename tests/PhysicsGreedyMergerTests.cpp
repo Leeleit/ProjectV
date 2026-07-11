@@ -16,9 +16,11 @@ struct TestContext {
 	}
 };
 
-// noinspection DfaConstantParameter
-VoxelWorld MakeTestWorld(const int width, const int height, const int depth)
+VoxelWorld MakeTestWorld()
 {
+	constexpr int width = 8;
+	constexpr int height = 8;
+	constexpr int depth = 8;
 	constexpr int chunkSize = 4;
 	VoxelWorld world{};
 	world.min = {0, 0, 0};
@@ -78,7 +80,7 @@ uint64_t SumMergedBoxVolumes(const std::vector<projectv::physics::MergedVoxelBox
 
 void TestEmptyWorldProducesZeroBoxes(TestContext &context)
 {
-	const VoxelWorld world = MakeTestWorld(8, 8, 8);
+	const VoxelWorld world = MakeTestWorld();
 	std::vector<projectv::physics::MergedVoxelBox> boxes;
 	const uint32_t count = projectv::physics::GreedyMergeSolidVoxelsInBounds(
 		world,
@@ -95,7 +97,7 @@ void TestEmptyWorldProducesZeroBoxes(TestContext &context)
 
 void TestSingleVoxelEmitsSingleUnitBox(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	SetVoxelMaterial(world, {3, 3, 3}, VoxelMaterial::FloorWhite, nullptr);
 	std::vector<projectv::physics::MergedVoxelBox> boxes;
 	const uint32_t count = projectv::physics::GreedyMergeSolidVoxelsInBounds(
@@ -115,7 +117,7 @@ void TestSingleVoxelEmitsSingleUnitBox(TestContext &context)
 
 void TestFullChunkEmitsSingleBox(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int z = 0; z < 8; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {
@@ -141,7 +143,7 @@ void TestFullChunkEmitsSingleBox(TestContext &context)
 
 void TestVolumePreservation(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int z = 0; z < 4; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {
@@ -170,7 +172,7 @@ void TestVolumePreservation(TestContext &context)
 
 void TestMixedHalfChunkHasReduction(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int y = 0; y < 8; ++y) {
 		for (int x = 0; x < 8; ++x) {
 			SetVoxelMaterial(world, {x, y, 0}, VoxelMaterial::FloorWhite, nullptr);
@@ -205,7 +207,7 @@ void TestMixedHalfChunkHasReduction(TestContext &context)
 
 void TestFluidAndAirAreIgnored(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int z = 0; z < 8; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {
@@ -226,7 +228,7 @@ void TestFluidAndAirAreIgnored(TestContext &context)
 
 void TestBoundsClamp(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int z = 0; z < 8; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {
@@ -247,7 +249,7 @@ void TestBoundsClamp(TestContext &context)
 
 void TestAllGlassMergesToSingleBox(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int z = 0; z < 8; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {
@@ -265,7 +267,7 @@ void TestAllGlassMergesToSingleBox(TestContext &context)
 
 void TestMixedSolidMaterialsMergeTogether(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int y = 0; y < 8; ++y) {
 		for (int x = 0; x < 4; ++x) {
 			SetVoxelMaterial(world, {x, y, 0}, VoxelMaterial::FloorWhite, nullptr);
@@ -285,7 +287,7 @@ void TestMixedSolidMaterialsMergeTogether(TestContext &context)
 
 void TestDisjointRegionsProduceMultipleBoxes(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
 	SetVoxelMaterial(world, {7, 7, 7}, VoxelMaterial::FloorWhite, nullptr);
 	std::vector<projectv::physics::MergedVoxelBox> boxes;
@@ -298,7 +300,7 @@ void TestDisjointRegionsProduceMultipleBoxes(TestContext &context)
 
 void TestThinColumnMerges(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int y = 0; y < 8; ++y) {
 		SetVoxelMaterial(world, {0, y, 0}, VoxelMaterial::FloorWhite, nullptr);
 	}
@@ -318,7 +320,7 @@ void TestThinColumnMerges(TestContext &context)
 
 void TestInteriorHoleProducesCorrectBoxes(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int z = 0; z < 8; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {
@@ -343,7 +345,7 @@ void TestInteriorHoleProducesCorrectBoxes(TestContext &context)
 
 void TestZeroSizeBoundsReturnZero(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
 	std::vector<projectv::physics::MergedVoxelBox> boxes;
 	const uint32_t count = projectv::physics::GreedyMergeSolidVoxelsInBounds(
@@ -355,7 +357,7 @@ void TestZeroSizeBoundsReturnZero(TestContext &context)
 
 void TestInvertedBoundsReturnZero(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	VoxelWorld world = MakeTestWorld();
 	for (int z = 0; z < 8; ++z) {
 		for (int y = 0; y < 8; ++y) {
 			for (int x = 0; x < 8; ++x) {

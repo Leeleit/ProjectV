@@ -29,10 +29,14 @@ static_assert(sizeof(FluidCaGpuFrameStats) == 16);
 
 inline bool IsFluidCaGpuPipelineRequested()
 {
-	if (const char *value = std::getenv("PROJECTV_FLUID_CA_GPU")) {
+	static const bool requested = [] {
+		const char *value = std::getenv("PROJECTV_FLUID_CA_GPU");
+		if (value == nullptr) {
+			return true;
+		}
 		return value[0] != '\0' && value[0] != '0';
-	}
-	return true;
+	}();
+	return requested;
 }
 
 inline bool IsAsyncComputeEnabled()
@@ -68,4 +72,4 @@ bool ReadFluidCaFrameStats(
 	uint32_t frameIndex,
 	FluidCaGpuFrameStats *outStats);
 
-}  // namespace projectv::render
+} // namespace projectv::render

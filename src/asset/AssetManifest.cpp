@@ -142,11 +142,11 @@ std::vector<ManifestEntry> ParseAssetManifestString(const std::string &raw)
 {
 	std::vector<ManifestEntry> entries;
 	std::size_t cursor = 0;
-	while (cursor <= raw.size()) {
+	while (cursor < raw.size()) {
 		const auto semi = raw.find(';', cursor);
 		const auto end = semi == std::string::npos ? raw.size() : semi;
 		const std::string token = raw.substr(cursor, end - cursor);
-		cursor = semi == std::string::npos ? raw.size() + 1 : semi + 1;
+		cursor = semi == std::string::npos ? raw.size() : semi + 1;
 
 		ManifestEntry entry;
 		if (ParseEntry(token, entry)) {

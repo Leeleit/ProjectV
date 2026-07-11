@@ -41,13 +41,11 @@ bool LoadShaderModule(
 	const char *debugName)
 {
 	const std::vector<char> code = ReadShaderFile(filename);
-	if (code.empty()) {
-		runtime::LogRuntimeFailure(
-			"Render",
-			"RtxShadowPipeline.LoadShaderModule",
-			fmt::format("{} not found or empty", filename));
-		return false;
-	}
+	PV_LOG_AND_RETURN_FALSE(
+		!code.empty(),
+		"Render",
+		"RtxShadowPipeline.LoadShaderModule",
+		fmt::format("{} not found or empty", filename));
 	*outModule = CreateShaderModule(device, code, debugName);
 	return *outModule != VK_NULL_HANDLE;
 }
@@ -60,9 +58,7 @@ void DestroyShaderModule(const VkDevice device, VkShaderModule &module) noexcept
 	}
 }
 
-}  // namespace
-
-
+} // namespace
 
 bool RtxShadowPipeline::Initialize(
 	const VulkanContextState &context,
@@ -217,4 +213,4 @@ void RtxShadowPipeline::Shutdown(const VulkanContextState &context) noexcept
 	DestroyShaderModule(context.device, m_missModule);
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

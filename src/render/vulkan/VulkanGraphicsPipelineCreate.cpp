@@ -171,9 +171,7 @@ bool CreateGraphicsPipeline(
 	std::vector<char> vertexShaderCode;
 	std::vector<char> fragmentShaderCode;
 	std::vector<char> fragmentShaderCodeRtx;
-	const bool rtxProbeAvailable = context->rayTracing.rayQuery
-		&& context->rayTracing.accelerationStructure
-		&& projectv::render::IsRayTracedShadowEnabled(*context);
+	const bool rtxProbeAvailable = context->rayTracing.rayQuery && context->rayTracing.accelerationStructure && projectv::render::IsRayTracedShadowEnabled(*context);
 	{
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.ReadShaders");
 		vertexShaderCode = ReadShaderFile("voxel.vert.spv");
@@ -182,12 +180,12 @@ bool CreateGraphicsPipeline(
 			fragmentShaderCodeRtx = ReadShaderFile("voxel.frag.rtx.spv");
 		}
 	}
-	if (vertexShaderCode.empty() || fragmentShaderCode.empty() ||
-		(rtxProbeAvailable && fragmentShaderCodeRtx.empty())) {
-		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.ReadShaders", "voxel shader blob is empty");
-		DestroyGraphicsPipeline(context, render);
-		return false;
-	}
+	PV_CHECK_OR_RETURN(
+		!vertexShaderCode.empty() && !fragmentShaderCode.empty() &&
+			!(rtxProbeAvailable && fragmentShaderCodeRtx.empty()),
+		"Graphics",
+		"CreateGraphicsPipeline.ReadShaders",
+		"voxel shader blob is empty");
 
 	VkShaderModule vertexShaderModule = VK_NULL_HANDLE;
 	VkShaderModule fragmentShaderModule = VK_NULL_HANDLE;
@@ -345,9 +343,7 @@ bool CreateGraphicsPipeline(
 	pushConstantRange.offset = 0;
 	pushConstantRange.size = sizeof(GraphicsPushConstants);
 
-	const bool rtxLayoutActiveForCreate = context->rayTracing.rayQuery
-		&& context->rayTracing.accelerationStructure
-		&& projectv::render::IsRayTracedShadowEnabled(*context);
+	const bool rtxLayoutActiveForCreate = context->rayTracing.rayQuery && context->rayTracing.accelerationStructure && projectv::render::IsRayTracedShadowEnabled(*context);
 	std::vector<VkDescriptorSetLayoutBinding> layoutBindings{};
 	layoutBindings.reserve(kGraphicsDescriptorBindings.size() + (rtxLayoutActiveForCreate ? 1u : 0u));
 	for (const VkDescriptorSetLayoutBinding &b : kGraphicsDescriptorBindings) {

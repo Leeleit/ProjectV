@@ -8,7 +8,6 @@
 
 #include <vector>
 
-
 namespace projectv::render {
 
 bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
@@ -16,13 +15,9 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 	if (render->worldGenPipelineEnabled) {
 		return true;
 	}
-	// noinspection DfaConstantConditions, DfaUnreachableCode
-	if (!context || !render) {
-		return false;
-	}
-	if (context->device == VK_NULL_HANDLE) {
-		return false;
-	}
+	PV_CHECK_OR_RETURN(
+		context && render && context->device != VK_NULL_HANDLE,
+		"Render", "CreateWorldGenPipelines.Preconditions", "missing context");
 	if (!IsWorldGenGpuPipelineRequested()) {
 		return false;
 	}
@@ -107,7 +102,7 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 		.module = render->worldGenShaderModule,
 		.pName = "main",
 	};
-	const VkComputePipelineCreateInfo pipelineInfo {
+	const VkComputePipelineCreateInfo pipelineInfo{
 		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
 		.stage = stage,
 		.layout = render->worldGenPipelineLayout,
@@ -307,4 +302,4 @@ bool RecordWorldGenDispatch(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

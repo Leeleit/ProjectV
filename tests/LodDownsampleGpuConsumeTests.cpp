@@ -75,10 +75,10 @@ void TestRefreshLodDownsampledBuffersRejectsNullContext(TestContext &context)
 	}
 }
 
-void TestLodPayloadWordStrideMatchesConstant(TestContext &context)
+void TestLodPayloadWordStrideMatchesConstant(TestContext &)
 {
-	(void)context;
-	static_assert(projectv::render::kLodPayloadWordStride == 16u, "kLodPayloadWordStride must be 16 for chunkSize=8, LOD 1");
+	static_assert(projectv::render::kLodPayloadWordStride == 16u,
+				  "kLodPayloadWordStride must be 16 for chunkSize=8, LOD 1");
 }
 
 void TestLodPayloadWordOffsetForChunkScalesLinearly(TestContext &context)
@@ -126,7 +126,7 @@ void TestBuildLodPayloadWordsPacks4BytesPerWord(TestContext &context)
 	std::array<uint32_t, 2> words{};
 	projectv::render::BuildLodPayloadWordsFromDownsampled(
 		bytes.data(),
-		static_cast<uint32_t>(bytes.size()),  // noinspection CppRedundantCastExpression
+		bytes.size(),
 		words.data());
 	if (words[0] != 0x44332211u) {
 		std::fprintf(stderr, "words[0]=0x%08x expected 0x44332211\n", words[0]);
@@ -144,7 +144,7 @@ void TestBuildLodPayloadWordsZeroPadsShortInput(TestContext &context)
 	std::array<uint32_t, 2> words{};
 	projectv::render::BuildLodPayloadWordsFromDownsampled(
 		bytes.data(),
-		static_cast<uint32_t>(bytes.size()),  // noinspection CppRedundantCastExpression
+		bytes.size(),
 		words.data());
 	if (words[0] != 0x04030201u) {
 		std::fprintf(stderr, "words[0]=0x%08x expected 0x04030201\n", words[0]);

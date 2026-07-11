@@ -57,7 +57,7 @@ struct DirtyChunkRebuild {
 };
 
 class RayTracedShadows {
-public:
+  public:
 	RayTracedShadows() = default;
 	~RayTracedShadows();
 
@@ -131,12 +131,81 @@ public:
 	[[nodiscard]] bool IsVoxelAwareRtxActive() const noexcept { return m_voxelAwareRtxActive; }
 	[[nodiscard]] VkAccelerationStructureKHR GetTlas() const noexcept { return m_config.tlas; }
 
-	static bool CreateShadowMaskFallback(const VulkanContextState &context, RenderState *render);
-	static void ReleaseShadowMaskFallback(const VulkanContextState &context, RenderState *render) noexcept;
+	static bool CreateShadowMaskFallback(const VulkanContextState &context, RenderState *render)
+	{
+		if (render == nullptr) {
+			return false;
+		}
+		if (render->rtxShadowMaskFallbackView != VK_NULL_HANDLE) {
+			return true;
+		}
+		if (context.device == VK_NULL_HANDLE || context.allocator == nullptr) {
+			return false;
+		}
+
+		VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
+		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		imageInfo.imageType = VK_IMAGE_TYPE_2D;
+		imageInfo.format = VK_FORMAT_R8_UNORM;
+		imageInfo.extent = {1u, 1u, 1u};
+		imageInfo.mipLevels = 1u;
+		imageInfo.arrayLayers = 1u;
+		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+		imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		VmaAllocationCreateInfo allocInfo{};
+		allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+		if (vmaCreateImage(
+				context.allocator,
+				&imageInfo,
+				&allocInfo,
+				&render->rtxShadowMaskFallbackImage,
+				&render->rtxShadowMaskFallbackAllocation,
+				nullptr) != VK_SUCCESS) {
+			return false;
+		}
+		VmaAllocationInfo mappedInfo{};
+		vmaGetAllocationInfo(context.allocator, render->rtxShadowMaskFallbackAllocation, &mappedInfo);
+		render->rtxShadowMaskFallbackMemory = mappedInfo.deviceMemory;
+
+		VkImageViewCreateInfo viewInfo{};
+		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		viewInfo.image = render->rtxShadowMaskFallbackImage;
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		viewInfo.format = VK_FORMAT_R8_UNORM;
+		viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+		if (vkCreateImageView(context.device, &viewInfo, nullptr, &render->rtxShadowMaskFallbackView) != VK_SUCCESS) {
+			vmaDestroyImage(context.allocator, render->rtxShadowMaskFallbackImage, render->rtxShadowMaskFallbackAllocation);
+			render->rtxShadowMaskFallbackImage = VK_NULL_HANDLE;
+			render->rtxShadowMaskFallbackAllocation = nullptr;
+			render->rtxShadowMaskFallbackMemory = VK_NULL_HANDLE;
+			return false;
+		}
+		return true;
+	}
+
+	static void ReleaseShadowMaskFallback(const VulkanContextState &context, RenderState *render) noexcept
+	{
+		if (render == nullptr) {
+			return;
+		}
+		if (render->rtxShadowMaskFallbackView != VK_NULL_HANDLE && context.device != VK_NULL_HANDLE) {
+			vkDestroyImageView(context.device, render->rtxShadowMaskFallbackView, nullptr);
+		}
+		render->rtxShadowMaskFallbackView = VK_NULL_HANDLE;
+		if (render->rtxShadowMaskFallbackImage != VK_NULL_HANDLE && context.allocator != nullptr) {
+			vmaDestroyImage(context.allocator, render->rtxShadowMaskFallbackImage, render->rtxShadowMaskFallbackAllocation);
+		}
+		render->rtxShadowMaskFallbackImage = VK_NULL_HANDLE;
+		render->rtxShadowMaskFallbackAllocation = nullptr;
+		render->rtxShadowMaskFallbackMemory = VK_NULL_HANDLE;
+	}
 
 	bool RecreateShadowMaskForExtent(const VulkanContextState &context, uint32_t width, uint32_t height);
 
-private:
+  private:
 	bool AllocateBuffers(
 		const VulkanContextState &context,
 		uint32_t maxBlasCount,
@@ -206,4 +275,4 @@ bool RecordRayTracedShadowPass(
 	VkPipelineStageFlags waitStage,
 	VkAccessFlags waitAccess);
 
-}  // namespace projectv::render
+} // namespace projectv::render

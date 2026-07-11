@@ -89,16 +89,20 @@ VkShaderModule CreateMeshShaderModule(const VkDevice device, const std::vector<c
 	}
 	return shaderModule;
 }
-}  // namespace
+} // namespace
 
 namespace projectv::render {
 
 bool IsMeshShaderPipelineRequested()
 {
-	if (const char *value = std::getenv("PROJECTV_MESH_SHADER_PIPELINE")) {
+	static const bool requested = [] {
+		const char *value = std::getenv("PROJECTV_MESH_SHADER_PIPELINE");
+		if (value == nullptr) {
+			return false;
+		}
 		return value[0] != '\0' && value[0] != '0';
-	}
-	return false;
+	}();
+	return requested;
 }
 
 namespace {
@@ -110,7 +114,7 @@ std::array<float, 4> MakeFrustumPlane(
 	const float w = -projectv::math::dot(cameraPos, normal) - offset;
 	return {normal.x, normal.y, normal.z, w};
 }
-}  // namespace
+} // namespace
 
 MeshCullPushConstants BuildMeshCullPushConstants(
 	const ChunkCullingParameters &parameters,
@@ -333,10 +337,6 @@ bool RefreshMeshShaderResourceBindings(
 
 void DestroyMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 {
-	if (!context || !render) {
-		return;
-	}
-
 	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
 		frameResources.meshShaderDescriptorSet = VK_NULL_HANDLE;
 	}
@@ -602,7 +602,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-		VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+										  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	colorBlendAttachment.blendEnable = VK_FALSE;
 
 	VkPipelineColorBlendStateCreateInfo colorBlend{};
@@ -660,13 +660,12 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 
 	vkDestroyShaderModule(context->device, fragmentModule, nullptr);
 
-	// noinspection DfaConstantConditions, DfaUnreachableCode
+	render->meshShaderEnabled = true;
 	if (!RefreshMeshShaderResourceBindings(context, render)) {
 		DestroyMeshShaderPipelines(context, render);
 		return false;
 	}
 
-	render->meshShaderEnabled = true;
 	SDL_LogInfo(
 		SDL_LOG_CATEGORY_APPLICATION,
 		"Mesh shader pipeline enabled (maxMeshOutputVertices=%u, maxMeshOutputPrimitives=%u)",
@@ -808,4 +807,4 @@ bool RecordMeshShaderDraw(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

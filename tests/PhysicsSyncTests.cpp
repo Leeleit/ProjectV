@@ -37,9 +37,8 @@ VoxelWorldConfig MakeFlatBenchSizedWorldConfig()
 	return config;
 }
 
-std::unique_ptr<VoxelWorld> MakeFlatBenchSizedWorld()
+std::unique_ptr<VoxelWorld> MakeFlatWorld(const VoxelWorldConfig &config)
 {
-	const VoxelWorldConfig config = MakeFlatBenchSizedWorldConfig();
 	std::unique_ptr<VoxelWorld> world = std::make_unique<VoxelWorld>();
 	world->config = config;
 	world->scenePreset = VoxelScenePreset::FlatBenchmark;
@@ -95,62 +94,14 @@ std::unique_ptr<VoxelWorld> MakeFlatBenchSizedWorld()
 	return world;
 }
 
+std::unique_ptr<VoxelWorld> MakeFlatBenchSizedWorld()
+{
+	return MakeFlatWorld(MakeFlatBenchSizedWorldConfig());
+}
+
 std::unique_ptr<VoxelWorld> MakeSmallFlatWorld()
 {
-	const VoxelWorldConfig config = MakeSmallFlatWorldConfig();
-	std::unique_ptr<VoxelWorld> world = std::make_unique<VoxelWorld>();
-	world->config = config;
-	world->scenePreset = VoxelScenePreset::FlatBenchmark;
-	world->chunkSize = config.chunkSize;
-	const int halfFloor = config.floorSize / 2;
-	world->min = Int3{
-		-halfFloor - config.padding,
-		config.floorY,
-		-halfFloor - config.padding
-	};
-	world->maxExclusive = Int3{
-		halfFloor + config.padding,
-		config.worldTopY + config.padding,
-		halfFloor + config.padding
-	};
-	world->width = world->maxExclusive.x - world->min.x;
-	world->height = world->maxExclusive.y - world->min.y;
-	world->depth = world->maxExclusive.z - world->min.z;
-	world->sparseStorage.Reset(world->width, world->height, world->depth);
-	world->chunkCountX = (world->width + config.chunkSize - 1) / config.chunkSize;
-	world->chunkCountY = (world->height + config.chunkSize - 1) / config.chunkSize;
-	world->chunkCountZ = (world->depth + config.chunkSize - 1) / config.chunkSize;
-	const size_t chunkCount = static_cast<size_t>(world->chunkCountX) *
-		static_cast<size_t>(world->chunkCountY) *
-		static_cast<size_t>(world->chunkCountZ);
-	world->chunks.resize(chunkCount);
-	for (int chunkZ = 0; chunkZ < world->chunkCountZ; ++chunkZ) {
-		for (int chunkY = 0; chunkY < world->chunkCountY; ++chunkY) {
-			for (int chunkX = 0; chunkX < world->chunkCountX; ++chunkX) {
-				const size_t chunkIndex = GetVoxelChunkIndex(*world, {chunkX, chunkY, chunkZ});
-				VoxelChunk &chunk = world->chunks[chunkIndex];
-				chunk.min = Int3{
-					world->min.x + chunkX * world->chunkSize,
-					world->min.y + chunkY * world->chunkSize,
-					world->min.z + chunkZ * world->chunkSize
-				};
-				chunk.maxExclusive = Int3{
-					std::min(chunk.min.x + world->chunkSize, world->maxExclusive.x),
-					std::min(chunk.min.y + world->chunkSize, world->maxExclusive.y),
-					std::min(chunk.min.z + world->chunkSize, world->maxExclusive.z)
-				};
-				chunk.isStatic = true;
-			}
-		}
-	}
-	for (int z = -halfFloor; z < halfFloor; ++z) {
-		for (int x = -halfFloor; x < halfFloor; ++x) {
-			SetVoxelMaterial(*world, {x, config.floorY, z},
-				(x + z & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray,
-				nullptr);
-		}
-	}
-	return world;
+	return MakeFlatWorld(MakeSmallFlatWorldConfig());
 }
 
 void TestSyncPhysicsWorldInitialLoadBuildsFullBody(TestContext &context)

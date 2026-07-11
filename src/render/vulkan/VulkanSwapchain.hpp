@@ -37,7 +37,7 @@ constexpr std::string_view toString(SwapchainError const e) noexcept {
 }
 } // namespace projectv::swapchain
 
-std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwapchain(
+bool CreateOrRecreateSwapchain(
 	PlatformState *platform,
 	VulkanContextState *context,
 	SwapchainState *swapchain);

@@ -8,7 +8,6 @@
 #include <cstring>
 #include <vector>
 
-
 namespace projectv::render {
 
 bool IsLodDownsampledGpuConsumeEnabled()
@@ -45,7 +44,7 @@ uint32_t LodPayloadWordOffsetForChunk(const uint32_t chunkIndex)
 uint32_t EncodeChunkLodMetadata(const uint8_t lodLevel, const uint8_t outExtent)
 {
 	return static_cast<uint32_t>(lodLevel) |
-		static_cast<uint32_t>(outExtent) << 8u;
+		   static_cast<uint32_t>(outExtent) << 8u;
 }
 
 void DecodeChunkLodMetadata(
@@ -125,8 +124,8 @@ bool RefreshLodDownsampledBuffers(
 			for (uint32_t i = 0u; i < chunkCount; ++i) {
 				const uint8_t lod = i < world.chunks.size() ? world.chunks[i].lodLevel : 0u;
 				const uint8_t outExtent = lod == 0u
-					? 0u
-					: static_cast<uint8_t>(voxel::LodDownsampledExtentForLod(lod, static_cast<uint8_t>(chunkSize)));
+											  ? 0u
+											  : static_cast<uint8_t>(voxel::LodDownsampledExtentForLod(lod, static_cast<uint8_t>(chunkSize)));
 				static_cast<uint32_t *>(frameResources.chunkLodLevelsMappedData)[i] =
 					EncodeChunkLodMetadata(lod, outExtent);
 				if (lod > 0u) {
@@ -173,4 +172,4 @@ bool RefreshLodDownsampledBuffers(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

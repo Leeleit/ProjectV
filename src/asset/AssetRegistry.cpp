@@ -48,7 +48,8 @@ void AssetRegistry::Clear()
 std::vector<std::string> AssetRegistry::Ids() const
 {
 	std::lock_guard lock(mMutex);
-	return mInsertionOrder;
+	std::vector<std::string> result = mInsertionOrder;
+	return result;
 }
 
 std::size_t AssetRegistry::Size() const

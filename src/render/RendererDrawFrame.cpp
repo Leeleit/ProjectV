@@ -160,13 +160,13 @@ SDL_AppResult DrawFrame(
 					const VoxelChunk &chunk = world.chunks[chunkIndex];
 					projectv::render::DirtyChunkRebuild entry{};
 					entry.chunkIndex = chunkIndex;
-				entry.aabb.minX = static_cast<float>(chunk.min.x);
-				entry.aabb.minY = static_cast<float>(chunk.min.y);
-				entry.aabb.minZ = static_cast<float>(chunk.min.z);
-				entry.aabb.maxX = static_cast<float>(chunk.maxExclusive.x);
-				entry.aabb.maxY = static_cast<float>(chunk.maxExclusive.y);
-				entry.aabb.maxZ = static_cast<float>(chunk.maxExclusive.z);
-				dirtyRebuilds.push_back(entry);
+					entry.aabb.minX = static_cast<float>(chunk.min.x);
+					entry.aabb.minY = static_cast<float>(chunk.min.y);
+					entry.aabb.minZ = static_cast<float>(chunk.min.z);
+					entry.aabb.maxX = static_cast<float>(chunk.maxExclusive.x);
+					entry.aabb.maxY = static_cast<float>(chunk.maxExclusive.y);
+					entry.aabb.maxZ = static_cast<float>(chunk.maxExclusive.z);
+					dirtyRebuilds.push_back(entry);
 				}
 				if (!dirtyRebuilds.empty()) {
 					render->rayTracedShadows->SetBlasDirtyQueue(std::move(dirtyRebuilds));
@@ -195,8 +195,7 @@ SDL_AppResult DrawFrame(
 				if (chunk.nonAirVoxelCount == 0u) {
 					continue;
 				}
-				if (i >= rtxConfig.blasDeviceAddresses.size()
-					|| rtxConfig.blasDeviceAddresses[i] == 0u) {
+				if (i >= rtxConfig.blasDeviceAddresses.size() || rtxConfig.blasDeviceAddresses[i] == 0u) {
 					continue;
 				}
 				visibleChunkIndices.push_back(static_cast<uint32_t>(i));
@@ -227,13 +226,11 @@ SDL_AppResult DrawFrame(
 		const float cameraPosition[3] = {
 			frame->renderData.graphicsPushConstants.cameraPosition.x,
 			frame->renderData.graphicsPushConstants.cameraPosition.y,
-			frame->renderData.graphicsPushConstants.cameraPosition.z
-		};
+			frame->renderData.graphicsPushConstants.cameraPosition.z};
 		const float cameraForward[3] = {
 			frame->renderData.graphicsPushConstants.cameraForward.x,
 			frame->renderData.graphicsPushConstants.cameraForward.y,
-			frame->renderData.graphicsPushConstants.cameraForward.z
-		};
+			frame->renderData.graphicsPushConstants.cameraForward.z};
 		render->rayTracedShadows->RecordVoxelAwareRtxShadowPass(
 			cmd,
 			*context,
@@ -310,8 +307,8 @@ SDL_AppResult DrawFrame(
 	const bool asyncComputePathActive =
 		asyncComputeHzbPathActive ||
 		(projectv::render::IsAsyncComputeEnabled() &&
-			projectv::render::IsAsyncComputeResourcesAllocated(*context) &&
-			(render->fluidCaPipelineEnabled || render->worldGenPipelineEnabled));
+		 projectv::render::IsAsyncComputeResourcesAllocated(*context) &&
+		 (render->fluidCaPipelineEnabled || render->worldGenPipelineEnabled));
 
 	if (!asyncComputePathActive && render->fluidCaPipelineEnabled && state->simulation().fluidGpuTicksPending > 0u) {
 		PV_PROFILE_ZONE_N("RecordFluidCaCommands");

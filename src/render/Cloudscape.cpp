@@ -7,9 +7,7 @@
 
 #include <array>
 #include <cmath>
-#include <cstddef>
 #include <vector>
-
 
 namespace {
 constexpr char kCloudscapeVertexShaderFilename[] = "cloudscape.vert.spv";
@@ -90,7 +88,7 @@ float Fbm2D(const float x, const float y, const int octaves)
 
 std::vector<uint8_t> GenerateCloudscapeNoiseR8()
 {
-	std::vector<uint8_t> data(projectv::render::kCloudscapeNoiseTextureSize *
+	std::vector<uint8_t> data(static_cast<size_t>(projectv::render::kCloudscapeNoiseTextureSize) *
 							  projectv::render::kCloudscapeNoiseTextureSize);
 	for (uint32_t y = 0; y < projectv::render::kCloudscapeNoiseTextureSize; ++y) {
 		for (uint32_t x = 0; x < projectv::render::kCloudscapeNoiseTextureSize; ++x) {
@@ -216,7 +214,7 @@ bool CreateCloudscapeSampler(
 	return true;
 }
 
-}  // namespace
+} // namespace
 
 namespace projectv::render {
 
@@ -412,7 +410,7 @@ bool CreateCloudscapeResources(VulkanContextState *context, RenderState *render)
 		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT,
 	};
 
-	constexpr VkPipelineColorBlendStateCreateInfo colorBlendState{
+	static constexpr VkPipelineColorBlendStateCreateInfo colorBlendState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.attachmentCount = 1,
 		.pAttachments = &colorBlendAttachment,
@@ -577,4 +575,4 @@ bool RecordCloudscapeRaymarchPass(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

@@ -1,7 +1,6 @@
 #pragma once
 
 import projectv.math;
-#include "render/ShadowTypes.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 #include <array>

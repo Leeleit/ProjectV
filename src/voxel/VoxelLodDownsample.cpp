@@ -108,7 +108,7 @@ uint32_t RunLodDownsampleJobs(VoxelWorld &world)
 			continue;
 		}
 		std::vector<uint8_t> downsampled;
-		projectv::voxel::DownsampleChunkForLodSurfacePreserve(world, chunkIndex, chunk.lodLevel, downsampled);  // noinspection CppRedundantQualifier
+		voxel::DownsampleChunkForLodSurfacePreserve(world, chunkIndex, chunk.lodLevel, downsampled);
 		uint32_t nonAirCount = 0u;
 		for (const uint8_t material : downsampled) {
 			if (material != 0u) {

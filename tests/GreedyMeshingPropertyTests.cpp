@@ -100,8 +100,8 @@ struct QuadCoverageVerifier {
 			cov.Init(extentN, extentU, extentV);
 
 			for (const auto &f : faces) {
-				const auto [x, y, z, faceIndexLocal] = UnpackLocalVoxelFaceCPU(f.localVoxelFace);
-				if (faceIndexLocal != fi) {
+				const auto [x, y, z, faceIndex] = UnpackLocalVoxelFaceCPU(f.localVoxelFace);
+				if (faceIndex != fi) {
 					continue;
 				}
 				const auto [width, height] = UnpackQuadExtentsCPU(f.packedExtents);
@@ -124,27 +124,27 @@ struct QuadCoverageVerifier {
 	}
 };
 
-// noinspection DfaConstantParameter
-void TestPropertyVolumePreservation(TestContext &ctx, const uint32_t seed, const int chunkSize, const int iterations)
+template <uint32_t Seed, int ChunkSize, int Iterations>
+void TestPropertyVolumePreservation(TestContext &ctx)
 {
-	Xorshift32 rng(seed);
-	for (int iter = 0; iter < iterations; ++iter) {
-		std::vector<uint8_t> voxels(static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize));
+	Xorshift32 rng(Seed);
+	for (int iter = 0; iter < Iterations; ++iter) {
+		std::vector<uint8_t> voxels(static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize));
 		for (auto &v : voxels) {
 			v = rng.NextMaterial();
 		}
 
 		CpuGreedyInput input{};
 		input.worldVoxels = voxels.data();
-		input.worldDim[0] = chunkSize;
-		input.worldDim[1] = chunkSize;
-		input.worldDim[2] = chunkSize;
+		input.worldDim[0] = ChunkSize;
+		input.worldDim[1] = ChunkSize;
+		input.worldDim[2] = ChunkSize;
 		input.chunk.chunkOrigin[0] = 0;
 		input.chunk.chunkOrigin[1] = 0;
 		input.chunk.chunkOrigin[2] = 0;
-		input.chunk.extent[0] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[1] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[2] = static_cast<uint32_t>(chunkSize);
+		input.chunk.extent[0] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[1] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[2] = static_cast<uint32_t>(ChunkSize);
 
 		uint32_t nonAir = 0u;
 		for (const uint8_t v : voxels) {
@@ -161,10 +161,10 @@ void TestPropertyVolumePreservation(TestContext &ctx, const uint32_t seed, const
 		uint32_t bruteTotal = 0u;
 		uint32_t bruteOpaque = 0u;
 		uint32_t bruteTransparent = 0u;
-		for (int z = 0; z < chunkSize; ++z) {
-			for (int y = 0; y < chunkSize; ++y) {
-				for (int x = 0; x < chunkSize; ++x) {
-					const uint8_t mat = voxels[static_cast<size_t>(x) + static_cast<size_t>(chunkSize) * (static_cast<size_t>(y) + static_cast<size_t>(chunkSize) * static_cast<size_t>(z))];
+		for (int z = 0; z < ChunkSize; ++z) {
+			for (int y = 0; y < ChunkSize; ++y) {
+				for (int x = 0; x < ChunkSize; ++x) {
+					const uint8_t mat = voxels[static_cast<size_t>(x) + static_cast<size_t>(ChunkSize) * (static_cast<size_t>(y) + static_cast<size_t>(ChunkSize) * static_cast<size_t>(z))];
 					if (mat == 0u) {
 						continue;
 					}
@@ -173,8 +173,8 @@ void TestPropertyVolumePreservation(TestContext &ctx, const uint32_t seed, const
 						const int ny = y + offsets[d][1];
 						const int nz = z + offsets[d][2];
 						uint8_t nbr = 0u;
-						if (nx >= 0 && ny >= 0 && nz >= 0 && nx < chunkSize && ny < chunkSize && nz < chunkSize) {
-							nbr = voxels[static_cast<size_t>(nx) + static_cast<size_t>(chunkSize) * (static_cast<size_t>(ny) + static_cast<size_t>(chunkSize) * static_cast<size_t>(nz))];
+						if (nx >= 0 && ny >= 0 && nz >= 0 && nx < ChunkSize && ny < ChunkSize && nz < ChunkSize) {
+							nbr = voxels[static_cast<size_t>(nx) + static_cast<size_t>(ChunkSize) * (static_cast<size_t>(ny) + static_cast<size_t>(ChunkSize) * static_cast<size_t>(nz))];
 						}
 						if (ShouldEmitVoxelFaceCPU(mat, nbr)) {
 							++bruteTotal;
@@ -202,12 +202,12 @@ void TestPropertyVolumePreservation(TestContext &ctx, const uint32_t seed, const
 
 		if (greedyOpaque != bruteOpaque) {
 			ctx.Fail(__LINE__, "volume preservation: opaque area mismatch");
-			std::fprintf(stderr, "  seed=%u iter=%d size=%d greedy=%u brute=%u\n", seed, iter, chunkSize, greedyOpaque, bruteOpaque);
+			std::fprintf(stderr, "  seed=%u iter=%d size=%d greedy=%u brute=%u\n", Seed, iter, ChunkSize, greedyOpaque, bruteOpaque);
 			return;
 		}
 		if (greedyTransparent != bruteTransparent) {
 			ctx.Fail(__LINE__, "volume preservation: transparent area mismatch");
-			std::fprintf(stderr, "  seed=%u iter=%d size=%d greedy=%u brute=%u\n", seed, iter, chunkSize, greedyTransparent, bruteTransparent);
+			std::fprintf(stderr, "  seed=%u iter=%d size=%d greedy=%u brute=%u\n", Seed, iter, ChunkSize, greedyTransparent, bruteTransparent);
 			return;
 		}
 		if (greedyOpaque + greedyTransparent != bruteTotal) {
@@ -217,26 +217,27 @@ void TestPropertyVolumePreservation(TestContext &ctx, const uint32_t seed, const
 	}
 }
 
-void TestPropertyNoOverlap(TestContext &ctx, const uint32_t seed, const int chunkSize, const int iterations)
+template <uint32_t Seed, int ChunkSize, int Iterations>
+void TestPropertyNoOverlap(TestContext &ctx)
 {
-	Xorshift32 rng(seed);
-	for (int iter = 0; iter < iterations; ++iter) {
-		std::vector<uint8_t> voxels(static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize));
+	Xorshift32 rng(Seed);
+	for (int iter = 0; iter < Iterations; ++iter) {
+		std::vector<uint8_t> voxels(static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize));
 		for (auto &v : voxels) {
 			v = rng.NextMaterial();
 		}
 
 		CpuGreedyInput input{};
 		input.worldVoxels = voxels.data();
-		input.worldDim[0] = chunkSize;
-		input.worldDim[1] = chunkSize;
-		input.worldDim[2] = chunkSize;
+		input.worldDim[0] = ChunkSize;
+		input.worldDim[1] = ChunkSize;
+		input.worldDim[2] = ChunkSize;
 		input.chunk.chunkOrigin[0] = 0;
 		input.chunk.chunkOrigin[1] = 0;
 		input.chunk.chunkOrigin[2] = 0;
-		input.chunk.extent[0] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[1] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[2] = static_cast<uint32_t>(chunkSize);
+		input.chunk.extent[0] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[1] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[2] = static_cast<uint32_t>(ChunkSize);
 		input.chunk.nonAirCount = 0u;
 		for (const uint8_t v : voxels) {
 			if (v != 0u) {
@@ -251,33 +252,33 @@ void TestPropertyNoOverlap(TestContext &ctx, const uint32_t seed, const int chun
 		verifier.CheckNoGapsNoOverlaps(ctx, transparentFaces);
 
 		if (ctx.failures > 0) {
-			std::fprintf(stderr, "  seed=%u iter=%d size=%d\n", seed, iter, chunkSize);
+			std::fprintf(stderr, "  seed=%u iter=%d size=%d\n", Seed, iter, ChunkSize);
 			return;
 		}
 	}
 }
 
-// noinspection DfaConstantParameter
-void TestPropertyDeterminism(TestContext &ctx, uint32_t seed, int chunkSize, int iterations)
+template <uint32_t Seed, int ChunkSize, int Iterations>
+void TestPropertyDeterminism(TestContext &ctx)
 {
-	Xorshift32 rng(seed);
-	for (int iter = 0; iter < iterations; ++iter) {
-		std::vector<uint8_t> voxels(static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize));
+	Xorshift32 rng(Seed);
+	for (int iter = 0; iter < Iterations; ++iter) {
+		std::vector<uint8_t> voxels(static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize));
 		for (auto &v : voxels) {
 			v = rng.NextMaterial();
 		}
 
 		CpuGreedyInput input{};
 		input.worldVoxels = voxels.data();
-		input.worldDim[0] = chunkSize;
-		input.worldDim[1] = chunkSize;
-		input.worldDim[2] = chunkSize;
+		input.worldDim[0] = ChunkSize;
+		input.worldDim[1] = ChunkSize;
+		input.worldDim[2] = ChunkSize;
 		input.chunk.chunkOrigin[0] = 0;
 		input.chunk.chunkOrigin[1] = 0;
 		input.chunk.chunkOrigin[2] = 0;
-		input.chunk.extent[0] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[1] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[2] = static_cast<uint32_t>(chunkSize);
+		input.chunk.extent[0] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[1] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[2] = static_cast<uint32_t>(ChunkSize);
 		input.chunk.nonAirCount = 0u;
 		for (const uint8_t v : voxels) {
 			if (v != 0u) {
@@ -289,33 +290,33 @@ void TestPropertyDeterminism(TestContext &ctx, uint32_t seed, int chunkSize, int
 		const auto [opaqueFaces, transparentFaces] = GenerateCpuGreedyMesh(input);
 		if (opaqueFaces1 != opaqueFaces || transparentFaces1 != transparentFaces) {
 			ctx.Fail(__LINE__, "determinism: identical inputs must produce identical outputs");
-			std::fprintf(stderr, "  seed=%u iter=%d size=%d\n", seed, iter, chunkSize);
+			std::fprintf(stderr, "  seed=%u iter=%d size=%d\n", Seed, iter, ChunkSize);
 			return;
 		}
 	}
 }
 
-// noinspection DfaConstantParameter
-void TestPropertyMaterialConsistency(TestContext &ctx, uint32_t seed, int chunkSize, int iterations)
+template <uint32_t Seed, int ChunkSize, int Iterations>
+void TestPropertyMaterialConsistency(TestContext &ctx)
 {
-	Xorshift32 rng(seed);
-	for (int iter = 0; iter < iterations; ++iter) {
-		std::vector<uint8_t> voxels(static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize));
+	Xorshift32 rng(Seed);
+	for (int iter = 0; iter < Iterations; ++iter) {
+		std::vector<uint8_t> voxels(static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize));
 		for (auto &v : voxels) {
 			v = rng.NextMaterial();
 		}
 
 		CpuGreedyInput input{};
 		input.worldVoxels = voxels.data();
-		input.worldDim[0] = chunkSize;
-		input.worldDim[1] = chunkSize;
-		input.worldDim[2] = chunkSize;
+		input.worldDim[0] = ChunkSize;
+		input.worldDim[1] = ChunkSize;
+		input.worldDim[2] = ChunkSize;
 		input.chunk.chunkOrigin[0] = 0;
 		input.chunk.chunkOrigin[1] = 0;
 		input.chunk.chunkOrigin[2] = 0;
-		input.chunk.extent[0] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[1] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[2] = static_cast<uint32_t>(chunkSize);
+		input.chunk.extent[0] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[1] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[2] = static_cast<uint32_t>(ChunkSize);
 		input.chunk.nonAirCount = 0u;
 		for (const uint8_t v : voxels) {
 			if (v != 0u) {
@@ -329,7 +330,7 @@ void TestPropertyMaterialConsistency(TestContext &ctx, uint32_t seed, int chunkS
 			const auto [chunkIndex, materialIndex] = UnpackChunkIndexMaterialCPU(f.chunkIndexMaterial);
 			if (materialIndex == 0u || materialIndex == 1u) {
 				ctx.Fail(__LINE__, "opaque face must have non-Air non-Glass material");
-				std::fprintf(stderr, "  seed=%u iter=%d mat=%u\n", seed, iter, materialIndex);
+				std::fprintf(stderr, "  seed=%u iter=%d mat=%u\n", Seed, iter, materialIndex);
 				return;
 			}
 		}
@@ -337,34 +338,34 @@ void TestPropertyMaterialConsistency(TestContext &ctx, uint32_t seed, int chunkS
 			const auto [chunkIndex, materialIndex] = UnpackChunkIndexMaterialCPU(f.chunkIndexMaterial);
 			if (materialIndex != 1u) {
 				ctx.Fail(__LINE__, "transparent face must have Glass material (1)");
-				std::fprintf(stderr, "  seed=%u iter=%d mat=%u\n", seed, iter, materialIndex);
+				std::fprintf(stderr, "  seed=%u iter=%d mat=%u\n", Seed, iter, materialIndex);
 				return;
 			}
 		}
 	}
 }
 
-// noinspection DfaConstantParameter
-void TestPropertyExtentsWithinBounds(TestContext &ctx, uint32_t seed, int chunkSize, int iterations)
+template <uint32_t Seed, int ChunkSize, int Iterations>
+void TestPropertyExtentsWithinBounds(TestContext &ctx)
 {
-	Xorshift32 rng(seed);
-	for (int iter = 0; iter < iterations; ++iter) {
-		std::vector<uint8_t> voxels(static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize) * static_cast<size_t>(chunkSize));
+	Xorshift32 rng(Seed);
+	for (int iter = 0; iter < Iterations; ++iter) {
+		std::vector<uint8_t> voxels(static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize) * static_cast<size_t>(ChunkSize));
 		for (auto &v : voxels) {
 			v = rng.NextMaterial();
 		}
 
 		CpuGreedyInput input{};
 		input.worldVoxels = voxels.data();
-		input.worldDim[0] = chunkSize;
-		input.worldDim[1] = chunkSize;
-		input.worldDim[2] = chunkSize;
+		input.worldDim[0] = ChunkSize;
+		input.worldDim[1] = ChunkSize;
+		input.worldDim[2] = ChunkSize;
 		input.chunk.chunkOrigin[0] = 0;
 		input.chunk.chunkOrigin[1] = 0;
 		input.chunk.chunkOrigin[2] = 0;
-		input.chunk.extent[0] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[1] = static_cast<uint32_t>(chunkSize);
-		input.chunk.extent[2] = static_cast<uint32_t>(chunkSize);
+		input.chunk.extent[0] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[1] = static_cast<uint32_t>(ChunkSize);
+		input.chunk.extent[2] = static_cast<uint32_t>(ChunkSize);
 		input.chunk.nonAirCount = 0u;
 		for (const uint8_t v : voxels) {
 			if (v != 0u) {
@@ -373,7 +374,7 @@ void TestPropertyExtentsWithinBounds(TestContext &ctx, uint32_t seed, int chunkS
 		}
 
 		const auto [opaqueFaces, transparentFaces] = GenerateCpuGreedyMesh(input);
-		const uint32_t maxExtent = static_cast<uint32_t>(chunkSize);
+		constexpr uint32_t maxExtent = static_cast<uint32_t>(ChunkSize);
 		auto checkFaces = [&](const std::vector<CpuGreedyFace> &faces) {
 			for (const auto &f : faces) {
 				const auto [x, y, z, faceIndex] = UnpackLocalVoxelFaceCPU(f.localVoxelFace);
@@ -402,7 +403,7 @@ void TestPropertyExtentsWithinBounds(TestContext &ctx, uint32_t seed, int chunkS
 		checkFaces(opaqueFaces);
 		checkFaces(transparentFaces);
 		if (ctx.failures > 0) {
-			std::fprintf(stderr, "  seed=%u iter=%d size=%d\n", seed, iter, chunkSize);
+			std::fprintf(stderr, "  seed=%u iter=%d size=%d\n", Seed, iter, ChunkSize);
 			return;
 		}
 	}
@@ -416,18 +417,18 @@ int main()
 	constexpr uint32_t kSeed = 0xDEADBEEFu;
 	constexpr int kIterations = 1000;
 
-	TestPropertyVolumePreservation(ctx, kSeed, 4, kIterations);
-	TestPropertyVolumePreservation(ctx, kSeed + 1, 8, kIterations);
-	TestPropertyVolumePreservation(ctx, kSeed + 2, 16, kIterations);
+	TestPropertyVolumePreservation<kSeed, 4, kIterations>(ctx);
+	TestPropertyVolumePreservation<kSeed + 1, 8, kIterations>(ctx);
+	TestPropertyVolumePreservation<kSeed + 2, 16, kIterations>(ctx);
 
-	TestPropertyNoOverlap(ctx, kSeed + 10, 8, kIterations);
-	TestPropertyNoOverlap(ctx, kSeed + 11, 16, 200);
+	TestPropertyNoOverlap<kSeed + 10, 8, kIterations>(ctx);
+	TestPropertyNoOverlap<kSeed + 11, 16, 200>(ctx);
 
-	TestPropertyDeterminism(ctx, kSeed + 20, 8, kIterations);
+	TestPropertyDeterminism<kSeed + 20, 8, kIterations>(ctx);
 
-	TestPropertyMaterialConsistency(ctx, kSeed + 30, 8, kIterations);
+	TestPropertyMaterialConsistency<kSeed + 30, 8, kIterations>(ctx);
 
-	TestPropertyExtentsWithinBounds(ctx, kSeed + 40, 8, kIterations);
+	TestPropertyExtentsWithinBounds<kSeed + 40, 8, kIterations>(ctx);
 
 	if (ctx.failures > 0) {
 		std::fprintf(stderr, "ProjectVGreedyMeshingPropertyTests: %d failure(s)\n", ctx.failures);

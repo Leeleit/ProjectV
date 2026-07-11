@@ -154,27 +154,27 @@ VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR &caps, SDL_Window *window
 }
 } // namespace
 
-std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwapchain(
+bool CreateOrRecreateSwapchain(
 	PlatformState *platform,
 	VulkanContextState *context,
 	SwapchainState *swapchain)
 {
-	const auto fail = [](projectv::swapchain::SwapchainError e, const std::string_view step, const std::string_view detail) {
-		runtime::LogRuntimeFailure("Swapchain", step, detail);
-		return std::unexpected(e);
-	};
 	PV_PROFILE_ZONE_N("CreateOrRecreateSwapchain");
 	SwapchainSupportDetails support;
 	if (!QuerySwapchainSupport(context->physicalDevice, context->surface, &support)) {
-		return fail(projectv::swapchain::SwapchainError::QuerySupportFailed,
+		runtime::LogRuntimeFailure(
+			"Swapchain",
 			"CreateOrRecreateSwapchain.QuerySwapchainSupport",
 			"QuerySwapchainSupport returned false");
+		return false;
 	}
 
 	if ((support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) == 0) {
-		return fail(projectv::swapchain::SwapchainError::SurfaceUsageUnsupported,
+		runtime::LogRuntimeFailure(
+			"Swapchain",
 			"CreateOrRecreateSwapchain.SurfaceUsage",
 			"surface does not support VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT for swapchain images");
+		return false;
 	}
 	const bool supportsTransferSrc =
 		(support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
@@ -188,7 +188,7 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 		swapchain->format = format;
 		swapchain->extent = chosenExtent;
 		swapchain->supportsTransferSrc = false;
-		return format;
+		return true;
 	}
 
 	uint32_t imageCount = std::max(2u, support.capabilities.minImageCount);
@@ -232,7 +232,7 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 		const VkResult createSwapchainResult = vkCreateSwapchainKHR(context->device, &createInfo, nullptr, &newSwapchain);
 		if (createSwapchainResult != VK_SUCCESS) {
 			runtime::LogVkFailure("CreateOrRecreateSwapchain.vkCreateSwapchainKHR", createSwapchainResult);
-			return std::unexpected(projectv::swapchain::SwapchainError::CreateSwapchainFailed);
+			return false;
 		}
 	}
 
@@ -244,11 +244,9 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 			vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 			if (imageCountResult != VK_SUCCESS) {
 				runtime::LogVkFailure("CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(count)", imageCountResult);
-				return std::unexpected(projectv::swapchain::SwapchainError::GetImageCountFailed);
+				return false;
 			}
-			return fail(projectv::swapchain::SwapchainError::ZeroImages,
-				"CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(count)",
-				"swapchain returned zero images");
+			return false;
 		}
 	}
 
@@ -260,7 +258,7 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 		if (fetchImagesResult != VK_SUCCESS) {
 			vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 			runtime::LogVkFailure("CreateOrRecreateSwapchain.vkGetSwapchainImagesKHR(data)", fetchImagesResult);
-			return std::unexpected(projectv::swapchain::SwapchainError::GetImageListFailed);
+			return false;
 		}
 	}
 
@@ -288,7 +286,7 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 				}
 				vkDestroySwapchainKHR(context->device, newSwapchain, nullptr);
 				runtime::LogVkFailure("CreateOrRecreateSwapchain.vkCreateImageView", createImageViewResult);
-				return std::unexpected(projectv::swapchain::SwapchainError::CreateImageViewFailed);
+				return false;
 			}
 		}
 	}
@@ -346,7 +344,7 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 				"Swapchain",
 				"CreateOrRecreateSwapchain.PerImageSemaphores",
 				"failed to create per-swapchain-image submit semaphores");
-			return std::unexpected(projectv::swapchain::SwapchainError::CreateSemaphoreFailed);
+			return false;
 		}
 
 		for (VkSemaphore semaphore : swapchain->submitSemaphores) {
@@ -382,7 +380,7 @@ std::expected<VkFormat, projectv::swapchain::SwapchainError> CreateOrRecreateSwa
 				viewName);
 		}
 	}
-	return format;
+	return true;
 }
 
 bool RecreateSwapchain(
@@ -416,12 +414,7 @@ bool RecreateSwapchain(
 		render->screenshotReadbackBuffer != VK_NULL_HANDLE;
 	{
 		PV_PROFILE_ZONE_N("RecreateSwapchain.CreateSwapchainResources");
-		const auto swapResult = CreateOrRecreateSwapchain(platform, context, swapchain);
-		if (!swapResult.has_value()) {
-			runtime::LogRuntimeFailure(
-				"Swapchain",
-				"RecreateSwapchain.CreateOrRecreateSwapchain",
-				std::string{"CreateOrRecreateSwapchain returned: "} + std::string{projectv::swapchain::toString(swapResult.error())});
+		if (!CreateOrRecreateSwapchain(platform, context, swapchain)) {
 			return false;
 		}
 	}

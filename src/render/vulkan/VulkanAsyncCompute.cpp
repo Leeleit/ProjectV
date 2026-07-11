@@ -11,13 +11,12 @@
 #include <array>
 #include <vector>
 
-
 namespace projectv::render {
 
 bool IsAsyncComputeResourcesAllocated(const VulkanContextState &context)
 {
 	return context.asyncComputeCommandPool != VK_NULL_HANDLE &&
-		context.asyncComputeCommandBuffer != VK_NULL_HANDLE;
+		   context.asyncComputeCommandBuffer != VK_NULL_HANDLE;
 }
 
 bool EnsureAsyncComputeResources(VulkanContextState *context)
@@ -321,7 +320,6 @@ bool RecordHzbAsyncCullPass(
 	if (render.hizCullingPipeline == VK_NULL_HANDLE) {
 		return false;
 	}
-	// noinspection DfaUnreachableCode, IfCanBeReplacedByConstexprIf
 	if (render.sceneFrameResources.empty()) {
 		return false;
 	}
@@ -349,7 +347,7 @@ bool RecordHzbAsyncCullPass(
 	beginInfo.pNext = nullptr;
 	beginInfo.flags = 0u;
 	beginInfo.pInheritanceInfo = nullptr;
-	const const VkResult beginResult = vkBeginCommandBuffer(asyncCommandBuffer, &beginInfo);
+	const VkResult beginResult = vkBeginCommandBuffer(asyncCommandBuffer, &beginInfo);
 	if (beginResult != VK_SUCCESS) {
 		runtime::LogVkFailure("RecordHzbAsyncCullPass.vkBeginCommandBuffer", beginResult);
 		return false;
@@ -463,4 +461,4 @@ bool SubmitHzbAsyncCullToComputeQueue(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

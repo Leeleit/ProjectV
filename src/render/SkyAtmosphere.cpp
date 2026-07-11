@@ -32,17 +32,17 @@ constexpr std::array kSkyAtmosphereDescriptorPoolSizes{
 	},
 };
 
-}  // namespace
+} // namespace
 
 namespace projectv::render {
 
 bool IsSkyLutPrecomputeEnabled()
 {
-	const char *value = std::getenv("PROJECTV_SKY_LUT");
-	if (value == nullptr || value[0] == '\0') {
-		return false;
-	}
-	return value[0] == 'O' && value[1] == 'N';
+	static const bool enabled = [] {
+		const char *value = std::getenv("PROJECTV_SKY_LUT");
+		return value != nullptr && value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
+	}();
+	return enabled;
 }
 
 void DestroySkyLutResources(VulkanContextState *context, RenderState *render)
@@ -162,7 +162,7 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 			const float sinViewZenith = std::sin(viewZenith * kPi * 0.5f);
 
 			const float cosScattering = cosViewZenith * cosSunZenith +
-									   sinViewZenith * sinSunZenith * std::cos(0.0f);
+										sinViewZenith * sinSunZenith * std::cos(0.0f);
 
 			float opticalDepth = 0.0f;
 			for (int step = 0; step < sky_atmosphere_constants::kRaymarchStepCount; ++step) {
@@ -189,7 +189,7 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 				sky_atmosphere_constants::kRayleighBetaG,
 				sky_atmosphere_constants::kRayleighBetaB);
 			const glm::vec3 inscatter = transmittance * (rayleighBeta * 60000.0f * rayleighPhase +
-																sky_atmosphere_constants::kMieBeta * 60000.0f * miePhase);
+														 sky_atmosphere_constants::kMieBeta * 60000.0f * miePhase);
 
 			lutData[y * kSkyViewLutWidth + x] = glm::vec4(inscatter, transmittance.r);
 		}
@@ -736,4 +736,4 @@ bool RecordSkyAtmospherePass(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

@@ -63,7 +63,7 @@ void TestVoxelAtBoundaryEmitsFace(TestContext &context)
 
 void TestFilledChunkEmitsPerVoxelFace(TestContext &context)
 {
-	std::vector<uint8_t> voxels(4 * 4 * 4, 0);
+	std::vector<uint8_t> voxels(static_cast<size_t>(4) * 4 * 4, 0);
 	for (int z = 0; z < 4; ++z) {
 		for (int y = 0; y < 4; ++y) {
 			for (int x = 0; x < 4; ++x) {

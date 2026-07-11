@@ -91,4 +91,5 @@ void LogCheckFailure(
 	SDL_TriggerBreakpoint();
 	std::abort();
 }
+
 } // namespace runtime

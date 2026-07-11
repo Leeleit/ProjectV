@@ -42,4 +42,4 @@ bool RefreshLodDownsampledBuffers(
 	RenderState *render,
 	const VoxelWorld &world);
 
-}  // namespace projectv::render
+} // namespace projectv::render

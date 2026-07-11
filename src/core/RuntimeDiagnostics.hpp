@@ -23,6 +23,7 @@ void LogCheckFailure(
 	std::string_view detail,
 	const char *file,
 	int line);
+
 } // namespace runtime
 
 #define PV_CHECK_OR_RETURN(condition, subsystem, step, detail)                                   \
@@ -31,6 +32,14 @@ void LogCheckFailure(
 			::runtime::LogCheckFailure(subsystem, step, #condition, detail, __FILE__, __LINE__); \
 			return false;                                                                        \
 		}                                                                                        \
+	} while (0)
+
+#define PV_LOG_AND_RETURN_FALSE(condition, subsystem, step, detail) \
+	do {                                                            \
+		if (!(condition)) {                                         \
+			::runtime::LogRuntimeFailure(subsystem, step, detail);  \
+			return false;                                           \
+		}                                                           \
 	} while (0)
 
 #if !defined(NDEBUG)

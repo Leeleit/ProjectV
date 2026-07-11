@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <!-- noinspection CssUnusedSymbol: many selectors are referenced from JavaScript templates -->
+    <!-- Many selectors are referenced from JavaScript templates -->
     <style>
         :root {
             --bg-dark: #070913;
@@ -112,6 +112,7 @@
         }
 
         .nav-btn {
+            --nav-btn-border: transparent;
             background: transparent;
             color: var(--text-secondary);
             padding: 0.9rem 1.2rem;
@@ -124,20 +125,20 @@
             display: flex;
             align-items: center;
             gap: 0.8rem;
-            border: 1px solid transparent;
+            border: 1px solid var(--nav-btn-border);
         }
 
         .nav-btn:hover {
+            --nav-btn-border: rgba(255, 255, 255, 0.05);
             color: #fff;
             background: rgba(255, 255, 255, 0.03);
-            border-color: rgba(255, 255, 255, 0.05);
             transform: translateX(4px);
         }
 
         .nav-btn.active {
+            --nav-btn-border: rgba(0, 240, 255, 0.15);
             color: var(--color-teal);
             background: rgba(0, 240, 255, 0.06);
-            border-color: rgba(0, 240, 255, 0.15);
             box-shadow: 0 0 15px rgba(0, 240, 255, 0.05);
             text-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
         }
@@ -290,7 +291,7 @@
             left: 0;
             width: 4px;
             height: 100%;
-            background: var(--accent-color, var(--color-teal));
+            background: var(--accent-color, #00f0ff);
             opacity: 0.6;
         }
 

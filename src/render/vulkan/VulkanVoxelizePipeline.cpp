@@ -9,7 +9,6 @@
 #include <array>
 #include <vector>
 
-
 namespace {
 constexpr uint32_t kVoxelizeDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kVoxelizeShaderFilename[] = "voxelize.comp.spv";
@@ -185,10 +184,14 @@ namespace projectv::render {
 
 bool IsVctGpuPipelineRequested()
 {
-	if (const char *value = std::getenv("PROJECTV_VCT_GPU")) {
+	static const bool requested = [] {
+		const char *value = std::getenv("PROJECTV_VCT_GPU");
+		if (value == nullptr) {
+			return false;
+		}
 		return value[0] != '\0' && value[0] != '0';
-	}
-	return false;
+	}();
+	return requested;
 }
 
 bool CreateVctClipmapFallbackSamplerOnly(VulkanContextState *context, RenderState *render)
@@ -584,4 +587,4 @@ bool BuildVctClipmapMipChain(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

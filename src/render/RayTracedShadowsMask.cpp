@@ -182,8 +182,7 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	}
 
 	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-		// noinspection CppUseStructuredBinding
-		RtxFrameResources &frame = m_rtxFrames[i];
+		auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, descriptorSet] = m_rtxFrames[i];
 
 		VkBufferCreateInfo uboInfo{};
 		uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -194,22 +193,22 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 		uboAllocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 		uboAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 		if (vmaCreateBuffer(context.allocator, &uboInfo, &uboAllocInfo,
-							&frame.cameraUboBuffer, &frame.cameraUboAllocation, nullptr) != VK_SUCCESS) {
+							&cameraUboBuffer, &cameraUboAllocation, nullptr) != VK_SUCCESS) {
 			runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vmaCreateBuffer.Ubo", VK_ERROR_INITIALIZATION_FAILED);
 			ReleaseVoxelAwareRtxResources(context);
 			return false;
 		}
 		VmaAllocationInfo mappedInfo{};
-		vmaGetAllocationInfo(context.allocator, frame.cameraUboAllocation, &mappedInfo);
-		frame.cameraUboMappedData = mappedInfo.pMappedData;
-		std::memset(frame.cameraUboMappedData, 0, 96u);
+		vmaGetAllocationInfo(context.allocator, cameraUboAllocation, &mappedInfo);
+		cameraUboMappedData = mappedInfo.pMappedData;
+		std::memset(cameraUboMappedData, 0, 96u);
 
 		VkDescriptorSetAllocateInfo allocInfo{};
 		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		allocInfo.descriptorPool = m_rtxDescriptorPool;
 		allocInfo.descriptorSetCount = 1u;
 		allocInfo.pSetLayouts = &m_rtxPipeline.GetDescriptorSetLayout();
-		if (vkAllocateDescriptorSets(device, &allocInfo, &frame.descriptorSet) != VK_SUCCESS) {
+		if (vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
 			runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vkAllocateDescriptorSets", VK_ERROR_INITIALIZATION_FAILED);
 			ReleaseVoxelAwareRtxResources(context);
 			return false;
@@ -224,15 +223,14 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 void RayTracedShadows::ReleaseVoxelAwareRtxResources(const VulkanContextState &context) noexcept
 {
 	const VkDevice device = context.device;
-	// noinspection CppUseStructuredBinding
-	for (RtxFrameResources &frame : m_rtxFrames) {
-		if (frame.cameraUboBuffer != VK_NULL_HANDLE && context.allocator != nullptr) {
-			vmaDestroyBuffer(context.allocator, frame.cameraUboBuffer, frame.cameraUboAllocation);
+	for (auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, descriptorSet] : m_rtxFrames) {
+		if (cameraUboBuffer != VK_NULL_HANDLE && context.allocator != nullptr) {
+			vmaDestroyBuffer(context.allocator, cameraUboBuffer, cameraUboAllocation);
 		}
-		frame.cameraUboBuffer = VK_NULL_HANDLE;
-		frame.cameraUboAllocation = nullptr;
-		frame.cameraUboMappedData = nullptr;
-		frame.descriptorSet = VK_NULL_HANDLE;
+		cameraUboBuffer = VK_NULL_HANDLE;
+		cameraUboAllocation = nullptr;
+		cameraUboMappedData = nullptr;
+		descriptorSet = VK_NULL_HANDLE;
 	}
 	if (m_rtxDescriptorPool != VK_NULL_HANDLE && device != VK_NULL_HANDLE) {
 		vkDestroyDescriptorPool(device, m_rtxDescriptorPool, nullptr);
@@ -338,78 +336,6 @@ bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &conte
 	vkDestroyFence(context.device, fence, nullptr);
 	vkFreeCommandBuffers(context.device, context.commandPool, 1u, &cmd);
 	return queueSubmitResult == VK_SUCCESS;
-}
-
-bool RayTracedShadows::CreateShadowMaskFallback(const VulkanContextState &context, RenderState *render)
-{
-	if (render == nullptr) {
-		return false;
-	}
-	if (render->rtxShadowMaskFallbackView != VK_NULL_HANDLE) {
-		return true;
-	}
-	if (context.device == VK_NULL_HANDLE || context.allocator == nullptr) {
-		return false;
-	}
-
-	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
-	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.format = VK_FORMAT_R8_UNORM;
-	imageInfo.extent = {1u, 1u, 1u};
-	imageInfo.mipLevels = 1u;
-	imageInfo.arrayLayers = 1u;
-	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	VmaAllocationCreateInfo allocInfo{};
-	allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-	if (vmaCreateImage(
-			context.allocator,
-			&imageInfo,
-			&allocInfo,
-			&render->rtxShadowMaskFallbackImage,
-			&render->rtxShadowMaskFallbackAllocation,
-			nullptr) != VK_SUCCESS) {
-		return false;
-	}
-	VmaAllocationInfo mappedInfo{};
-	vmaGetAllocationInfo(context.allocator, render->rtxShadowMaskFallbackAllocation, &mappedInfo);
-	render->rtxShadowMaskFallbackMemory = mappedInfo.deviceMemory;
-
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = render->rtxShadowMaskFallbackImage;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = VK_FORMAT_R8_UNORM;
-	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-	if (vkCreateImageView(context.device, &viewInfo, nullptr, &render->rtxShadowMaskFallbackView) != VK_SUCCESS) {
-		vmaDestroyImage(context.allocator, render->rtxShadowMaskFallbackImage, render->rtxShadowMaskFallbackAllocation);
-		render->rtxShadowMaskFallbackImage = VK_NULL_HANDLE;
-		render->rtxShadowMaskFallbackAllocation = nullptr;
-		render->rtxShadowMaskFallbackMemory = VK_NULL_HANDLE;
-		return false;
-	}
-	return true;
-}
-
-void RayTracedShadows::ReleaseShadowMaskFallback(const VulkanContextState &context, RenderState *render) noexcept
-{
-	if (render == nullptr) {
-		return;
-	}
-	if (render->rtxShadowMaskFallbackView != VK_NULL_HANDLE && context.device != VK_NULL_HANDLE) {
-		vkDestroyImageView(context.device, render->rtxShadowMaskFallbackView, nullptr);
-	}
-	render->rtxShadowMaskFallbackView = VK_NULL_HANDLE;
-	if (render->rtxShadowMaskFallbackImage != VK_NULL_HANDLE && context.allocator != nullptr) {
-		vmaDestroyImage(context.allocator, render->rtxShadowMaskFallbackImage, render->rtxShadowMaskFallbackAllocation);
-	}
-	render->rtxShadowMaskFallbackImage = VK_NULL_HANDLE;
-	render->rtxShadowMaskFallbackAllocation = nullptr;
-	render->rtxShadowMaskFallbackMemory = VK_NULL_HANDLE;
 }
 
 } // namespace projectv::render

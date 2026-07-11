@@ -10,14 +10,14 @@ namespace projectv::render {
 void RecordSwapchainScreenshotCopy(
 	const SwapchainState &swapchain,
 	RenderState &render,
-	const VkCommandBuffer cmd,
-	const uint32_t imageIndex);
+	VkCommandBuffer cmd,
+	uint32_t imageIndex);
 
 bool SaveRequestedScreenshot(
 	VulkanContextState &context,
 	RenderState &render,
-	const VkFence inFlightFence,
-	const VkExtent2D captureExtent,
-	const VkFormat captureFormat);
+	VkFence inFlightFence,
+	VkExtent2D captureExtent,
+	VkFormat captureFormat);
 
 } // namespace projectv::render

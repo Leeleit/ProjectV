@@ -11,11 +11,11 @@ namespace projectv::render {
 
 inline bool IsVolumetricFogEnabled()
 {
-	const char *value = std::getenv("PROJECTV_FOG");
-	if (value == nullptr || value[0] == '\0') {
-		return false;
-	}
-	return value[0] == 'O' && value[1] == 'N';
+	static const bool enabled = [] {
+		const char *value = std::getenv("PROJECTV_FOG");
+		return value != nullptr && value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
+	}();
+	return enabled;
 }
 
 struct VolumetricFogPushConstants {
@@ -49,4 +49,4 @@ bool RecordVolumetricFogAccumulationPass(
 	const VolumetricFogPushConstants &pushConstants,
 	uint32_t frameIndex);
 
-}  // namespace projectv::render
+} // namespace projectv::render

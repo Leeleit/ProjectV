@@ -21,13 +21,12 @@ where ProjectV's FetchContent target doesn't exist.
 
 ## Why a separate scope?
 
-<!-- noinspection MarkdownIncorrectTableFormatting: tables are valid but contain long inline-code cells -->
-| Concern | ProjectV scope | Tracy-only scope |
-|---------|----------------|------------------|
-| `add_subdirectory(external/tracy/profiler)` | would call `project(tracy-profiler)` again → CMake error | n/a (it's the top-level project) |
-| Tracy `vendor.cmake` `CPMAddPackage(NAME json ...)` | collides with `nlohmann_json::nlohmann_json` already created by `FetchContent_MakeAvailable` at root `CMakeLists.txt:475` | no conflict — no prior `nlohmann_json` target exists |
-| `tidy-html5` upstream bug (uses removed `uint` / `ulong` types) | only matters on Linux/glibc 2.36+; on Windows compiles fine | n/a — Tracy UI is built directly here |
-| Tracy UI build cost (5-10 min configure, 200+ MB CPM cache) | bloats every ProjectV configure | pays only when operator actually wants Tracy UI |
+| Concern                                                         | ProjectV scope                                                                                                            | Tracy-only scope                                     |
+|-----------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------|
+| `add_subdirectory(external/tracy/profiler)`                     | would call `project(tracy-profiler)` again → CMake error                                                                  | n/a (it's the top-level project)                     |
+| Tracy `vendor.cmake` `CPMAddPackage(NAME json ...)`             | collides with `nlohmann_json::nlohmann_json` already created by `FetchContent_MakeAvailable` at root `CMakeLists.txt:475` | no conflict — no prior `nlohmann_json` target exists |
+| `tidy-html5` upstream bug (uses removed `uint` / `ulong` types) | only matters on Linux/glibc 2.36+; on Windows compiles fine                                                               | n/a — Tracy UI is built directly here                |
+| Tracy UI build cost (5-10 min configure, 200+ MB CPM cache)     | bloats every ProjectV configure                                                                                           | pays only when operator actually wants Tracy UI      |
 
 ## Workflow
 
@@ -58,7 +57,7 @@ where ProjectV's FetchContent target doesn't exist.
 
 ## Why not a CMake preset?
 
-CMake presets v1 to v10 (`cmake --help-manual cmake-presets` lists
+CMake presets v1...v10 (`cmake --help-manual cmake-presets` lists
 the full schema) **do not** allow `sourceDir` to be set inside a
 configure preset — `${sourceDir}` is a read-only macro resolving
 to the directory containing `CMakePresets.json`. The only way to
@@ -72,13 +71,12 @@ The wrapper scripts pass the same cache variables as the
 `windows-clang-debug-tracy-profiler` preset to keep Tracy UI
 behavior consistent across the two scopes:
 
-<!-- noinspection MarkdownIncorrectTableFormatting: tables are valid but contain long inline-code cells -->
-| Variable | Value | Why |
-|----------|-------|-----|
-| `PROJECTV_BUILD_TRACY_PROFILER` | `ON` | Required by Tracy profiler UI's own `CMakeLists.txt` |
-| `CMAKE_POLICY_VERSION_MINIMUM` | `3.5` | Tracy 0.13 still uses pre-CMP0076 policies in its `tidy-html5` patch |
-| `CPM_SOURCE_CACHE` | `${sourceDir}/build/cpm-source-cache` | Shared with ProjectV's main build to avoid re-downloading capstone / glfw / libcurl / freetype / pugixml / md4c / nfd / usearch / tidy / base64 |
-| `NO_ISA_EXTENSIONS` / `BASE64_WERROR` / `BUILD_LIBCURL_DOCS` / etc. | OFF | All standard Tracy-UI switches to keep its build slim and warning-clean |
+| Variable                                                            | Value                                 | Why                                                                                                                                             |
+|---------------------------------------------------------------------|---------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| `PROJECTV_BUILD_TRACY_PROFILER`                                     | `ON`                                  | Required by Tracy profiler UI's own `CMakeLists.txt`                                                                                            |
+| `CMAKE_POLICY_VERSION_MINIMUM`                                      | `3.5`                                 | Tracy 0.13 still uses pre-CMP0076 policies in its `tidy-html5` patch                                                                            |
+| `CPM_SOURCE_CACHE`                                                  | `${sourceDir}/build/cpm-source-cache` | Shared with ProjectV's main build to avoid re-downloading capstone / glfw / libcurl / freetype / pugixml / md4c / nfd / usearch / tidy / base64 |
+| `NO_ISA_EXTENSIONS` / `BASE64_WERROR` / `BUILD_LIBCURL_DOCS` / etc. | OFF                                   | All standard Tracy-UI switches to keep its build slim and warning-clean                                                                         |
 
 The `PROJECTV_ENABLE_TRACY=ON` flag is **not** required for the
 Tracy UI build (it controls the **client** library instrumentation
