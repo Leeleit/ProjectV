@@ -262,7 +262,10 @@ bundled profiler UI, а не для самого факта instrumentation.
 ## Полезные файлы
 
 - [voxel_mvp_smoke_checklist.md](voxel_mvp_smoke_checklist.md)
-- [BuildAndRun](BuildAndRun.md)
+- [Linux Build & Run Guide](Linux_Build_And_Run.md) (Основное руководство по Linux)
+- [RTX Renderer Architecture](RTX_Renderer_Architecture.md) (Архитектура RTX-рендеринга)
+- [Physics & Movement Guide](Physics_And_Movement_Guide.md) (Физика и перемещение Jolt)
+- [BuildAndRun (Windows)](BuildAndRun.md)
 - [Profiling](Profiling.md)
-- [RenderArchitecture](RenderArchitecture.md)
-- [VoxelWorld](VoxelWorld.md)
+- [RenderArchitecture (Historical)](RenderArchitecture.md)
+- [VoxelWorld (Historical)](VoxelWorld.md)

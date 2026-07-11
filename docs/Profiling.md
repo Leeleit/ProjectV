@@ -180,8 +180,11 @@ generated opaque/transparent faces, visibility pressure, upload sizes и live `w
 
 ## Связанные документы
 
-- [BuildAndRun](BuildAndRun.md)
+- [Linux Build & Run Guide](Linux_Build_And_Run.md) (Основное руководство по Linux)
+- [RTX Renderer Architecture](RTX_Renderer_Architecture.md) (Архитектура RTX-рендеринга)
+- [Physics & Movement Guide](Physics_And_Movement_Guide.md) (Физика и перемещение Jolt)
+- [BuildAndRun (Windows)](BuildAndRun.md)
 - [Debugging](Debugging.md)
-- [VoxelWorld](VoxelWorld.md)
+- [VoxelWorld (Historical)](VoxelWorld.md)
 - [README](../README.md)
 - [TODO](../TODO.md)

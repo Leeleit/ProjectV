@@ -1,8 +1,12 @@
 # ProjectV Render Architecture
 
-Дата фиксации: `2026-04-22`
+> [!WARNING]
+> **Исторический документ.** Данный файл содержит устаревшие разделы (такие как описание каскадных теней CSM, сглаживания TAA и конусной трассировки VCT), которые были полностью удалены или перемещены в архив (`legacy/aa/`) в ходе пост-ресет рефакторинга в июне-июле 2026 года.
+> Актуальное описание современной архитектуры рендеринга приведено в документе [RTX Renderer Architecture](RTX_Renderer_Architecture.md).
 
-Этот документ описывает текущий render path `ProjectV`: как данные переходят из `VoxelWorld` в scene resources, как
+Дата фиксации: `2026-04-22` (Обновлено: `2026-07-11`)
+
+Этот документ описывает исторический и базовый render path `ProjectV`: как данные переходят из `VoxelWorld` в scene resources, как
 compute meshing готовит packed faces и как поверх этого рисуются overlay/HUD.
 
 ## Ключевая идея
@@ -22,7 +26,7 @@ Shadow-path update `2026-04-22`:
 - Packed voxel faces are not a dense global prefix. Each chunk owns reserved opaque/transparent ranges, and any draw
   path that consumes packed faces must respect `firstInstance`/indirect addressing.
 
-CPU-side scene preparation живёт в [SceneResources.cpp](../src/render/SceneResources.cpp).
+CPU-side scene preparation живёт в семействе файлов `SceneResources.cpp` (~810 строк) плюс `SceneResourcesUpdate.cpp` (заливка CPU->GPU), `SceneResourcesVisibility.cpp` (CPU куллинг), `SceneResourcesDestroy.cpp` (deferred NanoVDB очистка), `SceneResourcesUtilities.cpp` и `SceneResourcesInternal.hpp`.
 
 Этот слой держит:
 
@@ -187,7 +191,7 @@ Shadow-path update `2026-04-22`:
 - `Fluid` may still live in the main opaque draw range for forward rendering, so the shadow fragment shader must only
   reject `Glass`; rejecting `Fluid` makes water incorrectly shadowless.
 
-Graphics path записывается в [Renderer.cpp](../src/render/Renderer.cpp).
+Graphics path записывается в семействе файлов `Renderer.cpp` (~90 строк): `RendererDrawFrame.cpp` (синхронизация кадра, HZB, презентация), `RendererRecordCommands.cpp` (запись команд отрисовки), `RendererOverlay.cpp` и `RendererScreenshot.cpp`.
 
 В текущем mainline кадр включает:
 

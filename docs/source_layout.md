@@ -54,9 +54,14 @@ src/
 
 - `app/main.cpp`
 - `app/AppUpdate.cpp`
+- `app/AppUpdateHelpers.cpp`
 - `app/Camera.cpp`
 - `app/InputActions.cpp`
+- `app/InputReplay.cpp`
 - `app/FramePreparation.cpp`
+- `app/ModelGravigun.cpp`
+- `app/BenchmarkAutomation.cpp`
+- `app/LookDevCaptureAutomation.cpp`
 
 ### `src/core/`
 
@@ -67,10 +72,13 @@ src/
 
 Ключевые файлы:
 
-- `core/Types.hpp`
+- `core/Types.hpp` / `core/Types.cpp`
 - `core/RuntimeDiagnostics.cpp`
 - `core/RuntimeProbe.cpp`
 - `core/ShaderIO.cpp`
+- `core/Math.ixx`
+- `core/StringId.ixx`
+- `core/Probe.ixx`
 
 ### `src/debug/`
 
@@ -94,6 +102,7 @@ src/
 
 - `ecs/EcsWorld.cpp`
 - `ecs/EcsWorld.hpp`
+- `ecs/EcsWorld.ixx`
 
 ### `src/physics/`
 
@@ -106,6 +115,9 @@ src/
 
 - `physics/PhysicsWorld.cpp`
 - `physics/PhysicsWorld.hpp`
+- `physics/PhysicsWorld_Walk.cpp`
+- `physics/PhysicsWorld_Internal.hpp`
+- `physics/GreedyPhysicsMerger.cpp`
 
 ### `src/platform/`
 
@@ -124,11 +136,36 @@ src/
 Ключевые файлы:
 
 - `render/Renderer.cpp`
+- `render/RendererDrawFrame.cpp`
+- `render/RendererRecordCommands.cpp`
+- `render/RendererOverlay.cpp`
+- `render/RendererScreenshot.cpp`
 - `render/SceneResources.cpp`
+- `render/SceneResourcesUpdate.cpp`
+- `render/SceneResourcesVisibility.cpp`
+- `render/SceneResourcesDestroy.cpp`
+- `render/SceneResourcesUtilities.cpp`
+- `render/RayTracedShadows.cpp`
+- `render/RayTracedShadowsBlas.cpp`
+- `render/RayTracedShadowsTlas.cpp`
+- `render/RayTracedShadowsPass.cpp`
+- `render/RayTracedShadowsMask.cpp`
+- `render/RtxGiProbes.cpp`
+- `render/RtxGiProbesPipeline.cpp`
+- `render/RtxGiProbesUpdate.cpp`
+- `render/HizCulling.cpp`
 - `render/vulkan/VulkanInit.cpp`
 - `render/vulkan/VulkanSwapchain.cpp`
 - `render/vulkan/VulkanGraphicsPipeline.cpp`
+- `render/vulkan/VulkanGraphicsPipelineCreate.cpp`
+- `render/vulkan/VulkanGraphicsPipelineBindings.cpp`
+- `render/vulkan/VulkanGraphicsPipelineOverlay.cpp`
+- `render/vulkan/VulkanAsyncCompute.cpp`
+- `render/vulkan/VulkanFluidCaPipeline.cpp`
+- `render/vulkan/VulkanMeshShaderPipeline.cpp`
 - `render/vulkan/VulkanVoxelMeshingPipeline.cpp`
+- `render/vulkan/VulkanVoxelizePipeline.cpp`
+- `render/vulkan/VulkanWorldGenPipeline.cpp`
 
 ### `src/voxel/`
 
@@ -140,13 +177,35 @@ src/
 Ключевые файлы:
 
 - `voxel/VoxelWorld.cpp`
+- `voxel/VoxelWorldInternal.hpp`
+- `voxel/VoxelWorldPreset.cpp`
+- `voxel/VoxelWorldSnapshot.cpp`
+- `voxel/VoxelWorldFluid.cpp`
+- `voxel/VoxelWorldLod.cpp`
+- `voxel/VoxelWorldStatic.cpp`
 - `voxel/VoxelMaterials.cpp`
 - `voxel/VoxelRaycast.cpp`
 - `voxel/VoxelInteraction.cpp`
+- `voxel/Sparse64Tree.hpp`
+- `voxel/NanoVdb.cpp`
+- `voxel/ChunkStreamer.cpp`
+- `voxel/VoxelLodDownsample.cpp`
+- `voxel/CpuMeshGenerator.cpp`
+- `voxel/SceneConfig.cpp`
 
 ### `src/shaders/`
 
 Шейдеры пока сознательно остаются отдельной плоской зоной внутри `src/`. Это не считается нарушением `8.2`: перенос shader assets в другую структуру не был нужен для текущего mainline.
+
+Ключевые файлы:
+
+- `shaders/voxel.frag`
+- `shaders/voxel.vert`
+- `shaders/voxel_mesh.comp`
+- `shaders/probe_update.comp`
+- `shaders/voxel_rtx_shadow.rgen`
+- `shaders/fluid_ca.comp`
+- `shaders/hzb_cull.comp`
 
 ## Что это меняет для будущих правок
 

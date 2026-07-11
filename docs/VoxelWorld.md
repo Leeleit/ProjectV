@@ -1,8 +1,12 @@
 # ProjectV VoxelWorld
 
-Дата фиксации: `2026-04-22`
+> [!WARNING]
+> **Исторический документ.** В данном файле содержится ряд устаревших деталей реализации воксельной базы данных (например, плоский массив `std::vector<uint8_t> voxels` вместо разреженного SVO дерева `Sparse64Tree` на CPU и NanoVDB буферов на GPU) и каскадных теней CSM.
+> Современное описание структур хранения приведено в [CODEBASE_GUIDE.md](CODEBASE_GUIDE.md), а физической структуры — в [Physics & Movement Guide](Physics_And_Movement_Guide.md).
 
-Этот документ описывает current `VoxelWorld` в `ProjectV`: его структуру данных, dirty queue, interaction path и связь с
+Дата фиксации: `2026-04-22` (Обновлено: `2026-07-11`)
+
+Этот документ описывает базовые принципы `VoxelWorld` в `ProjectV`: его логическую структуру, dirty queue, interaction path и связь с
 render/physics слоями.
 
 ## Роль `VoxelWorld`
@@ -140,7 +144,7 @@ Chunk bookkeeping сейчас нужен не ради gameplay, а ради re
 
 ## Builtin scene presets
 
-`VoxelWorld.cpp` теперь держит небольшой builtin preset layer для reproducible runs.
+`VoxelWorldPreset.cpp` теперь держит небольшой builtin preset layer для reproducible runs.
 
 Текущий default preset:
 

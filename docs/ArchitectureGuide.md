@@ -9,17 +9,20 @@
 
 `ProjectV` в текущем состоянии:
 
-- рендерит CPU-backed `VoxelWorld` через Vulkan;
+- рендерит CPU-backed `VoxelWorld` через Vulkan 1.4;
 - позволяет выбирать, ставить и удалять блоки в runtime;
 - поддерживает `creative`, `spectator` и `walk`;
-- держит minimal ECS и minimal physics как practical slices, а не как тотальный rewrite.
+- держит minimal ECS и minimal physics как practical slices, а не как тотальный rewrite;
+- использует полностью RTX-Driven конвейер освещения (аппаратные тени солнца и сетку зондов DDGI глобального освещения);
+- производит Greedy Meshing и HZB куллинг чанков на GPU.
 
 Главный принцип архитектуры сейчас такой:
 
 - `VoxelWorld` остаётся источником истины для мира;
 - ECS добавляет структуру данных и мосты между подсистемами;
 - physics усиливает interaction loop, а не подменяет его;
-- app loop остаётся явным и читаемым.
+- app loop остаётся явным и читаемым;
+- Vulkan-рендерер логически разделен на компактные доменные C++ файлы (до 600 строк каждый) для упрощения сопровождения.
 
 ## Верхний runtime lifecycle
 
@@ -80,7 +83,7 @@
 
 `voxel/` хранит главный источник истины для мира:
 
-- dense voxel storage;
+- SVO (Sparse64Tree) voxel storage;
 - chunk bookkeeping;
 - dirty queue;
 - CPU interaction raycast;
@@ -116,8 +119,8 @@ Interaction при этом остаётся на CPU `VoxelRaycast`. Physics н
 
 Render слой делится на две части:
 
-- `render/` — scene resources и orchestration draw path;
-- `render/vulkan/` — bootstrap, swapchain, pipelines и Vulkan-specific plumbing.
+- `render/` — scene resources и orchestration draw path. В рамках повышения читаемости монолитные файлы декомпозированы: `Renderer.cpp` разделен на доменные файлы `RendererDrawFrame.cpp` (синхронизация кадра, HZB, презентация), `RendererRecordCommands.cpp` (запись команд отрисовки) и `RendererOverlay.cpp`/`RendererScreenshot.cpp`. Аналогично `SceneResources.cpp` разделен на `SceneResourcesUpdate.cpp` (заливка CPU->GPU), `SceneResourcesVisibility.cpp` (CPU куллинг) и `SceneResourcesDestroy.cpp` (deferred NanoVDB очистка). Аппаратные тени декомпозированы на `RayTracedShadows.cpp`, `RayTracedShadowsBlas.cpp`, `RayTracedShadowsTlas.cpp`, `RayTracedShadowsPass.cpp` и `RayTracedShadowsMask.cpp`. Сетка зондов DDGI декомпозирована на `RtxGiProbes.cpp`, `RtxGiProbesPipeline.cpp` и `RtxGiProbesUpdate.cpp`.
+- `render/vulkan/` — bootstrap, swapchain, pipelines и Vulkan-specific plumbing, включая асинхронную вычислительную очередь `VulkanAsyncCompute.cpp` и пайплайны клеточных автоматов жидкости `VulkanFluidCaPipeline.cpp`.
 
 Compute meshing, graphics passes, overlay и HUD собираются здесь, но данные приходят из `VoxelWorld` через
 `SceneResources`.
@@ -155,8 +158,9 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
 5. `DrawFrame`:
    - acquire image;
    - при необходимости recreates swapchain;
-   - dispatch compute meshing;
-   - рисует opaque/transparent passes;
+   - для RTX: строит BLAS/TLAS в семействе файлов `RayTracedShadows.cpp` (Blas, Tlas), рассчитывает маску `rtxShadowMask` солнца (Pass, Mask) и обновляет DDGI зонды в `RtxGiProbes.cpp` (Pipeline, Update);
+   - dispatch compute greedy meshing (`voxel_mesh.comp`) и HZB куллинг чанков на GPU;
+   - рисует opaque/transparent passes через indirect draw (`vkCmdDrawIndirectCountKHR` на основе видимости из HZB);
    - рисует debug overlay boxes, crosshair и HUD;
    - present.
 
@@ -185,8 +189,11 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
 
 ## Связанные документы
 
-- [BuildAndRun](BuildAndRun.md)
-- [RenderArchitecture](RenderArchitecture.md)
-- [VoxelWorld](VoxelWorld.md)
+- [Linux Build & Run Guide](Linux_Build_And_Run.md) (Основное руководство по Linux)
+- [RTX Renderer Architecture](RTX_Renderer_Architecture.md) (Архитектура RTX-рендеринга)
+- [Physics & Movement Guide](Physics_And_Movement_Guide.md) (Физика и перемещение Jolt)
+- [BuildAndRun (Windows)](BuildAndRun.md)
+- [RenderArchitecture (Historical)](RenderArchitecture.md)
+- [VoxelWorld (Historical)](VoxelWorld.md)
 - [Debugging](Debugging.md)
 - [Source Layout Guide](source_layout.md)
