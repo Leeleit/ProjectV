@@ -409,6 +409,7 @@ void TestNonAirCount(TestContext &context)
 void TestDedupOffBaseline(TestContext &context)
 {
 	projectv::voxel::Sparse64Tree tree(4, 4, 4);
+	// noinspection DfaConstantConditions
 	ExpectTrue(context, !tree.IsDeduplicationEnabled(), __LINE__, "dedup OFF by default");
 	tree.SetCell(0, 0, 0, 1);
 	tree.SetCell(1, 1, 1, 2);

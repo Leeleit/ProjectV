@@ -18,6 +18,7 @@ struct TestContext {
 
 using namespace projectv::voxel;
 
+// noinspection DfaConstantParameter
 CpuGreedyChunkDesc MakeChunk(const int ox, const int oy, const int oz, const int ex, const int ey, const int ez, const uint32_t nonAir = 1u)
 {
 	CpuGreedyChunkDesc c{};
@@ -31,6 +32,7 @@ CpuGreedyChunkDesc MakeChunk(const int ox, const int oy, const int oz, const int
 	return c;
 }
 
+// noinspection DfaConstantParameter
 CpuChunkCullingParams MakeCameraLookingForward(const float camX, const float camY, const float camZ, const float maxDist = 1000.0f)
 {
 	CpuChunkCullingParams c{};

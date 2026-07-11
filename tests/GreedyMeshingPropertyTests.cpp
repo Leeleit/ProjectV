@@ -125,6 +125,7 @@ struct QuadCoverageVerifier {
 	}
 };
 
+// noinspection DfaConstantParameter
 void TestPropertyVolumePreservation(TestContext &ctx, const uint32_t seed, const int chunkSize, const int iterations)
 {
 	Xorshift32 rng(seed);
@@ -257,6 +258,7 @@ void TestPropertyNoOverlap(TestContext &ctx, const uint32_t seed, const int chun
 	}
 }
 
+// noinspection DfaConstantParameter
 void TestPropertyDeterminism(TestContext &ctx, uint32_t seed, int chunkSize, int iterations)
 {
 	Xorshift32 rng(seed);
@@ -294,6 +296,7 @@ void TestPropertyDeterminism(TestContext &ctx, uint32_t seed, int chunkSize, int
 	}
 }
 
+// noinspection DfaConstantParameter
 void TestPropertyMaterialConsistency(TestContext &ctx, uint32_t seed, int chunkSize, int iterations)
 {
 	Xorshift32 rng(seed);
@@ -342,6 +345,7 @@ void TestPropertyMaterialConsistency(TestContext &ctx, uint32_t seed, int chunkS
 	}
 }
 
+// noinspection DfaConstantParameter
 void TestPropertyExtentsWithinBounds(TestContext &ctx, uint32_t seed, int chunkSize, int iterations)
 {
 	Xorshift32 rng(seed);

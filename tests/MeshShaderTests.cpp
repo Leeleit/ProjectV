@@ -10,6 +10,7 @@ namespace {
 
 struct TestContext {
 	int failures = 0;
+	// noinspection DfaConstantParameter
 	void Fail(const int line, const std::string_view message)
 	{
 		std::fprintf(stderr, "Test failure at line %d: %.*s\n", line, static_cast<int>(message.size()), message.data());
@@ -17,6 +18,7 @@ struct TestContext {
 	}
 };
 
+// noinspection DfaConstantParameter
 void ExpectFalse(TestContext &context, const bool condition, const int line, const std::string_view expr)
 {
 	if (condition) {
@@ -24,6 +26,7 @@ void ExpectFalse(TestContext &context, const bool condition, const int line, con
 	}
 }
 
+// noinspection DfaConstantParameter
 void ExpectEqualUInt(TestContext &context, const uint32_t expected, const uint32_t actual, const int line, const std::string_view expr)
 {
 	if (expected != actual) {

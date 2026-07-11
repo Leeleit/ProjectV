@@ -17,6 +17,7 @@ struct TestContext {
 	}
 };
 
+// noinspection DfaConstantParameter
 VoxelWorld MakeTestWorld(const int width, const int height, const int depth)
 {
 	constexpr int chunkSize = 4;

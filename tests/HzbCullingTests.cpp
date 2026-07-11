@@ -15,6 +15,7 @@ struct TestContext {
 	}
 };
 
+// noinspection DfaConstantParameter
 void ExpectFalse(TestContext &context, const bool condition, const int line, const std::string_view expr)
 {
 	if (condition) {
@@ -22,6 +23,7 @@ void ExpectFalse(TestContext &context, const bool condition, const int line, con
 	}
 }
 
+// noinspection DfaConstantParameter
 void ExpectEqualUInt(TestContext &context, const uint32_t expected, const uint32_t actual, const int line, const std::string_view expr)
 {
 	if (expected != actual) {

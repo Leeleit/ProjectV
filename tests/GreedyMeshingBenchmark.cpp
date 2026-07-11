@@ -10,6 +10,7 @@ namespace {
 using projectv::voxel::CpuGreedyInput;
 using projectv::voxel::GenerateCpuGreedyMesh;
 
+// noinspection DfaConstantParameter
 struct Xorshift32 {
 	uint32_t state;
 	explicit Xorshift32(uint32_t seed) : state(seed ? seed : 1u) {}
@@ -40,6 +41,7 @@ struct Xorshift32 {
 	}
 };
 
+// noinspection DfaConstantParameter
 std::vector<uint8_t> MakeRandomChunk(const int size, const uint32_t seed)
 {
 	Xorshift32 rng(seed);

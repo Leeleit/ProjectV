@@ -45,6 +45,7 @@ uint32_t ComputePerChunkMipLevelCpu(
 	return std::min(capped, maxMipLevel);
 }
 
+// noinspection DfaConstantParameter
 uint32_t ComputePerChunkMipLevelsFromAabbs(
 	const std::vector<std::array<float, 4>> &chunkCenters,
 	const std::vector<std::array<float, 4>> &chunkHalfExtents,
@@ -213,6 +214,7 @@ void TestComputePerChunkMipLevelsFromAabbs(SmartMipTestContext &test)
 	}
 }
 
+// noinspection DfaConstantParameter
 constexpr uint32_t ComputeBlendWidthForChunkMipLocal(
 	const uint32_t projectedExtentXTexels,
 	const uint32_t projectedExtentYTexels,
