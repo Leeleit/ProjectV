@@ -78,7 +78,7 @@ uint64_t SumMergedBoxVolumes(const std::vector<projectv::physics::MergedVoxelBox
 
 void TestEmptyWorldProducesZeroBoxes(TestContext &context)
 {
-	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	const VoxelWorld world = MakeTestWorld(8, 8, 8);
 	std::vector<projectv::physics::MergedVoxelBox> boxes;
 	const uint32_t count = projectv::physics::GreedyMergeSolidVoxelsInBounds(
 		world,

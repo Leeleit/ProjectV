@@ -1,10 +1,8 @@
 #include "render/vulkan/VulkanGraphicsPipeline.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include "render/vulkan/VulkanGraphicsPipelineInternal.hpp"
 #include "core/RuntimeDiagnostics.hpp"
-#include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
 #include "render/RayTracedShadows.hpp"
-#include "render/RtxGiProbes.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include <array>
@@ -67,7 +65,6 @@ VkFormat ChooseDepthFormat(const VkPhysicalDevice physicalDevice)
 	}
 	return VK_FORMAT_UNDEFINED;
 }
-
 
 bool CreateDepthResources(
 	VulkanContextState *context,
@@ -247,7 +244,6 @@ bool CreateScreenshotReadbackResources(
 	return true;
 }
 
-
 void DestroyGraphicsPipeline(
 	VulkanContextState *context,
 	RenderState *render)
@@ -263,6 +259,11 @@ void DestroyGraphicsPipeline(
 		PV_PROFILE_ZONE_N("DestroyTransparentGraphicsPipeline");
 		vkDestroyPipeline(context->device, render->transparentGraphicsPipeline, nullptr);
 		render->transparentGraphicsPipeline = VK_NULL_HANDLE;
+	}
+	if (render->transparentDebugGraphicsPipeline) {
+		PV_PROFILE_ZONE_N("DestroyTransparentDebugGraphicsPipeline");
+		vkDestroyPipeline(context->device, render->transparentDebugGraphicsPipeline, nullptr);
+		render->transparentDebugGraphicsPipeline = VK_NULL_HANDLE;
 	}
 
 	if (render->shadowGraphicsPipeline) {

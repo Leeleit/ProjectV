@@ -1,7 +1,6 @@
 #include "volk.h"
 #include "render/RayTracedShadows.hpp"
 #include "core/RuntimeDiagnostics.hpp"
-#include "SDL3/SDL_log.h"
 #include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
@@ -9,9 +8,9 @@
 
 namespace projectv::render {
 
-void RayTracedShadows::SetBlasDirtyQueue(std::vector<DirtyChunkRebuild> &&dirtyChunks) noexcept
+void RayTracedShadows::SetBlasDirtyQueue(std::vector<DirtyChunkRebuild> &&dirtyChunks) noexcept // NOLINT(bugprone-exception-escape): mutex/vector operations are bounded
 {
-	std::lock_guard<std::mutex> lock(m_dirtyQueueMutex);
+	std::lock_guard lock(m_dirtyQueueMutex);
 	if (dirtyChunks.empty()) {
 		return;
 	}
@@ -23,9 +22,9 @@ void RayTracedShadows::SetBlasDirtyQueue(std::vector<DirtyChunkRebuild> &&dirtyC
 
 void RayTracedShadows::BuildDirtyBlases(
 	const VulkanContextState &context,
-	VkCommandPool commandPool)
+	const VkCommandPool commandPool)
 {
-	std::lock_guard<std::mutex> lock(m_dirtyQueueMutex);
+	std::lock_guard lock(m_dirtyQueueMutex);
 	if (m_pendingDirtyChunks.empty()) {
 		return;
 	}
@@ -39,11 +38,8 @@ void RayTracedShadows::BuildDirtyBlases(
 		m_pendingDirtyChunks.clear();
 		return;
 	}
-	
-	const bool routeAsyncCompute = false;
-	VkCommandPool submitPool = routeAsyncCompute
-		? context.asyncComputeCommandPool
-		: commandPool;
+
+	const VkCommandPool submitPool = commandPool;
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -59,8 +55,10 @@ void RayTracedShadows::BuildDirtyBlases(
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	vkBeginCommandBuffer(cmd, &beginInfo);
 
-	for (const DirtyChunkRebuild &chunk : m_pendingDirtyChunks) {
-		BuildChunkBlas(cmd, context, chunk.chunkIndex, chunk.aabb);
+	for (const auto &[chunkIndex, aabb] : m_pendingDirtyChunks) {
+		if (!BuildChunkBlas(cmd, context, chunkIndex, aabb)) {
+			runtime::LogRuntimeFailure("RayTracedShadows", "BuildDirtyBlas", "BuildChunkBlas failed");
+		}
 	}
 
 	m_pendingDirtyChunks.clear();
@@ -74,7 +72,7 @@ void RayTracedShadows::BuildDirtyBlases(
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.commandBufferCount = 1u;
 		submitInfo.pCommandBuffers = &cmd;
-		VkQueue submitQueue = routeAsyncCompute ? context.dedicatedComputeQueue : context.queue;
+		const VkQueue submitQueue = context.queue;
 		if (vkQueueSubmit(submitQueue, 1u, &submitInfo, fence) == VK_SUCCESS) {
 			vkWaitForFences(context.device, 1u, &fence, VK_TRUE, UINT64_MAX);
 		}
@@ -163,8 +161,7 @@ bool RayTracedShadows::BuildChunkBlas(
 	VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
 	buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
 	buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR
-					  | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
 	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
 	buildInfo.geometryCount = 1u;
 	buildInfo.pGeometries = &geometry;
@@ -176,7 +173,7 @@ bool RayTracedShadows::BuildChunkBlas(
 	rangeInfo.primitiveOffset = 0u;
 	rangeInfo.firstVertex = 0u;
 	rangeInfo.transformOffset = 0u;
-	const VkAccelerationStructureBuildRangeInfoKHR *rangeInfos[1] = { &rangeInfo };
+	const VkAccelerationStructureBuildRangeInfoKHR *rangeInfos[1] = {&rangeInfo};
 
 	vkCmdBuildAccelerationStructuresKHR(
 		commandBuffer,
@@ -204,7 +201,7 @@ bool RayTracedShadows::BuildChunkBlas(
 	scratchBarrier.offset = 0u;
 	scratchBarrier.size = m_config.scratchCapacityBytes;
 
-	std::array<VkBufferMemoryBarrier, 2> buildBarriers = {blasWriteBarrier, scratchBarrier};
+	std::array buildBarriers = {blasWriteBarrier, scratchBarrier};
 	vkCmdPipelineBarrier(
 		commandBuffer,
 		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
@@ -247,6 +244,7 @@ bool RayTracedShadows::EnsureBlasHandle(
 	const uint32_t chunkIndex,
 	VkAabbPositionsKHR aabb)
 {
+	(void)aabb;
 	if (context.device == VK_NULL_HANDLE || context.allocator == nullptr) {
 		return false;
 	}
@@ -285,14 +283,13 @@ bool RayTracedShadows::EnsureBlasHandle(
 		&blasSizingPrimitiveCount,
 		&blasSizeInfo);
 	const VkDeviceSize blasBackingSize = blasSizeInfo.accelerationStructureSize > 0u
-		? blasSizeInfo.accelerationStructureSize
-		: static_cast<VkDeviceSize>(1024u);
+											 ? blasSizeInfo.accelerationStructureSize
+											 : static_cast<VkDeviceSize>(1024u);
 
 	VkBufferCreateInfo blasBackingInfo{};
 	blasBackingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	blasBackingInfo.size = blasBackingSize;
-	blasBackingInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
-						  | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	blasBackingInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 	blasBackingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	VmaAllocationCreateInfo blasBackingAllocInfo{};
 	blasBackingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -331,8 +328,7 @@ bool RayTracedShadows::EnsureBlasHandle(
 	const VkAccelerationStructureDeviceAddressInfoKHR blasAddressInfo{
 		VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
 		nullptr,
-		m_config.blasHandles[chunkIndex]
-	};
+		m_config.blasHandles[chunkIndex]};
 	m_config.blasDeviceAddresses[chunkIndex] = vkGetAccelerationStructureDeviceAddressKHR(
 		context.device,
 		&blasAddressInfo);

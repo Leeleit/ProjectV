@@ -9,26 +9,26 @@ export import projectv.types;
 
 export namespace projectv::ecs {
 
-bool InitializeAppEcs(::projectv::core::AppState *state);
+bool InitializeAppEcs(core::AppState *state);
 
-::projectv::core::CameraState *GetPrimaryCameraState(::projectv::core::EcsState *ecs);
-const ::projectv::core::CameraState *GetPrimaryCameraState(const ::projectv::core::EcsState *ecs);
+core::CameraState *GetPrimaryCameraState(core::EcsState *ecs);
+const core::CameraState *GetPrimaryCameraState(const core::EcsState *ecs);
 
-::projectv::core::DebugState *GetDebugState(::projectv::core::EcsState *ecs);
-const ::projectv::core::DebugState *GetDebugState(const ::projectv::core::EcsState *ecs);
+core::DebugState *GetDebugState(core::EcsState *ecs);
+const core::DebugState *GetDebugState(const core::EcsState *ecs);
 
-::projectv::core::WorldState *GetWorldState(::projectv::core::EcsState *ecs);
-const ::projectv::core::WorldState *GetWorldState(const ::projectv::core::EcsState *ecs);
+core::WorldState *GetWorldState(core::EcsState *ecs);
+const core::WorldState *GetWorldState(const core::EcsState *ecs);
 
-bool SyncEcsWorldState(::projectv::core::EcsState *ecs);
+bool SyncEcsWorldState(core::EcsState *ecs);
 
-std::uint64_t GetPrimaryCameraEntityId(const ::projectv::core::EcsState *ecs);
-std::uint64_t GetPrimaryPlayerEntityId(const ::projectv::core::EcsState *ecs);
-std::uint64_t GetPlayerControlledCameraEntityId(const ::projectv::core::EcsState *ecs);
+std::uint64_t GetPrimaryCameraEntityId(const core::EcsState *ecs);
+std::uint64_t GetPrimaryPlayerEntityId(const core::EcsState *ecs);
+std::uint64_t GetPlayerControlledCameraEntityId(const core::EcsState *ecs);
 
 bool GetEcsWorldChunkSummary(
-	const ::projectv::core::EcsState *ecs,
-	::projectv::core::VoxelWorldStats *outStats,
+	const core::EcsState *ecs,
+	core::VoxelWorldStats *outStats,
 	std::size_t *outChunkEntityCount);
 
 } // namespace projectv::ecs

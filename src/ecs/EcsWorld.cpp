@@ -7,13 +7,10 @@ import projectv.string_id;
 #include "app/BenchmarkAutomation.hpp"
 #include "app/LookDevCaptureAutomation.hpp"
 #include "core/Types.hpp"
-#include "render/vulkan/VulkanFluidCaPipeline.hpp"
-#include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 #include <SDL3/SDL.h>
 
-#include <cmath>
 
 #include <string>
 #include <vector>
@@ -237,7 +234,7 @@ bool InitializeAppEcs(AppState *state)
 			}
 			const DebugState *debug = GetDebugState(binding->state->ecs().get());
 			const DebugStats debugStats = debug ? debug->stats : DebugStats{};
-			const Uint64 frameCounter = static_cast<Uint64>(SDL_GetPerformanceCounter());
+			const Uint64 frameCounter = SDL_GetPerformanceCounter();
 			result.quitAfterFrame = UpdateBenchmarkAutomation(
 				&binding->state->benchmark(),
 				debugStats,
@@ -274,7 +271,7 @@ void TickAudioRefreshPlaylistSystem(EcsState *ecs)
 	if (!ecs) {
 		return;
 	}
-	ecs->impl.world.progress();
+	(void)ecs->impl.world.progress();
 }
 
 void TickFluidCASystem(EcsState *ecs)
@@ -282,7 +279,7 @@ void TickFluidCASystem(EcsState *ecs)
 	if (!ecs) {
 		return;
 	}
-	ecs->impl.world.progress();
+	(void)ecs->impl.world.progress();
 }
 
 
@@ -291,7 +288,7 @@ void TickBenchmarkAutomationSystem(EcsState *ecs)
 	if (!ecs) {
 		return;
 	}
-	ecs->impl.world.progress();
+	(void)ecs->impl.world.progress();
 }
 
 bool IsBenchmarkAutomationQuitRequested(const EcsState *ecs)
@@ -310,7 +307,7 @@ void TickLookDevCaptureSystem(EcsState *ecs)
 	if (!ecs) {
 		return;
 	}
-	ecs->impl.world.progress();
+	(void)ecs->impl.world.progress();
 }
 
 bool IsLookDevCaptureQuitRequested(const EcsState *ecs)

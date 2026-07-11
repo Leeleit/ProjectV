@@ -1,7 +1,6 @@
 import projectv.math;
 import projectv.string_id;
 
-#include "voxel/VoxelWorldInternal.hpp"
 #include "voxel/VoxelLodDownsample.hpp"
 
 #include <cmath>

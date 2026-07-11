@@ -14,110 +14,11 @@ void DestroyStaticWorldBody(PhysicsState &physics)
 	physics.staticWorldShape = nullptr;
 }
 
-bool BuildStaticVoxelCollisionBody(PhysicsState &physics, const VoxelWorld &world)
-{
-	PV_PROFILE_ZONE_N("BuildStaticVoxelCollisionBody");
-	JPH::StaticCompoundShapeSettings compoundSettings;
-
-	std::vector<projectv::physics::MergedVoxelBox> mergedBoxes;
-	if (projectv::physics::IsGreedyPhysicsMeshEnabled()) {
-		projectv::physics::GreedyMergeSolidVoxelsInBounds(
-			world,
-			world.min,
-			world.maxExclusive,
-			mergedBoxes);
-		profiling::PlotValue(
-			"Physics Greedy Merge Box Count",
-			static_cast<int64_t>(mergedBoxes.size()));
-	}
-
-	size_t solidVoxelCount = 0;
-	if (!mergedBoxes.empty()) {
-		for (const projectv::physics::MergedVoxelBox &box : mergedBoxes) {
-			const int spanX = box.maxX - box.minX;
-			const int spanY = box.maxY - box.minY;
-			const int spanZ = box.maxZ - box.minZ;
-			const float halfX = static_cast<float>(spanX) * 0.5f;
-			const float halfY = static_cast<float>(spanY) * 0.5f;
-			const float halfZ = static_cast<float>(spanZ) * 0.5f;
-			const JPH::Vec3 halfExtent(halfX, halfY, halfZ);
-			const JPH::Vec3 center(
-				static_cast<float>(box.minX) + halfX,
-				static_cast<float>(box.minY) + halfY,
-				static_cast<float>(box.minZ) + halfZ);
-			const JPH::RefConst<JPH::Shape> boxShape = new JPH::BoxShape(halfExtent);
-			compoundSettings.AddShape(
-				center,
-				JPH::Quat::sIdentity(),
-				boxShape.GetPtr());
-			solidVoxelCount += static_cast<size_t>(spanX) *
-				static_cast<size_t>(spanY) *
-				static_cast<size_t>(spanZ);
-		}
-	} else {
-		const JPH::RefConst<JPH::Shape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
-		for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
-			for (int y = world.min.y; y < world.maxExclusive.y; ++y) {
-				for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
-					const Int3 voxel{x, y, z};
-					if (!IsPhysicsSolidMaterial(GetVoxelMaterial(world, voxel))) {
-						continue;
-					}
-
-					compoundSettings.AddShape(
-						JPH::Vec3(
-							static_cast<float>(x) + 0.5f,
-							static_cast<float>(y) + 0.5f,
-							static_cast<float>(z) + 0.5f),
-						JPH::Quat::sIdentity(),
-						voxelShape.GetPtr());
-					++solidVoxelCount;
-				}
-			}
-		}
-	}
-
-	if (solidVoxelCount == 0) {
-		return true;
-	}
-
-	const JPH::ShapeSettings::ShapeResult shapeResult = compoundSettings.Create(physics.tempAllocator);
-	if (!shapeResult.IsValid()) {
-		runtime::LogRuntimeFailure(
-			"Physics",
-			"BuildStaticVoxelCollisionBody.Create",
-			shapeResult.GetError());
-		return false;
-	}
-
-	physics.staticWorldShape = shapeResult.Get();
-	const JPH::BodyCreationSettings worldBodySettings(
-		physics.staticWorldShape,
-		JPH::RVec3::sZero(),
-		JPH::Quat::sIdentity(),
-		JPH::EMotionType::Static,
-		PhysicsLayers::Static);
-
-	JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
-	const JPH::BodyID bodyId = bodyInterface.CreateAndAddBody(worldBodySettings, JPH::EActivation::DontActivate);
-	if (bodyId.IsInvalid()) {
-		runtime::LogRuntimeFailure(
-			"Physics",
-			"BuildStaticVoxelCollisionBody.CreateAndAddBody",
-			"CreateAndAddBody returned an invalid body id");
-		physics.staticWorldShape = nullptr;
-		return false;
-	}
-
-	physics.staticWorldBodyId = bodyId;
-	physics.physicsSystem.OptimizeBroadPhase();
-	return true;
-}
-
 } // namespace
 
 bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &world, uint32_t chunkIndex)
 {
+	(void)world;
 	PV_PROFILE_ZONE_N("BuildChunkStaticCollisionBody");
 	if (chunkIndex >= world.chunks.size()) {
 		return false;
@@ -155,29 +56,29 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 
 	size_t solidVoxelCount = 0;
 	if (!mergedBoxes.empty()) {
-		for (const projectv::physics::MergedVoxelBox &box : mergedBoxes) {
-			const int spanX = box.maxX - box.minX;
-			const int spanY = box.maxY - box.minY;
-			const int spanZ = box.maxZ - box.minZ;
+		for (const auto &[minX, minY, minZ, maxX, maxY, maxZ] : mergedBoxes) {
+			const int spanX = maxX - minX;
+			const int spanY = maxY - minY;
+			const int spanZ = maxZ - minZ;
 			const float halfX = static_cast<float>(spanX) * 0.5f;
 			const float halfY = static_cast<float>(spanY) * 0.5f;
 			const float halfZ = static_cast<float>(spanZ) * 0.5f;
 			const JPH::Vec3 halfExtent(halfX, halfY, halfZ);
 			const JPH::Vec3 center(
-				static_cast<float>(box.minX) + halfX,
-				static_cast<float>(box.minY) + halfY,
-				static_cast<float>(box.minZ) + halfZ);
-			const JPH::RefConst<JPH::Shape> boxShape = new JPH::BoxShape(halfExtent);
+				static_cast<float>(minX) + halfX,
+				static_cast<float>(minY) + halfY,
+				static_cast<float>(minZ) + halfZ);
+			const JPH::RefConst boxShape = new JPH::BoxShape(halfExtent);
 			compoundSettings.AddShape(
 				center,
 				JPH::Quat::sIdentity(),
 				boxShape.GetPtr());
 			solidVoxelCount += static_cast<size_t>(spanX) *
-				static_cast<size_t>(spanY) *
-				static_cast<size_t>(spanZ);
+							   static_cast<size_t>(spanY) *
+							   static_cast<size_t>(spanZ);
 		}
 	} else {
-		const JPH::RefConst<JPH::Shape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
+		const JPH::RefConst voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
 		for (int z = chunk.min.z; z < chunk.maxExclusive.z; ++z) {
 			for (int y = chunk.min.y; y < chunk.maxExclusive.y; ++y) {
 				for (int x = chunk.min.x; x < chunk.maxExclusive.x; ++x) {
@@ -213,7 +114,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 		return false;
 	}
 
-	const JPH::RefConst<JPH::Shape> chunkShape = shapeResult.Get();
+	const JPH::RefConst chunkShape = shapeResult.Get();
 	const JPH::BodyCreationSettings chunkBodySettings(
 		chunkShape,
 		JPH::RVec3::sZero(),
@@ -235,7 +136,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 	return true;
 }
 
-void DestroyChunkStaticBody(PhysicsState &physics, uint32_t chunkIndex)
+void DestroyChunkStaticBody(PhysicsState &physics, const uint32_t chunkIndex)
 {
 	const auto it = physics.chunkStaticBodies.find(chunkIndex);
 	if (it == physics.chunkStaticBodies.end()) {
@@ -273,10 +174,10 @@ bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWor
 
 	JPH::StaticCompoundShapeSettings compoundSettings;
 	for (const auto &entry : physics.chunkMergedBoxes) {
-		for (const projectv::physics::MergedVoxelBox &box : entry.second) {
-			const int spanX = box.maxX - box.minX;
-			const int spanY = box.maxY - box.minY;
-			const int spanZ = box.maxZ - box.minZ;
+		for (const auto &[minX, minY, minZ, maxX, maxY, maxZ] : entry.second) {
+			const int spanX = maxX - minX;
+			const int spanY = maxY - minY;
+			const int spanZ = maxZ - minZ;
 			if (spanX <= 0 || spanY <= 0 || spanZ <= 0) {
 				continue;
 			}
@@ -285,10 +186,10 @@ bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWor
 			const float halfZ = static_cast<float>(spanZ) * 0.5f;
 			const JPH::Vec3 halfExtent(halfX, halfY, halfZ);
 			const JPH::Vec3 center(
-				static_cast<float>(box.minX) + halfX,
-				static_cast<float>(box.minY) + halfY,
-				static_cast<float>(box.minZ) + halfZ);
-			const JPH::RefConst<JPH::Shape> boxShape = new JPH::BoxShape(halfExtent);
+				static_cast<float>(minX) + halfX,
+				static_cast<float>(minY) + halfY,
+				static_cast<float>(minZ) + halfZ);
+			const JPH::RefConst boxShape = new JPH::BoxShape(halfExtent);
 			compoundSettings.AddShape(
 				center,
 				JPH::Quat::sIdentity(),

@@ -48,9 +48,7 @@ bool RefreshGraphicsResourceBindings(
 		render->graphicsDescriptorPool = VK_NULL_HANDLE;
 	}
 
-	const bool rtxLayoutActive = context->rayTracing.rayQuery
-		&& context->rayTracing.accelerationStructure
-		&& projectv::render::IsRayTracedShadowEnabled(*context);
+	const bool rtxLayoutActive = context->rayTracing.rayQuery && context->rayTracing.accelerationStructure && projectv::render::IsRayTracedShadowEnabled(*context);
 	std::vector<VkDescriptorPoolSize> poolSizes{};
 	poolSizes.reserve(kGraphicsDescriptorPoolSizes.size());
 	for (const VkDescriptorPoolSize &size : kGraphicsDescriptorPoolSizes) {
@@ -138,8 +136,7 @@ bool RefreshGraphicsResourceBindings(
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		};
 
-		const bool rtxGiActive = render->rtxGiProbes != nullptr
-			&& render->rtxGiProbes->IsEnabled();
+		const bool rtxGiActive = render->rtxGiProbes != nullptr && render->rtxGiProbes->IsEnabled();
 		const VkDescriptorImageInfo rtxGiIrradianceImageInfo{
 			.sampler = rtxGiActive ? render->rtxGiProbes->GetConfig().irradianceSampler : VK_NULL_HANDLE,
 			.imageView = rtxGiActive ? render->rtxGiProbes->GetConfig().irradianceView : VK_NULL_HANDLE,
@@ -298,9 +295,7 @@ bool RefreshGraphicsResourceBindings(
 			});
 		}
 
-		const bool rtxActive = render->rayTracedShadows != nullptr
-			&& render->rayTracedShadows->IsEnabled()
-			&& render->rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
+		const bool rtxActive = render->rayTracedShadows != nullptr && render->rayTracedShadows->IsEnabled() && render->rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
 		if (rtxActive) {
 			VkWriteDescriptorSet tlasWrite{};
 			tlasWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

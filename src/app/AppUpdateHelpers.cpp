@@ -3,7 +3,6 @@
 #include <cmath>
 
 #include "app/Camera.hpp"
-#include "core/RuntimeDiagnostics.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "voxel/VoxelWorld.hpp"
 

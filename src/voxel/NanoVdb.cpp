@@ -1,6 +1,5 @@
 #include "voxel/NanoVdb.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
-#include <cassert>
 
 namespace projectv::voxel::nanovdb {
 
@@ -8,12 +7,12 @@ namespace {
 
 constexpr uint32_t GetBitsPerAxis() noexcept
 {
-	return static_cast<uint32_t>(kSparse64BitsPerAxis);
+	return kSparse64BitsPerAxis;
 }
 
 constexpr uint32_t GetChildrenPerNode() noexcept
 {
-	return static_cast<uint32_t>(kSparse64ChildrenPerNode);
+	return kSparse64ChildrenPerNode;
 }
 
 bool DecodeSlot(
@@ -238,6 +237,7 @@ uint8_t ReadNanoVdbVoxelMaterial(
 	if (rootUpperIndex >= result.uppers.size()) {
 		return 0u;
 	}
+	// noinspection CppUseStructuredBinding
 	const NanoVdbUpper &upper = result.uppers[rootUpperIndex];
 	if (upper.firstLower == kNanoVdbInvalidIndex) {
 		return 0u;

@@ -1,7 +1,6 @@
 #include "render/vulkan/FrameResources.hpp"
 
 #include "core/RuntimeDiagnostics.hpp"
-#include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 

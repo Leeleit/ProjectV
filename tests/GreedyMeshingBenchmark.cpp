@@ -40,7 +40,7 @@ struct Xorshift32 {
 	}
 };
 
-std::vector<uint8_t> MakeRandomChunk(int size, uint32_t seed)
+std::vector<uint8_t> MakeRandomChunk(const int size, const uint32_t seed)
 {
 	Xorshift32 rng(seed);
 	std::vector<uint8_t> voxels(static_cast<size_t>(size) * static_cast<size_t>(size) * static_cast<size_t>(size));
@@ -50,7 +50,7 @@ std::vector<uint8_t> MakeRandomChunk(int size, uint32_t seed)
 	return voxels;
 }
 
-CpuGreedyInput MakeInput(const std::vector<uint8_t> &voxels, int size)
+CpuGreedyInput MakeInput(const std::vector<uint8_t> &voxels, const int size)
 {
 	CpuGreedyInput input{};
 	input.worldVoxels = voxels.data();
@@ -64,7 +64,7 @@ CpuGreedyInput MakeInput(const std::vector<uint8_t> &voxels, int size)
 	input.chunk.extent[1] = static_cast<uint32_t>(size);
 	input.chunk.extent[2] = static_cast<uint32_t>(size);
 	input.chunk.nonAirCount = 0u;
-	for (uint8_t v : voxels) {
+	for (const uint8_t v : voxels) {
 		if (v != 0u) {
 			++input.chunk.nonAirCount;
 		}
@@ -74,7 +74,7 @@ CpuGreedyInput MakeInput(const std::vector<uint8_t> &voxels, int size)
 
 void BM_GreedyMeshRandom8(benchmark::State &state)
 {
-	auto voxels = MakeRandomChunk(8, 42u);
+	const auto voxels = MakeRandomChunk(8, 42u);
 	const auto input = MakeInput(voxels, 8);
 	for (auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
@@ -85,7 +85,7 @@ BENCHMARK(BM_GreedyMeshRandom8);
 
 void BM_GreedyMeshRandom16(benchmark::State &state)
 {
-	auto voxels = MakeRandomChunk(16, 42u);
+	const auto voxels = MakeRandomChunk(16, 42u);
 	const auto input = MakeInput(voxels, 16);
 	for (auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
@@ -96,7 +96,7 @@ BENCHMARK(BM_GreedyMeshRandom16);
 
 void BM_GreedyMeshRandom32(benchmark::State &state)
 {
-	auto voxels = MakeRandomChunk(32, 42u);
+	const auto voxels = MakeRandomChunk(32, 42u);
 	const auto input = MakeInput(voxels, 32);
 	for (auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
@@ -107,7 +107,7 @@ BENCHMARK(BM_GreedyMeshRandom32);
 
 void BM_GreedyMeshSolid8(benchmark::State &state)
 {
-	std::vector<uint8_t> voxels(static_cast<size_t>(8) * 8 * 8, 3u);
+	const std::vector<uint8_t> voxels(static_cast<size_t>(8) * 8 * 8, 3u);
 	const auto input = MakeInput(voxels, 8);
 	for (auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
@@ -118,7 +118,7 @@ BENCHMARK(BM_GreedyMeshSolid8);
 
 void BM_GreedyMeshSolid32(benchmark::State &state)
 {
-	std::vector<uint8_t> voxels(static_cast<size_t>(32) * 32 * 32, 3u);
+	const std::vector<uint8_t> voxels(static_cast<size_t>(32) * 32 * 32, 3u);
 	const auto input = MakeInput(voxels, 32);
 	for (auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);

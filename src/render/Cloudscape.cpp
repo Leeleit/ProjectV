@@ -7,15 +7,15 @@
 
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <vector>
 
-#include "SDL3/SDL_log.h"
 
 namespace {
 constexpr char kCloudscapeVertexShaderFilename[] = "cloudscape.vert.spv";
 constexpr char kCloudscapeFragmentShaderFilename[] = "cloudscape.frag.spv";
 
-constexpr std::array<VkDescriptorSetLayoutBinding, 3> kCloudscapeDescriptorBindings{
+constexpr std::array kCloudscapeDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -44,7 +44,7 @@ constexpr VkDescriptorSetLayoutCreateInfo kCloudscapeDescriptorSetLayoutInfo{
 	.pBindings = kCloudscapeDescriptorBindings.data(),
 };
 
-constexpr std::array<VkDescriptorPoolSize, 1> kCloudscapeDescriptorPoolSizes{
+constexpr std::array kCloudscapeDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
 		.descriptorCount = MAX_FRAMES_IN_FLIGHT * 3u,
@@ -90,8 +90,8 @@ float Fbm2D(float x, float y, int octaves)
 
 std::vector<uint8_t> GenerateCloudscapeNoiseR8()
 {
-	std::vector<uint8_t> data(projectv::render::kCloudscapeNoiseTextureSize *
-							  projectv::render::kCloudscapeNoiseTextureSize);
+	std::vector<uint8_t> data(static_cast<std::size_t>(projectv::render::kCloudscapeNoiseTextureSize *
+							  projectv::render::kCloudscapeNoiseTextureSize));
 	for (uint32_t y = 0; y < projectv::render::kCloudscapeNoiseTextureSize; ++y) {
 		for (uint32_t x = 0; x < projectv::render::kCloudscapeNoiseTextureSize; ++x) {
 			const float u = static_cast<float>(x) / static_cast<float>(projectv::render::kCloudscapeNoiseTextureSize);
@@ -122,7 +122,7 @@ bool CreateCloudscapeNoiseImage(
 		return false;
 	}
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.format = VK_FORMAT_R8_UNORM;
@@ -365,22 +365,22 @@ bool CreateCloudscapeResources(VulkanContextState *context, RenderState *render)
 		.pName = "main",
 	};
 
-	const VkPipelineVertexInputStateCreateInfo vertexInputState{
+	static constexpr VkPipelineVertexInputStateCreateInfo vertexInputState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 	};
 
-	const VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{
+	static constexpr VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 	};
 
-	const VkPipelineViewportStateCreateInfo viewportState{
+	static constexpr VkPipelineViewportStateCreateInfo viewportState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
 		.viewportCount = 1,
 		.scissorCount = 1,
 	};
 
-	const VkPipelineRasterizationStateCreateInfo rasterizationState{
+	static constexpr VkPipelineRasterizationStateCreateInfo rasterizationState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 		.polygonMode = VK_POLYGON_MODE_FILL,
 		.cullMode = VK_CULL_MODE_NONE,
@@ -388,12 +388,12 @@ bool CreateCloudscapeResources(VulkanContextState *context, RenderState *render)
 		.lineWidth = 1.0f,
 	};
 
-	const VkPipelineMultisampleStateCreateInfo multisampleState{
+	static constexpr VkPipelineMultisampleStateCreateInfo multisampleState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 	};
 
-	const VkPipelineDepthStencilStateCreateInfo depthStencilState{
+	static constexpr VkPipelineDepthStencilStateCreateInfo depthStencilState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_FALSE,
@@ -401,7 +401,7 @@ bool CreateCloudscapeResources(VulkanContextState *context, RenderState *render)
 		.stencilTestEnable = VK_FALSE,
 	};
 
-	const VkPipelineColorBlendAttachmentState colorBlendAttachment{
+	static constexpr VkPipelineColorBlendAttachmentState colorBlendAttachment{
 		.blendEnable = VK_TRUE,
 		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
 		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
@@ -418,8 +418,8 @@ bool CreateCloudscapeResources(VulkanContextState *context, RenderState *render)
 		.pAttachments = &colorBlendAttachment,
 	};
 
-	const VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-	const VkPipelineDynamicStateCreateInfo dynamicState{
+	static constexpr VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+	static constexpr VkPipelineDynamicStateCreateInfo dynamicState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		.dynamicStateCount = static_cast<uint32_t>(std::size(dynamicStates)),
 		.pDynamicStates = dynamicStates,

@@ -55,7 +55,7 @@ void TestSkyAtmosphereEnvOffString(TestContext &context)
 
 void TestSkyAtmospherePushConstantsSize(TestContext &context)
 {
-	if (sizeof(projectv::render::SkyAtmospherePushConstants) != 64u) {
+	if constexpr (sizeof(projectv::render::SkyAtmospherePushConstants) != 64u) {
 		std::fprintf(stderr, "sizeof(SkyAtmospherePushConstants)=%zu expected=64\n", sizeof(projectv::render::SkyAtmospherePushConstants));
 		context.Fail(__LINE__, "SkyAtmospherePushConstants must remain 64 bytes (16-byte align for push constants)");
 	}
@@ -77,7 +77,7 @@ void TestDestroySkyAtmospherePipelinesRejectsNull(TestContext &context)
 void TestRecordSkyAtmospherePassRejectsNullCommandBuffer(TestContext &context)
 {
 	RenderState render{};
-	projectv::render::SkyAtmospherePushConstants push{};
+	constexpr projectv::render::SkyAtmospherePushConstants push{};
 	if (projectv::render::RecordSkyAtmospherePass(VK_NULL_HANDLE, render, push, VK_NULL_HANDLE, VK_NULL_HANDLE, {1280u, 720u}, 0u)) {
 		context.Fail(__LINE__, "RecordSkyAtmospherePass(null CB) must return false");
 	}
@@ -86,7 +86,7 @@ void TestRecordSkyAtmospherePassRejectsNullCommandBuffer(TestContext &context)
 void TestRecordSkyAtmospherePassRejectsNullSceneColor(TestContext &context)
 {
 	RenderState render{};
-	projectv::render::SkyAtmospherePushConstants push{};
+	constexpr projectv::render::SkyAtmospherePushConstants push{};
 	if (projectv::render::RecordSkyAtmospherePass(VK_NULL_HANDLE, render, push, VK_NULL_HANDLE, VK_NULL_HANDLE, {1280u, 720u}, 0u)) {
 	}
 }
@@ -94,7 +94,7 @@ void TestRecordSkyAtmospherePassRejectsNullSceneColor(TestContext &context)
 void TestRecordSkyAtmospherePassRejectsZeroExtent(TestContext &context)
 {
 	RenderState render{};
-	projectv::render::SkyAtmospherePushConstants push{};
+	constexpr projectv::render::SkyAtmospherePushConstants push{};
 	if (projectv::render::RecordSkyAtmospherePass(VK_NULL_HANDLE, render, push, VK_NULL_HANDLE, VK_NULL_HANDLE, {0u, 0u}, 0u)) {
 		context.Fail(__LINE__, "RecordSkyAtmospherePass(zero extent) must return false");
 	}

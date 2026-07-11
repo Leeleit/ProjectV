@@ -24,4 +24,4 @@ uint32_t GreedyMergeSolidVoxelsInBounds(
 
 bool IsGreedyPhysicsMeshEnabled();
 
-}  // namespace projectv::physics
+} // namespace projectv::physics

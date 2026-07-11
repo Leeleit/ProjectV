@@ -7,7 +7,7 @@ import projectv.string_id;
 uint32_t GetVoxelChunkStaticPromotionThreshold()
 {
 	if (const char *value = std::getenv("PROJECTV_SVDAG_STATIC_PROMOTION_TICKS")) {
-		const int parsed = std::atoi(value);
+		const long parsed = std::strtol(value, nullptr, 10);
 		if (parsed > 0) {
 			return static_cast<uint32_t>(parsed);
 		}

@@ -31,20 +31,20 @@ std::array<uint8_t, 256> MakeIdentityLookup()
 
 void TestStructAlignmentContract(TestContext &context)
 {
-	if (sizeof(projectv::voxel::nanovdb::NanoVdbUpper) != 8u) {
+	if constexpr (sizeof(projectv::voxel::nanovdb::NanoVdbUpper) != 8u) {
 		context.Fail(__LINE__, "NanoVdbUpper must remain 8 bytes for GPU upload contract");
 	}
-	if (sizeof(projectv::voxel::nanovdb::NanoVdbLower) != 16u) {
+	if constexpr (sizeof(projectv::voxel::nanovdb::NanoVdbLower) != 16u) {
 		context.Fail(__LINE__, "NanoVdbLower must remain 16 bytes for GPU upload contract");
 	}
-	if (sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) != 24u) {
+	if constexpr (sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) != 24u) {
 		context.Fail(__LINE__, "NanoVdbLeaf must remain 24 bytes for GPU upload contract");
 	}
 }
 
 void TestPackEmptyFlatten(TestContext &context)
 {
-	projectv::voxel::nanovdb::NanoVdbFlattenResult flatten;
+	const projectv::voxel::nanovdb::NanoVdbFlattenResult flatten;
 	std::vector<uint8_t> upperBytes(8u, 0xAAu);
 	std::vector<uint8_t> lowerBytes(16u, 0xAAu);
 	std::vector<uint8_t> leafBytes(24u, 0xAAu);
@@ -196,21 +196,21 @@ void TestVersionedUploadTrigger(TestContext &context)
 
 void TestCapacityBudgetContract(TestContext &context)
 {
-	const uint64_t initialUpperBytes = sizeof(projectv::voxel::nanovdb::NanoVdbUpper) * 1u;
-	const uint64_t initialLowerBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLower) * 64u;
-	const uint64_t initialLeafBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) * 64u;
-	const uint64_t initialMaterialBytes = sizeof(uint8_t) * 64u;
+	constexpr uint64_t initialUpperBytes = sizeof(projectv::voxel::nanovdb::NanoVdbUpper) * 1u;
+	constexpr uint64_t initialLowerBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLower) * 64u;
+	constexpr uint64_t initialLeafBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) * 64u;
+	constexpr uint64_t initialMaterialBytes = sizeof(uint8_t) * 64u;
 
-	if (initialUpperBytes != 8u) {
+	if constexpr (initialUpperBytes != 8u) {
 		context.Fail(__LINE__, "Initial upper capacity must be 8 bytes (1 entry)");
 	}
-	if (initialLowerBytes != 1024u) {
+	if constexpr (initialLowerBytes != 1024u) {
 		context.Fail(__LINE__, "Initial lower capacity must be 1024 bytes (64 entries)");
 	}
-	if (initialLeafBytes != 1536u) {
+	if constexpr (initialLeafBytes != 1536u) {
 		context.Fail(__LINE__, "Initial leaf capacity must be 1536 bytes (64 entries)");
 	}
-	if (initialMaterialBytes != 64u) {
+	if constexpr (initialMaterialBytes != 64u) {
 		context.Fail(__LINE__, "Initial material capacity must be 64 bytes (64 entries)");
 	}
 }

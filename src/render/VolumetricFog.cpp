@@ -8,12 +8,11 @@
 #include <array>
 #include <vector>
 
-#include "SDL3/SDL_log.h"
 
 namespace {
 constexpr char kVolumetricFogShaderFilename[] = "volumetric_fog.comp.spv";
 
-constexpr std::array<VkDescriptorSetLayoutBinding, 3> kVolumetricFogDescriptorBindings{
+constexpr std::array kVolumetricFogDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -42,7 +41,7 @@ constexpr VkDescriptorSetLayoutCreateInfo kVolumetricFogDescriptorSetLayoutInfo{
 	.pBindings = kVolumetricFogDescriptorBindings.data(),
 };
 
-constexpr std::array<VkDescriptorPoolSize, 2> kVolumetricFogDescriptorPoolSizes{
+constexpr std::array kVolumetricFogDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 		.descriptorCount = MAX_FRAMES_IN_FLIGHT,
@@ -64,7 +63,7 @@ bool CreateVolumetricFogFroxelImage(
 		return true;
 	}
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_3D;
 	imageInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -115,6 +114,7 @@ void DestroyVolumetricFogFroxelImage(
 	VulkanContextState *context,
 	RenderState *render)
 {
+	// noinspection CppDFAConstantConditions
 	if (context == nullptr || render == nullptr || context->device == VK_NULL_HANDLE) {
 		return;
 	}
@@ -162,7 +162,7 @@ bool CreateVolumetricFogSampler(
 	return true;
 }
 
-}  // namespace
+} // namespace
 
 bool CreateVolumetricFogFallbackImage(
 	VulkanContextState *context,
@@ -175,7 +175,7 @@ bool CreateVolumetricFogFallbackImage(
 		return true;
 	}
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_3D;
 	imageInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -322,8 +322,7 @@ bool CreateVolumetricFogFallbackOnly(VulkanContextState *context, RenderState *r
 	imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	imageBarrier.image = render->volumetricFogFallbackImage;
 	imageBarrier.subresourceRange = {
-		VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u
-	};
+		VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	VkDependencyInfo depInfo{};
 	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
 	depInfo.imageMemoryBarrierCount = 1u;
@@ -427,9 +426,7 @@ bool CreateVolumetricFogResources(VulkanContextState *context, RenderState *rend
 		.pName = "main",
 	};
 
-	VkComputePipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	pipelineInfo.stage = stage;
+	VkComputePipelineCreateInfo pipelineInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .stage = stage};
 	pipelineInfo.layout = render->volumetricFogPipelineLayout;
 	if (vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->volumetricFogPipeline) != VK_SUCCESS) {
 		DestroyVolumetricFogResources(context, render);
@@ -471,8 +468,8 @@ bool CreateVolumetricFogResources(VulkanContextState *context, RenderState *rend
 		VkDescriptorImageInfo sceneColorInfo{};
 		sceneColorInfo.sampler = render->volumetricFogLinearSampler;
 		sceneColorInfo.imageView = render->sceneColorImageView != VK_NULL_HANDLE
-									  ? render->sceneColorImageView
-									  : VK_NULL_HANDLE;
+									   ? render->sceneColorImageView
+									   : VK_NULL_HANDLE;
 		sceneColorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		VkDescriptorImageInfo depthInfo{};
@@ -518,10 +515,10 @@ bool CreateVolumetricFogResources(VulkanContextState *context, RenderState *rend
 }
 
 bool RecordVolumetricFogAccumulationPass(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RenderState &render,
 	const VolumetricFogPushConstants &pushConstants,
-	uint32_t frameIndex)
+	const uint32_t frameIndex)
 {
 	PV_PROFILE_ZONE_N("RecordVolumetricFogAccumulationPass");
 	if (commandBuffer == VK_NULL_HANDLE) {
@@ -605,4 +602,4 @@ bool RecordVolumetricFogAccumulationPass(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

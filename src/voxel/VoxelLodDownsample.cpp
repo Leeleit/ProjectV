@@ -129,4 +129,4 @@ bool IsLodDownsampleEnabled()
 	return false;
 }
 
-}  // namespace projectv::voxel
+} // namespace projectv::voxel

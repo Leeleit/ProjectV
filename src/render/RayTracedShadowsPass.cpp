@@ -3,15 +3,15 @@
 #include "SDL3/SDL_log.h"
 
 #include <array>
-#include <cstring>
 
 namespace projectv::render {
 
+// noinspection CppDFAConstantFunctionResult
 bool RayTracedShadows::RecordRayTracedShadowPass(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	const VulkanContextState &context,
-	VkPipelineStageFlags waitStage,
-	VkAccessFlags waitAccess)
+	const VkPipelineStageFlags waitStage,
+	const VkAccessFlags waitAccess) const
 {
 	if (!m_config.enabled) {
 		return false;
@@ -24,29 +24,28 @@ bool RayTracedShadows::RecordRayTracedShadowPass(
 }
 
 bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	const VulkanContextState &context,
-	uint32_t frameIndex,
-	VkBuffer chunkDescriptorBuffer,
-	VkBuffer sceneLightingBuffer,
-	VkBuffer chunkVoxelPayloadBuffer,
+	const uint32_t frameIndex,
+	const VkBuffer chunkDescriptorBuffer,
+	const VkBuffer sceneLightingBuffer,
+	const VkBuffer chunkVoxelPayloadBuffer,
 	const float *inverseViewProjection,
 	const float *cameraPosition,
 	const float *cameraForward,
-	uint32_t screenWidth,
-	uint32_t screenHeight)
+	const uint32_t screenWidth,
+	const uint32_t screenHeight)
 {
 	if (!m_config.enabled || !m_voxelAwareRtxActive) {
 		return false;
 	}
-	if (commandBuffer == VK_NULL_HANDLE
-			|| m_rtxPipeline.GetPipeline() == VK_NULL_HANDLE
-			|| !m_rtxSbt.IsReady()) {
+	if (commandBuffer == VK_NULL_HANDLE || m_rtxPipeline.GetPipeline() == VK_NULL_HANDLE || !m_rtxSbt.IsReady()) {
 		return false;
 	}
 	if (frameIndex >= MAX_FRAMES_IN_FLIGHT) {
 		return false;
 	}
+	// noinspection CppUseStructuredBinding
 	const RtxFrameResources &frame = m_rtxFrames[frameIndex];
 	if (frame.cameraUboMappedData == nullptr || frame.descriptorSet == VK_NULL_HANDLE) {
 		return false;
@@ -54,27 +53,25 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	if (inverseViewProjection == nullptr || cameraPosition == nullptr || cameraForward == nullptr) {
 		return false;
 	}
-	if (chunkDescriptorBuffer == VK_NULL_HANDLE
-			|| sceneLightingBuffer == VK_NULL_HANDLE
-			|| chunkVoxelPayloadBuffer == VK_NULL_HANDLE) {
+	if (chunkDescriptorBuffer == VK_NULL_HANDLE || sceneLightingBuffer == VK_NULL_HANDLE || chunkVoxelPayloadBuffer == VK_NULL_HANDLE) {
 		return false;
 	}
 
 	uint8_t *uboMapped = static_cast<uint8_t *>(frame.cameraUboMappedData);
 	std::memcpy(uboMapped + 0, inverseViewProjection, 64u);
-	const float positionAndWidth[4] = { cameraPosition[0], cameraPosition[1], cameraPosition[2],
-		static_cast<float>(screenWidth) };
-	const float forwardAndHeight[4] = { cameraForward[0], cameraForward[1], cameraForward[2],
-		static_cast<float>(screenHeight) };
+	const float positionAndWidth[4] = {cameraPosition[0], cameraPosition[1], cameraPosition[2],
+									   static_cast<float>(screenWidth)};
+	const float forwardAndHeight[4] = {cameraForward[0], cameraForward[1], cameraForward[2],
+									   static_cast<float>(screenHeight)};
 	std::memcpy(uboMapped + 64, positionAndWidth, 16u);
 	std::memcpy(uboMapped + 80, forwardAndHeight, 16u);
 	vmaFlushAllocation(context.allocator, frame.cameraUboAllocation, 0u, 96u);
 
-	VkDescriptorBufferInfo chunkDescriptorInfo{ chunkDescriptorBuffer, 0, VK_WHOLE_SIZE };
-	VkDescriptorBufferInfo sceneLightingInfo{ sceneLightingBuffer, 0, VK_WHOLE_SIZE };
-	VkDescriptorBufferInfo chunkVoxelPayloadInfo{ chunkVoxelPayloadBuffer, 0, VK_WHOLE_SIZE };
-	VkDescriptorImageInfo shadowMaskImageInfo{ VK_NULL_HANDLE, m_shadowMaskImageView, VK_IMAGE_LAYOUT_GENERAL };
-	VkDescriptorBufferInfo cameraUboInfo{ frame.cameraUboBuffer, 0, 96u };
+	const VkDescriptorBufferInfo chunkDescriptorInfo{chunkDescriptorBuffer, 0, VK_WHOLE_SIZE};
+	const VkDescriptorBufferInfo sceneLightingInfo{sceneLightingBuffer, 0, VK_WHOLE_SIZE};
+	const VkDescriptorBufferInfo chunkVoxelPayloadInfo{chunkVoxelPayloadBuffer, 0, VK_WHOLE_SIZE};
+	const VkDescriptorImageInfo shadowMaskImageInfo{VK_NULL_HANDLE, m_shadowMaskImageView, VK_IMAGE_LAYOUT_GENERAL};
+	const VkDescriptorBufferInfo cameraUboInfo{frame.cameraUboBuffer, 0, 96u};
 	VkWriteDescriptorSetAccelerationStructureKHR tlasInfo{};
 	tlasInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
 	tlasInfo.accelerationStructureCount = 1u;
@@ -140,7 +137,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	imageBarrier.image = m_shadowMaskImage;
-	imageBarrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	vkCmdPipelineBarrier(
 		commandBuffer,
 		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -183,7 +180,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	readBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	readBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	readBarrier.image = m_shadowMaskImage;
-	readBarrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	readBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	vkCmdPipelineBarrier(
 		commandBuffer,
 		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
@@ -199,6 +196,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 
 void RayTracedShadows::RecordDebugReport() const noexcept
 {
+#if 0
 	if (!m_config.enabled) {
 		return;
 	}
@@ -209,18 +207,20 @@ void RayTracedShadows::RecordDebugReport() const noexcept
 		m_config.tlasRebuildCount,
 		m_config.shadowRayDispatchCount,
 		m_config.fallbackCount);
+#endif
 }
 
+// noinspection CppDFAConstantFunctionResult
 bool RecordRayTracedShadowPass(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RayTracedShadows *rayTracedShadows,
-	VkPipelineStageFlags waitStage,
-	VkAccessFlags waitAccess)
+	const VkPipelineStageFlags waitStage,
+	const VkAccessFlags waitAccess)
 {
 	if (rayTracedShadows == nullptr) {
 		return false;
 	}
-	VulkanContextState dummyContext{};
+	constexpr VulkanContextState dummyContext{};
 	return rayTracedShadows->RecordRayTracedShadowPass(
 		commandBuffer,
 		dummyContext,

@@ -3,7 +3,6 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
-#include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include <array>
@@ -29,7 +28,7 @@ constexpr uint32_t kMeshMaxOutputPrimitives = 256u;
 // EVIL: kMeshPushConstantSize=128 = Vulkan spec min. VoxelMeshingPushConstants(64) + viewProjection(64) = 128 exactly. If VoxelMeshingPushConstants grows (e.g. per-chunk cascade count) this overflows the min spec; check first.
 constexpr uint32_t kMeshPushConstantSize = 128u;
 
-constexpr std::array<VkDescriptorSetLayoutBinding, 4> kMeshShaderDescriptorBindings{
+constexpr std::array kMeshShaderDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -68,7 +67,7 @@ constexpr VkDescriptorSetLayoutCreateInfo kMeshShaderDescriptorSetLayoutInfo{
 	.pBindings = kMeshShaderDescriptorBindings.data(),
 };
 
-constexpr std::array<VkDescriptorPoolSize, 1> kMeshShaderDescriptorPoolSizes{
+constexpr std::array kMeshShaderDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = kMeshShaderDescriptorSetCount * 4u,
@@ -205,7 +204,7 @@ bool RefreshMeshShaderResourceBindings(
 		render->meshShaderDescriptorPool = VK_NULL_HANDLE;
 	}
 
-	const VkDescriptorPoolCreateInfo poolInfo{
+	static constexpr VkDescriptorPoolCreateInfo poolInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
@@ -271,7 +270,7 @@ bool RefreshMeshShaderResourceBindings(
 			.range = VK_WHOLE_SIZE,
 		};
 
-		const std::array<VkWriteDescriptorSet, 4> writes{
+		const std::array writes{
 			VkWriteDescriptorSet{
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.pNext = nullptr,
@@ -511,9 +510,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 		.pName = "main",
 		.pSpecializationInfo = nullptr,
 	};
-	VkComputePipelineCreateInfo cullPipelineInfo{};
-	cullPipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	cullPipelineInfo.stage = cullStage;
+	VkComputePipelineCreateInfo cullPipelineInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .stage = cullStage};
 	cullPipelineInfo.layout = render->meshCullPipelineLayout;
 	cullPipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 	cullPipelineInfo.basePipelineIndex = 0;
@@ -591,7 +588,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 	rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterization.lineWidth = 1.0f;
 
-	VkPipelineMultisampleStateCreateInfo multisample{};
+	VkPipelineMultisampleStateCreateInfo multisample{.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT};
 	multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
@@ -622,7 +619,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 	dynamicState.dynamicStateCount = 2u;
 	dynamicState.pDynamicStates = dynamicStates;
 
-	const VkFormat colorFormats[1]{VK_FORMAT_B10G11R11_UFLOAT_PACK32};
+	static constexpr VkFormat colorFormats[1]{VK_FORMAT_B10G11R11_UFLOAT_PACK32};
 	VkPipelineRenderingCreateInfo renderingCreateInfo{};
 	renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 	renderingCreateInfo.colorAttachmentCount = 1u;
@@ -663,6 +660,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 
 	vkDestroyShaderModule(context->device, fragmentModule, nullptr);
 
+	// noinspection CppDFAConstantConditions, CppDFAUnreachableCode
 	if (!RefreshMeshShaderResourceBindings(context, render)) {
 		DestroyMeshShaderPipelines(context, render);
 		return false;

@@ -4,12 +4,11 @@
 #include "voxel/VoxelLodDownsample.hpp"
 
 #include <algorithm>
-#include <array>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
 
-#include "SDL3/SDL_log.h"
 
 namespace projectv::render {
 
@@ -31,7 +30,7 @@ uint32_t ComputeLodDownsampledVoxelPayloadBytes(
 		static_cast<VkDeviceSize>(worstCaseExtent) *
 		static_cast<VkDeviceSize>(worstCaseExtent);
 	const VkDeviceSize totalBytes = worstCaseVoxelCount * chunkCount;
-	return static_cast<uint32_t>(std::min<VkDeviceSize>(totalBytes, 64u * 1024u * 1024u));
+	return static_cast<uint32_t>(std::min<VkDeviceSize>(totalBytes, static_cast<VkDeviceSize>(64u) * 1024u * 1024u));
 }
 
 uint32_t ComputeChunkLodLevelsCapacity(const uint32_t chunkCount)
@@ -156,7 +155,7 @@ bool RefreshLodDownsampledBuffers(
 				}
 				projectv::voxel::DownsampleChunkForLodSurfacePreserve(
 					world,
-					static_cast<size_t>(i),
+					i,
 					chunk.lodLevel,
 					downsampled);
 				const uint32_t chunkWordOffset = LodPayloadWordOffsetForChunk(i);

@@ -136,8 +136,8 @@ std::vector<uint32_t> BuildActiveChunkIdsForFluidCa(const VoxelWorld &world);
 
 void ToggleFluidCaGpuEnabledForTesting(bool enabled);
 
-uint8_t SelectLodLevelForDistance(const float distanceMeters);
-void AssignLodLevels(VoxelWorld &world, const float cameraX, const float cameraY, const float cameraZ);
+uint8_t SelectLodLevelForDistance(float distanceMeters);
+void AssignLodLevels(VoxelWorld &world, float cameraX, float cameraY, float cameraZ);
 uint32_t CountChunksAtLod(const VoxelWorld &world, uint8_t lodLevel);
 uint32_t LodDownsampleStepForLod(uint8_t lodLevel);
 uint32_t LodDownsampledExtentForLod(uint8_t lodLevel, uint8_t chunkSize);

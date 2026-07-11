@@ -18,43 +18,43 @@ inline constexpr uint32_t kSparse64NodeIndexMask = 0x3FFFFFFFu;
 inline constexpr uint32_t kSparse64MaterialMask = 0xFFu;
 inline constexpr uint32_t kSparse64InvalidNodeIndex = kSparse64NodeIndexMask;
 
-inline constexpr uint32_t MakeSparse64Leaf(uint8_t material) noexcept
+constexpr uint32_t MakeSparse64Leaf(uint8_t material) noexcept
 {
 	return kSparse64LeafFlag | static_cast<uint32_t>(material);
 }
 
-inline constexpr uint32_t MakeSparse64Homogeneous(uint8_t material) noexcept
+constexpr uint32_t MakeSparse64Homogeneous(uint8_t material) noexcept
 {
 	return kSparse64LeafFlag | kSparse64HomogeneousFlag | static_cast<uint32_t>(material);
 }
 
-inline constexpr bool IsSparse64Leaf(uint32_t slot) noexcept
+constexpr bool IsSparse64Leaf(uint32_t slot) noexcept
 {
 	return (slot & (kSparse64LeafFlag | kSparse64HomogeneousFlag)) == kSparse64LeafFlag;
 }
 
-inline constexpr bool IsSparse64Homogeneous(uint32_t slot) noexcept
+constexpr bool IsSparse64Homogeneous(uint32_t slot) noexcept
 {
 	return (slot & (kSparse64LeafFlag | kSparse64HomogeneousFlag)) ==
 		   (kSparse64LeafFlag | kSparse64HomogeneousFlag);
 }
 
-inline constexpr uint8_t Sparse64LeafMaterial(uint32_t slot) noexcept
+constexpr uint8_t Sparse64LeafMaterial(uint32_t slot) noexcept
 {
 	return static_cast<uint8_t>(slot & kSparse64MaterialMask);
 }
 
-inline constexpr uint8_t Sparse64HomogeneousMaterial(uint32_t slot) noexcept
+constexpr uint8_t Sparse64HomogeneousMaterial(uint32_t slot) noexcept
 {
 	return static_cast<uint8_t>(slot & kSparse64MaterialMask);
 }
 
-inline constexpr uint32_t Sparse64NodeIndex(uint32_t slot) noexcept
+constexpr uint32_t Sparse64NodeIndex(uint32_t slot) noexcept
 {
 	return slot & kSparse64NodeIndexMask;
 }
 
-inline constexpr int ComputeSparse64ChildSlotIndex(int subX, int subY, int subZ) noexcept
+constexpr int ComputeSparse64ChildSlotIndex(int subX, int subY, int subZ) noexcept
 {
 	return subX + kSparse64NodeSide * (subY + kSparse64NodeSide * subZ);
 }
@@ -109,15 +109,15 @@ public:
 		rootSlot_ = MakeSparse64Leaf(0);
 	}
 
-	int SideX() const noexcept { return sideX_; }
-	int SideY() const noexcept { return sideY_; }
-	int SideZ() const noexcept { return sideZ_; }
-	int DepthX() const noexcept { return depthX_; }
-	int DepthY() const noexcept { return depthY_; }
-	int DepthZ() const noexcept { return depthZ_; }
-	int MaxDepth() const noexcept { return maxDepth_; }
+	[[nodiscard]] int SideX() const noexcept { return sideX_; }
+	[[nodiscard]] int SideY() const noexcept { return sideY_; }
+	[[nodiscard]] int SideZ() const noexcept { return sideZ_; }
+	[[nodiscard]] int DepthX() const noexcept { return depthX_; }
+	[[nodiscard]] int DepthY() const noexcept { return depthY_; }
+	[[nodiscard]] int DepthZ() const noexcept { return depthZ_; }
+	[[nodiscard]] int MaxDepth() const noexcept { return maxDepth_; }
 
-	bool IsDeduplicationEnabled() const noexcept
+	[[nodiscard]] bool IsDeduplicationEnabled() const noexcept
 	{
 		return deduplicationEnabled_;
 	}
@@ -144,7 +144,7 @@ public:
 		}
 	}
 
-	uint8_t GetCell(int x, int y, int z) const noexcept
+	[[nodiscard]] uint8_t GetCell(int x, int y, int z) const noexcept
 	{
 		if (!Contains(x, y, z)) {
 			return 0;
@@ -194,27 +194,27 @@ public:
 		rootSlot_ = SetCellRecursive(rootSlot_, x, y, z, material, maxDepth_);
 	}
 
-	bool Contains(int x, int y, int z) const noexcept
+	[[nodiscard]] bool Contains(int x, int y, int z) const noexcept
 	{
 		return x >= 0 && x < sideX_ && y >= 0 && y < sideY_ && z >= 0 && z < sideZ_;
 	}
 
-	size_t NodeCount() const noexcept
+	[[nodiscard]] size_t NodeCount() const noexcept
 	{
 		return nodes_.size();
 	}
 
-	size_t RawNodeCount() const noexcept
+	[[nodiscard]] size_t RawNodeCount() const noexcept
 	{
 		return nodes_.size();
 	}
 
-	const Node &NodeAt(uint32_t nodeIndex) const noexcept
+	[[nodiscard]] const Node &NodeAt(uint32_t nodeIndex) const noexcept
 	{
 		return nodes_[nodeIndex];
 	}
 
-	size_t LiveNodeCount() const noexcept
+	[[nodiscard]] size_t LiveNodeCount() const noexcept
 	{
 		size_t live = 0;
 		for (const Node &node : nodes_) {
@@ -225,12 +225,12 @@ public:
 		return live;
 	}
 
-	const Node *GetNodes() const noexcept
+	[[nodiscard]] const Node *GetNodes() const noexcept
 	{
 		return nodes_.data();
 	}
 
-	uint32_t RootSlot() const noexcept
+	[[nodiscard]] uint32_t RootSlot() const noexcept
 	{
 		return rootSlot_;
 	}
@@ -250,12 +250,12 @@ public:
 		}
 	}
 
-	size_t NonAirCount() const noexcept
+	[[nodiscard]] size_t NonAirCount() const noexcept
 	{
 		return CountNonAirRecursive(rootSlot_, maxDepth_);
 	}
 
-	bool IsEmpty() const noexcept
+	[[nodiscard]] bool IsEmpty() const noexcept
 	{
 		return NonAirCount() == 0;
 	}
@@ -288,7 +288,7 @@ private:
 		return z ^ (z >> 31);
 	}
 
-	uint64_t ComputeNodeStructuralHash(const Node &node) const noexcept
+	[[nodiscard]] uint64_t ComputeNodeStructuralHash(const Node &node) const noexcept
 	{
 		uint64_t h = MixSplitMix64(0x9E3779B97F4A7C15ull, node.fillMask);
 		for (std::size_t i = 0; i < node.slots.size(); ++i) {
@@ -297,14 +297,14 @@ private:
 		return h;
 	}
 
-	void RebuildHashAndIndexForNode(uint32_t nodeIndex) noexcept
+	void RebuildHashAndIndexForNode(uint32_t nodeIndex) noexcept // NOLINT(bugprone-exception-escape): hash index growth is bounded
 	{
 		Node &node = nodes_[nodeIndex];
 		node.structuralHash = ComputeNodeStructuralHash(node);
 		dedupIndex_.emplace(node.structuralHash, nodeIndex);
 	}
 
-	bool NodesStructurallyEqual(const Node &a, const Node &b) const noexcept
+	[[nodiscard]] bool NodesStructurallyEqual(const Node &a, const Node &b) const noexcept
 	{
 		if (a.fillMask != b.fillMask) {
 			return false;
@@ -367,7 +367,7 @@ private:
 		AddNodeToDedupIndex(nodeIndex);
 	}
 
-	int ExtractSubCoord(int coord, int level) const noexcept
+	[[nodiscard]] int ExtractSubCoord(int coord, int level) const noexcept
 	{
 		if (level <= 0 || level > maxDepth_) {
 			return 0;
@@ -376,7 +376,7 @@ private:
 		return (coord >> shift) & (kSparse64NodeSide - 1);
 	}
 
-	size_t CountNonAirRecursive(uint32_t slot, int level) const noexcept
+	[[nodiscard]] size_t CountNonAirRecursive(uint32_t slot, int level) const noexcept // NOLINT(misc-no-recursion): recursive tree traversal is intentional
 	{
 		if (IsSparse64Homogeneous(slot)) {
 			if (Sparse64HomogeneousMaterial(slot) == 0) {
@@ -435,7 +435,7 @@ private:
 		return true;
 	}
 
-	uint32_t AllocateNode(uint32_t fillMaterial) noexcept
+	uint32_t AllocateNode(uint32_t fillMaterial) noexcept // NOLINT(bugprone-exception-escape): node vector growth is bounded
 	{
 		Node newNode{};
 		if (IsSparse64Leaf(fillMaterial)) {
@@ -465,7 +465,7 @@ private:
 		return index;
 	}
 
-	uint32_t MarkNodeUnique(uint32_t nodeIndex) noexcept
+	uint32_t MarkNodeUnique(uint32_t nodeIndex) noexcept // NOLINT(bugprone-exception-escape): node vector growth is bounded
 	{
 		if (!deduplicationEnabled_ || nodes_[nodeIndex].refCount == 1) {
 			return nodeIndex;
@@ -487,12 +487,12 @@ private:
 		}
 	}
 
-	uint32_t GetRefCount(uint32_t nodeIndex) const noexcept
+	[[nodiscard]] uint32_t GetRefCount(uint32_t nodeIndex) const noexcept
 	{
 		return nodes_[nodeIndex].refCount;
 	}
 
-	bool IsHomogeneousRoot() const noexcept
+	[[nodiscard]] bool IsHomogeneousRoot() const noexcept
 	{
 		return IsSparse64Homogeneous(rootSlot_);
 	}
@@ -506,7 +506,7 @@ public:
 		rootSlot_ = DedupSubtree(rootSlot_, maxDepth_);
 	}
 
-	uint32_t DedupSubtree(uint32_t slot, int level) noexcept
+	uint32_t DedupSubtree(uint32_t slot, int level) noexcept // NOLINT(misc-no-recursion): bounded-depth recursive tree traversal
 	{
 		// Tree depth bounded by chunkSize (default 8 = depth 2; max chunkSize 32 = depth 3).
 		// Max recursion: log2(32) + 1 = 6 levels. Safe from stack overflow.
@@ -522,7 +522,7 @@ public:
 		return slot;
 	}
 
-	uint32_t SetCellRecursive(uint32_t slot, int x, int y, int z, uint8_t material, int level) noexcept
+	uint32_t SetCellRecursive(uint32_t slot, int x, int y, int z, uint8_t material, int level) noexcept // NOLINT(misc-no-recursion): bounded-depth recursive tree traversal
 	{
 		if (level <= 0) {
 			return MakeSparse64Leaf(material);

@@ -7,8 +7,8 @@ int GetWalkSneakSupportVoxelY(const WalkSneakSupportRegion &region);
 
 bool DoesWalkSneakSupportRegionContainVoxel(
 	const WalkSneakSupportRegion &region,
-	const int voxelX,
-	const int voxelZ);
+	int voxelX,
+	int voxelZ);
 
 bool IsWalkJumpLockedSupportTargetInsideRegion(const PhysicsState &physics);
 
@@ -22,15 +22,15 @@ bool IsWalkJumpLockedSourceSupportSideWallContact(
 
 bool IsSolidAtPosition(const VoxelWorld &world, const std::array<float, 3> &position);
 
-float GetWalkEyeHeight(const PhysicsState &physics, const CameraState::ControlMode controlMode);
+float GetWalkEyeHeight(const PhysicsState &physics, CameraState::ControlMode controlMode);
 
-Float3 Cross(const Float3 a, const Float3 b);
+Float3 Cross(Float3 a, Float3 b);
 
 Float3 GetWalkForwardVector(const CameraState &camera);
 
-int64_t ToWalkSupportProfilingValue(const WalkSupportState state);
+int64_t ToWalkSupportProfilingValue(WalkSupportState state);
 
-int64_t ToWalkAirControlProfilingValue(const WalkAirControlMode mode);
+int64_t ToWalkAirControlProfilingValue(WalkAirControlMode mode);
 
 void PlotWalkProfilingState(
 	const PhysicsState &physics,
@@ -49,7 +49,7 @@ JPH::CharacterVirtual::ExtendedUpdateSettings BuildCreativeUpdateSettings();
 
 bool SetWalkSneakActive(
 	PhysicsState &physics,
-	const bool sneakActive);
+	bool sneakActive);
 
 void ClearWalkSneakSupportCache(PhysicsState &physics);
 
@@ -60,7 +60,7 @@ void ClearWalkJumpBallisticHorizontalVelocity(PhysicsState &physics);
 JPH::Vec3 MoveWalkJumpHorizontalVelocityTowards(
 	const JPH::Vec3 &currentVelocity,
 	const JPH::Vec3 &targetVelocity,
-	const float maxSpeedDelta);
+	float maxSpeedDelta);
 
 bool IsWalkJumpLockedSupportActive(const PhysicsState &physics);
 
@@ -74,13 +74,13 @@ void PrimeWalkJumpLockedSupport(
 	PhysicsState &physics,
 	const WalkSneakSupportRegion &supportRegion,
 	const std::array<float, 3> &anchorFeetPosition,
-	const bool constrainMovementWhileSneakHeld);
+	bool constrainMovementWhileSneakHeld);
 
 void UpdateWalkJumpLockedSupportLifetime(PhysicsState &physics, const VoxelWorld &world);
 
 void ReleaseWalkSneakSupportCacheIfUnused(PhysicsState &physics);
 
-void RefreshWalkCharacterContacts(PhysicsState &physics);
+void RefreshWalkCharacterContacts(PhysicsState &physics); // NOLINT(readability-redundant-declaration): forward declaration exists in sibling header
 
 WalkFootSupportInfo ComputeVoxelFootSupportInfo(const VoxelWorld &world, const std::array<float, 3> &feetPosition);
 
@@ -88,16 +88,16 @@ std::array<float, 3> OffsetWalkFeetPosition(
 	const std::array<float, 3> &feetPosition,
 	const JPH::Vec3 &horizontalDelta);
 
-float GetWalkCapsuleHalfHeight(const bool sneakActive);
+float GetWalkCapsuleHalfHeight(bool sneakActive);
 
 bool IsWalkCharacterClearAt(
 	const VoxelWorld &world,
 	const std::array<float, 3> &feetPosition,
-	const bool sneakActive);
+	bool sneakActive);
 
 bool HasWalkSneakSupport(const VoxelWorld &world, const std::array<float, 3> &feetPosition);
 
-[[maybe_unused]] float GetWalkSneakDistanceOutsideInterval(const float value, const float minBound, const float maxBound);
+[[maybe_unused]] float GetWalkSneakDistanceOutsideInterval(float value, float minBound, float maxBound);
 
 bool IsWalkFeetInsideSneakBackoffRegion(
 	const WalkSneakSupportRegion &region,
@@ -105,12 +105,12 @@ bool IsWalkFeetInsideSneakBackoffRegion(
 
 bool IsWalkFeetInsideSneakSupportFace(
 	const WalkSneakSupportFace &face,
-	const float sampleRadius,
+	float sampleRadius,
 	const std::array<float, 3> &feetPosition);
 
 std::array<float, 2> ProjectWalkFeetToSneakSupportFace(
 	const WalkSneakSupportFace &face,
-	const float sampleRadius,
+	float sampleRadius,
 	const std::array<float, 2> &feetXZ);
 
 std::array<float, 2> ProjectWalkFeetToSneakSupportRegion(
@@ -125,47 +125,47 @@ bool IsWalkFeetInsideSneakSupportRegion(
 	const WalkSneakSupportRegion &region,
 	const std::array<float, 3> &feetPosition);
 
-float GetWalkBodyHeight(const bool sneakActive);
+float GetWalkBodyHeight(bool sneakActive);
 
-float GetWalkSupportPlaneY(const float feetY);
+float GetWalkSupportPlaneY(float feetY);
 
 bool DoesWalkFootprintOverlapVoxel(
-	const float centerX,
-	const float centerZ,
-	const int voxelX,
-	const int voxelZ,
-	const float footprintRadius);
+	float centerX,
+	float centerZ,
+	int voxelX,
+	int voxelZ,
+	float footprintRadius);
 
 bool FindWalkBestSupportFeetYAtXZ(
 	const VoxelWorld &world,
 	const std::array<float, 3> &referenceFeetPosition,
-	const float maxRise,
-	const float maxDrop,
-	const bool sneakActive,
-	const float footprintRadius,
+	float maxRise,
+	float maxDrop,
+	bool sneakActive,
+	float footprintRadius,
 	float &outFeetY);
 
 WalkTopSupportCandidate FindWalkTopSupportCandidate(
 	const VoxelWorld &world,
 	const std::array<float, 3> &desiredFeetPosition,
-	const float maxRise,
-	const bool sneakActive);
+	float maxRise,
+	bool sneakActive);
 
-bool IsWalkAutoJumpRiseInRange(const float rise);
+bool IsWalkAutoJumpRiseInRange(float rise);
 
 bool ResolveWalkCharacterPenetration(
 	const VoxelWorld &world,
 	std::array<float, 3> &feetPosition,
-	const bool sneakActive,
-	const bool allowUpwardResolve);
+	bool sneakActive,
+	bool allowUpwardResolve);
 
 bool TryBuildWalkSupportCorrectedFeetPosition(
 	const PhysicsState &physics,
 	const VoxelWorld &world,
 	const WalkSneakSupportRegion &supportRegion,
 	const std::array<float, 3> &sourceFeetPosition,
-	const float maxHorizontalCorrection,
-	const float maxUpwardRestore,
+	float maxHorizontalCorrection,
+	float maxUpwardRestore,
 	std::array<float, 3> &outFeetPosition);
 
 bool TryBuildWalkJumpTakeoffFeetPosition(
@@ -184,51 +184,51 @@ bool CanWalkSneakMoveInsideSupportRegion(
 	const VoxelWorld &world,
 	const WalkSneakSupportRegion &supportRegion,
 	const std::array<float, 3> &feetPosition,
-	const bool sneakActive);
+	bool sneakActive);
 
-float BackOffWalkSneakDeltaComponent(const float delta);
+float BackOffWalkSneakDeltaComponent(float delta);
 
 JPH::Vec3 ApplyWalkSneakBackoff(
 	const VoxelWorld &world,
 	const WalkSneakSupportRegion &supportRegion,
 	const std::array<float, 3> &feetPosition,
 	const JPH::Vec3 &desiredHorizontalDelta,
-	const bool sneakActive);
+	bool sneakActive);
 
 bool TryRestoreWalkSupportRegionPlane(
 	const VoxelWorld &world,
 	const WalkSneakSupportRegion &supportRegion,
 	std::array<float, 3> &feetPosition,
 	JPH::Vec3 &velocity,
-	const bool sneakActive);
+	bool sneakActive);
 
 bool SweepWalkVertical(
 	const VoxelWorld &world,
 	std::array<float, 3> &feetPosition,
 	JPH::Vec3 &velocity,
-	const float deltaSeconds,
-	const bool sneakActive);
+	float deltaSeconds,
+	bool sneakActive);
 
 bool SnapWalkToFloor(
 	const VoxelWorld &world,
 	std::array<float, 3> &feetPosition,
 	JPH::Vec3 &velocity,
-	const bool sneakActive,
-	const float maxDrop);
+	bool sneakActive,
+	float maxDrop);
 
 bool TrySnapWalkToGroundTakeoffAnchor(
 	const PhysicsState &physics,
 	const VoxelWorld &world,
 	std::array<float, 3> &feetPosition,
 	JPH::Vec3 &velocity,
-	const float maxDrop);
+	float maxDrop);
 
 bool TrySnapWalkToGroundReturnAnchor(
 	const PhysicsState &physics,
 	const VoxelWorld &world,
 	std::array<float, 3> &feetPosition,
 	JPH::Vec3 &velocity,
-	const float maxDrop);
+	float maxDrop);
 
 bool TryRestoreWalkGroundReturnAnchorPlane(
 	const PhysicsState &physics,
@@ -248,21 +248,21 @@ bool TryRestoreWalkGroundReturnAnchorPlane(
 void UpdateWalkGroundSupport(
 	PhysicsState &physics,
 	const VoxelWorld &world,
-	const bool allowNarrowJumpEdgeSupport = false);
+	bool allowNarrowJumpEdgeSupport = false);
 
 void UpdateCameraFromWalkCharacter(const PhysicsState &physics, CameraState &camera);
 
 bool TryBuildWalkSpawnFromRay(
 	const PhysicsState &physics,
 	const std::array<float, 3> &origin,
-	const float maxDistance,
+	float maxDistance,
 	std::array<float, 3> *outFeetPosition);
 
 std::array<float, 3> BuildFallbackWalkFeetPosition(const PhysicsState &physics, const CameraState &camera);
 
 bool DoesWalkCharacterBodyOverlapVoxel(
 	const std::array<float, 3> &feetPosition,
-	const bool sneakActive,
+	bool sneakActive,
 	const Int3 &voxel);
 
 bool CameraNeedsGroundRecovery(const PhysicsState &physics, const VoxelWorld &world, const CameraState &camera);

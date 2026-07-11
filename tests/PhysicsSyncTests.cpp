@@ -157,7 +157,7 @@ std::unique_ptr<VoxelWorld> MakeSmallFlatWorld()
 void TestSyncPhysicsWorldInitialLoadBuildsFullBody(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	if (!SyncPhysicsWorld(physics, world.get())) {
 		context.Fail(__LINE__, "SyncPhysicsWorld on initial load must succeed");
 		DestroyPhysicsState(physics);
@@ -176,7 +176,7 @@ void TestSyncPhysicsWorldInitialLoadBuildsFullBody(TestContext &context)
 void TestSyncPhysicsWorldNoOpOnSameVersion(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	if (!SyncPhysicsWorld(physics, world.get())) {
 		context.Fail(__LINE__, "First sync must succeed");
 		DestroyPhysicsState(physics);
@@ -196,7 +196,7 @@ void TestSyncPhysicsWorldNoOpOnSameVersion(TestContext &context)
 void TestSyncPhysicsWorldIncrementalAfterSmallEdit(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	if (!SyncPhysicsWorld(physics, world.get())) {
 		context.Fail(__LINE__, "Initial sync must succeed");
 		DestroyPhysicsState(physics);
@@ -221,7 +221,7 @@ void TestSyncPhysicsWorldIncrementalAfterSmallEdit(TestContext &context)
 void TestSyncPhysicsWorldNullWorldClearsState(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	if (!SyncPhysicsWorld(physics, world.get())) {
 		context.Fail(__LINE__, "Initial sync must succeed");
 		DestroyPhysicsState(physics);
@@ -239,7 +239,7 @@ void TestSyncPhysicsWorldNullWorldClearsState(TestContext &context)
 
 void TestFluidAirTransitionDoesNotBumpEditVersion(TestContext &context)
 {
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	const uint64_t versionBefore = world->editVersion;
 	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Fluid, nullptr);
 	if (world->editVersion != versionBefore) {
@@ -262,7 +262,7 @@ void TestFluidAirTransitionDoesNotBumpEditVersion(TestContext &context)
 
 void TestSolidEditBumpsEditVersion(TestContext &context)
 {
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	const uint64_t versionBefore = world->editVersion;
 	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Glass, nullptr);
 	if (world->editVersion == versionBefore) {
@@ -274,7 +274,7 @@ void TestSolidEditBumpsEditVersion(TestContext &context)
 void TestFluidAirTransitionDoesNotQueuePhysicsRebuild(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	if (!SyncPhysicsWorld(physics, world.get())) {
 		context.Fail(__LINE__, "Initial sync must succeed");
 		DestroyPhysicsState(physics);
@@ -294,7 +294,7 @@ void TestFluidAirTransitionDoesNotQueuePhysicsRebuild(TestContext &context)
 void TestRebuildStaticWorldBodyFromChunkShapesAfterEdit(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	if (!SyncPhysicsWorld(physics, world.get())) {
 		context.Fail(__LINE__, "Initial sync must succeed");
 		DestroyPhysicsState(physics);
@@ -320,7 +320,7 @@ void TestRebuildStaticWorldBodyFromChunkShapesAfterEdit(TestContext &context)
 void TestPhysicsSyncBoundaryEditTriggersMultiChunkRebuild(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	if (!SyncPhysicsWorld(physics, world.get())) {
 		context.Fail(__LINE__, "Initial sync must succeed");
 		DestroyPhysicsState(physics);
@@ -350,7 +350,7 @@ void TestPhysicsSyncBoundaryEditTriggersMultiChunkRebuild(TestContext &context)
 void TestSyncPhysicsWorldFlatBenchSizedWorldFitsInCapacity(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeFlatBenchSizedWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeFlatBenchSizedWorld();
 	const size_t totalChunks = world->chunks.size();
 	std::printf("TestSyncPhysicsWorldFlatBenchSizedWorldFitsInCapacity: chunks=%zu\n", totalChunks);
 	if (!SyncPhysicsWorld(physics, world.get())) {
@@ -368,7 +368,7 @@ void TestSyncPhysicsWorldFlatBenchSizedWorldFitsInCapacity(TestContext &context)
 void TestFluidCABumpOnSmallFlatWorldStaysFast(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	if (!SyncPhysicsWorld(physics, world.get())) {
 		context.Fail(__LINE__, "Initial sync must succeed");
 		DestroyPhysicsState(physics);
@@ -409,7 +409,7 @@ void TestGetPhysicsBroadphaseStatsNullReturnsZeroed(TestContext &context)
 void TestGetPhysicsBroadphaseStatsAfterSync(TestContext &context)
 {
 	PhysicsState *physicsState = CreatePhysicsState();
-	std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	if (!SyncPhysicsWorld(physicsState, world.get())) {
 		context.Fail(__LINE__, "Sync must succeed for broadphase stats test");
 		DestroyPhysicsState(physicsState);
@@ -434,7 +434,7 @@ void TestGetPhysicsBroadphaseStatsAfterSync(TestContext &context)
 
 void TestFluidCAPerTickCostOnFlatBenchSizedWorld(TestContext &context)
 {
-	std::unique_ptr<VoxelWorld> world = MakeFlatBenchSizedWorld();
+	const std::unique_ptr<VoxelWorld> world = MakeFlatBenchSizedWorld();
 	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Fluid, nullptr);
 	const uint64_t editVersionBefore = world->editVersion;
 	std::printf("TestFluidCAPerTickCostOnFlatBenchSizedWorld: chunks=%zu editVersionBefore=%llu fluidVoxels=%u\n",

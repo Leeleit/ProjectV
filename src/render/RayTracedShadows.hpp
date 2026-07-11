@@ -110,7 +110,7 @@ public:
 		VkCommandBuffer commandBuffer,
 		const VulkanContextState &context,
 		VkPipelineStageFlags waitStage,
-		VkAccessFlags waitAccess);
+		VkAccessFlags waitAccess) const;
 
 	bool RecordVoxelAwareRtxShadowPass(
 		VkCommandBuffer commandBuffer,
@@ -152,7 +152,7 @@ private:
 	bool CreateVoxelAwareRtxResources(const VulkanContextState &context);
 	void ReleaseVoxelAwareRtxResources(const VulkanContextState &context) noexcept;
 
-	bool InitializeShadowMaskClear(const VulkanContextState &context);
+	bool InitializeShadowMaskClear(const VulkanContextState &context) const;
 
 	struct RtxFrameResources {
 		VkBuffer cameraUboBuffer = VK_NULL_HANDLE;
@@ -167,8 +167,8 @@ private:
 	bool m_hostBuildSupported = false;
 	std::atomic<bool> m_initialized{false};
 
-	RtxShadowPipeline m_rtxPipeline{};
-	RtxShadowSBT m_rtxSbt{};
+	RtxShadowPipeline m_rtxPipeline;
+	RtxShadowSBT m_rtxSbt;
 	VkDescriptorPool m_rtxDescriptorPool = VK_NULL_HANDLE;
 	VkImage m_shadowMaskImage = VK_NULL_HANDLE;
 	VkImageView m_shadowMaskImageView = VK_NULL_HANDLE;

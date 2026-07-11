@@ -3,7 +3,6 @@
 #include "SDL3/SDL_log.h"
 
 #include <algorithm>
-#include <cstring>
 
 namespace projectv::render {
 
@@ -54,7 +53,7 @@ void RayTracedShadows::UpdateTlas(
 			}
 		}
 		SDL_Log("UpdateTlas diag: clamped=%zu tlasInstanceCount=%u withNonZeroRef=%u tlas=%p",
-			clamped, m_config.tlasInstanceCount, withNonZeroAddr, (void*)m_config.tlas);
+				clamped, m_config.tlasInstanceCount, withNonZeroAddr, static_cast<void *>(m_config.tlas));
 		++diagCount;
 	}
 
@@ -71,6 +70,7 @@ void RayTracedShadows::RecordTlasBuild(
 	VkCommandBuffer commandBuffer,
 	const VulkanContextState &context)
 {
+	(void)context;
 	if (!m_config.enabled || commandBuffer == VK_NULL_HANDLE) {
 		return;
 	}
@@ -156,7 +156,7 @@ void RayTracedShadows::RecordTlasBuild(
 	tlasRangeInfo.primitiveOffset = 0u;
 	tlasRangeInfo.firstVertex = 0u;
 	tlasRangeInfo.transformOffset = 0u;
-	const VkAccelerationStructureBuildRangeInfoKHR *tlasRangeInfos[1] = { &tlasRangeInfo };
+	const VkAccelerationStructureBuildRangeInfoKHR *tlasRangeInfos[1] = {&tlasRangeInfo};
 
 	vkCmdBuildAccelerationStructuresKHR(
 		commandBuffer,

@@ -20,7 +20,6 @@ import projectv.string_id;
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
 #include "render/SkyAtmosphere.hpp"
 #include "render/VolumetricFog.hpp"
-#include "render/Cloudscape.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 void ShutdownVulkan(AppState *state)
@@ -67,7 +66,7 @@ void ShutdownVulkan(AppState *state)
 			state->render().sceneColorImageView = VK_NULL_HANDLE;
 		}
 		if (state->render().sceneColorImage != VK_NULL_HANDLE) {
-			vmaDestroyImage(state->context().allocator, state->render().sceneColorImage, static_cast<VmaAllocation>(state->render().sceneColorAllocation));
+			vmaDestroyImage(state->context().allocator, state->render().sceneColorImage, state->render().sceneColorAllocation);
 			state->render().sceneColorImage = VK_NULL_HANDLE;
 			state->render().sceneColorAllocation = nullptr;
 		}

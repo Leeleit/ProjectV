@@ -29,7 +29,7 @@ int gFailureCount = 0;
 
 void TestEnvGateDefaultsOff()
 {
-	VulkanContextState context{};
+	constexpr VulkanContextState context{};
 	PROJECTV_RTX_EXPECT(
 		!projectv::render::IsRayTracedShadowEnabled(context),
 		"IsRayTracedShadowEnabled must be false on default-constructed context (no RT capability)");
@@ -58,7 +58,7 @@ void TestEnvGateOnRespected()
 
 void TestConfigDefaultValues()
 {
-	projectv::render::RayTracedShadowConfig config{};
+	const projectv::render::RayTracedShadowConfig config{};
 	PROJECTV_RTX_EXPECT(config.tlas == VK_NULL_HANDLE, "default tlas must be null");
 	PROJECTV_RTX_EXPECT(config.tlasInstanceBuffer == VK_NULL_HANDLE, "default instance buffer must be null");
 	PROJECTV_RTX_EXPECT(config.scratchBuffer == VK_NULL_HANDLE, "default scratch buffer must be null");
@@ -71,14 +71,14 @@ void TestConfigDefaultValues()
 
 void TestConfigZeroSizedAfterShutdown()
 {
-	projectv::render::RayTracedShadows shadows{};
+	const projectv::render::RayTracedShadows shadows{};
 	PROJECTV_RTX_EXPECT(!shadows.IsEnabled(), "default-constructed shadows must be disabled");
 	PROJECTV_RTX_EXPECT(shadows.GetConfig().tlasInstanceCount == 0u, "default config must have zero instance count");
 }
 
 void TestComputeBlasBuildScratchSize()
 {
-	projectv::render::RayTracedShadows shadows{};
+	const projectv::render::RayTracedShadows shadows{};
 	PROJECTV_RTX_EXPECT(shadows.ComputeBlasBuildScratchSize(0u) == 0u, "scratch size for zero primitives must be zero");
 	const VkDeviceSize nonZero = shadows.ComputeBlasBuildScratchSize(8192u);
 	PROJECTV_RTX_EXPECT(nonZero > 0u, "scratch size for non-zero primitives must be positive");
@@ -87,8 +87,8 @@ void TestComputeBlasBuildScratchSize()
 void TestBuildChunkBlasGuardsForNullCommandBuffer()
 {
 	projectv::render::RayTracedShadows shadows{};
-	VkCommandBuffer cmd = VK_NULL_HANDLE;
-	VulkanContextState context{};
+	const VkCommandBuffer cmd = VK_NULL_HANDLE;
+	constexpr VulkanContextState context{};
 	projectv::render::DirtyChunkRebuild entry{};
 	entry.chunkIndex = 0u;
 	entry.aabb.minX = 0.0f;
@@ -105,8 +105,8 @@ void TestBuildChunkBlasGuardsForNullCommandBuffer()
 void TestBuildChunkBlasRejectsInvertedAabb()
 {
 	projectv::render::RayTracedShadows shadows{};
-	VkCommandBuffer cmd = VK_NULL_HANDLE;
-	VulkanContextState context{};
+	const VkCommandBuffer cmd = VK_NULL_HANDLE;
+	constexpr VulkanContextState context{};
 	projectv::render::DirtyChunkRebuild entry{};
 	entry.chunkIndex = 0u;
 	entry.aabb.minX = 1.0f;
@@ -137,7 +137,7 @@ void TestSetBlasDirtyQueueAndConsume()
 		dirty.push_back(entry);
 	}
 	shadows.SetBlasDirtyQueue(std::move(dirty));
-	VulkanContextState context{};
+	constexpr VulkanContextState context{};
 	shadows.BuildDirtyBlases(context, VK_NULL_HANDLE);
 	PROJECTV_RTX_EXPECT(
 		shadows.GetConfig().blasRebuildCount == 4u,
@@ -169,8 +169,8 @@ void TestDirtyChunkRebuildStructLayout()
 void TestBuildChunkBlasAabbBoundsCheck()
 {
 	projectv::render::RayTracedShadows shadows{};
-	VkCommandBuffer cmd = VK_NULL_HANDLE;
-	VulkanContextState context{};
+	const VkCommandBuffer cmd = VK_NULL_HANDLE;
+	constexpr VulkanContextState context{};
 	VkAabbPositionsKHR negativeOrigin{};
 	negativeOrigin.minX = -10.0f;
 	negativeOrigin.minY = -10.0f;
@@ -185,7 +185,7 @@ void TestBuildChunkBlasAabbBoundsCheck()
 
 void TestConfigHasBlasCacheFields()
 {
-	projectv::render::RayTracedShadowConfig config{};
+	const projectv::render::RayTracedShadowConfig config{};
 	PROJECTV_RTX_EXPECT(config.blasHandles.empty(), "blasHandles must default to empty");
 	PROJECTV_RTX_EXPECT(config.blasStorageBuffers.empty(), "blasStorageBuffers must default to empty");
 	PROJECTV_RTX_EXPECT(config.blasStorageAllocations.empty(), "blasStorageAllocations must default to empty");
@@ -207,9 +207,9 @@ void TestUpdateTlasSafeWithoutBlasCache()
 	config.tlasInstanceCapacityBytes = kCapacity;
 	config.blasDeviceAddresses.assign(2u, 0u);
 
-	std::vector<uint32_t> chunks{0u, 1u};
-	std::vector<VkTransformMatrixKHR> transforms(chunks.size(), VkTransformMatrixKHR{});
-	VulkanContextState context{};
+	const std::vector chunks{0u, 1u};
+	const std::vector transforms(chunks.size(), VkTransformMatrixKHR{});
+	constexpr VulkanContextState context{};
 	shadows.UpdateTlas(context, chunks, transforms);
 	PROJECTV_RTX_EXPECT(
 		shadows.GetConfig().tlasInstanceCount == 2u,
@@ -241,9 +241,9 @@ void TestUpdateTlasSafeForOversizedChunkIndex()
 	config.tlasInstanceMappedData = storage;
 	config.tlasInstanceCapacityBytes = kCapacity;
 
-	std::vector<uint32_t> chunks{9999u};
-	std::vector<VkTransformMatrixKHR> transforms(1u, VkTransformMatrixKHR{});
-	VulkanContextState context{};
+	const std::vector chunks{9999u};
+	const std::vector transforms(1u, VkTransformMatrixKHR{});
+	constexpr VulkanContextState context{};
 	shadows.UpdateTlas(context, chunks, transforms);
 	const auto *instances = reinterpret_cast<const VkAccelerationStructureInstanceKHR *>(storage);
 	PROJECTV_RTX_EXPECT(
@@ -254,8 +254,8 @@ void TestUpdateTlasSafeForOversizedChunkIndex()
 void TestRecordTlasBuildGuardsForZeroInstanceCount()
 {
 	projectv::render::RayTracedShadows shadows{};
-	VkCommandBuffer cmd = VK_NULL_HANDLE;
-	VulkanContextState context{};
+	const VkCommandBuffer cmd = VK_NULL_HANDLE;
+	constexpr VulkanContextState context{};
 	shadows.RecordTlasBuild(cmd, context);
 	PROJECTV_RTX_EXPECT(
 		shadows.GetConfig().shadowRayDispatchCount == 0u,
@@ -270,7 +270,7 @@ void TestRtxSunShadowRayHelperExistsInShader()
 	if (!fp.good()) {
 		return;
 	}
-	std::string sourceText{ std::istreambuf_iterator<char>(fp), std::istreambuf_iterator<char>() };
+	const std::string sourceText{ std::istreambuf_iterator<char>(fp), std::istreambuf_iterator<char>() };
 	PROJECTV_RTX_EXPECT(
 		sourceText.find("rtxShadowMask") != std::string::npos,
 		"voxel.frag must reference rtxShadowMask (binding 18) for 5.2.E voxel-aware shadow consume");
@@ -352,7 +352,7 @@ void TestRtxAoDispatchUsesTerminateOnFirstHitFlag()
 void TestRtxAoShaderBinaryBuilt()
 {
 	bool found = false;
-	const char *const kCandidatePaths[]{
+	constexpr char *const kCandidatePaths[]{
 		PROJECTV_TESTS_SOURCE_DIR "/../build/linux-clang-debug/src/voxel.frag.rtx.spv",
 		PROJECTV_TESTS_SOURCE_DIR "/../build/linux-clang-debug/bin/voxel.frag.rtx.spv",
 	};
@@ -369,7 +369,7 @@ void TestRtxAoShaderBinaryBuilt()
 
 void TestRtxGiProbeConfigDefaults()
 {
-	projectv::render::RtxGiProbeConfig config{};
+	constexpr projectv::render::RtxGiProbeConfig config{};
 	PROJECTV_RTX_EXPECT(config.irradianceImage == VK_NULL_HANDLE, "default irradiance image must be null");
 	PROJECTV_RTX_EXPECT(config.distanceImage == VK_NULL_HANDLE, "default distance image must be null");
 	PROJECTV_RTX_EXPECT(config.probeDataImage == VK_NULL_HANDLE, "default probe data image must be null");
@@ -382,7 +382,7 @@ void TestRtxGiProbeConfigDefaults()
 
 void TestRtxGiProbesClassHasGetters()
 {
-	projectv::render::RtxGiProbes probes{};
+	const projectv::render::RtxGiProbes probes{};
 	PROJECTV_RTX_EXPECT(!probes.IsEnabled(), "default-constructed probes must be disabled");
 	PROJECTV_RTX_EXPECT(probes.GetConfig().probeCountAxisX == 0u, "default config probe count must be 0");
 }
@@ -427,8 +427,8 @@ void TestRtxGiProbeShaderBindingsDeclared()
 void TestRtxGiProbeRecordUpdatePassNoopWithoutContext()
 {
 	projectv::render::RtxGiProbes probes{};
-	VkCommandBuffer cmd = VK_NULL_HANDLE;
-	VulkanContextState context{};
+	const VkCommandBuffer cmd = VK_NULL_HANDLE;
+	constexpr VulkanContextState context{};
 	PROJECTV_RTX_EXPECT(
 		!probes.RecordUpdatePass(cmd, context, VK_NULL_HANDLE),
 		"RecordUpdatePass must return false when probes are not initialized");
@@ -436,7 +436,7 @@ void TestRtxGiProbeRecordUpdatePassNoopWithoutContext()
 
 void TestRtxShadowPipelineClassHasGetters()
 {
-	projectv::render::RtxShadowPipeline pipeline{};
+	const projectv::render::RtxShadowPipeline pipeline{};
 	PROJECTV_RTX_EXPECT(
 		pipeline.GetPipeline() == VK_NULL_HANDLE,
 		"RtxShadowPipeline default-constructed pipeline handle must be null");
@@ -460,20 +460,20 @@ void TestRtxShadowPipelineClassHasGetters()
 
 void TestRtxShadowSbtClassHasGetters()
 {
-	projectv::render::RtxShadowSBT sbt{};
+	const projectv::render::RtxShadowSBT sbt{};
 	PROJECTV_RTX_EXPECT(!sbt.IsReady(), "RtxShadowSBT must not be ready before Initialize");
-	const auto &raygen = sbt.GetRaygenRegion();
+	const auto &[deviceAddress, stride, size] = sbt.GetRaygenRegion();
 	const auto &miss = sbt.GetMissRegion();
 	const auto &hit = sbt.GetHitRegion();
 	const auto &callable = sbt.GetCallableRegion();
 	PROJECTV_RTX_EXPECT(
-		raygen.deviceAddress == 0u,
+		deviceAddress == 0u,
 		"RtxShadowSBT default-constructed raygen deviceAddress must be zero");
 	PROJECTV_RTX_EXPECT(
-		raygen.stride == 0u,
+		stride == 0u,
 		"RtxShadowSBT default-constructed raygen stride must be zero");
 	PROJECTV_RTX_EXPECT(
-		raygen.size == 0u,
+		size == 0u,
 		"RtxShadowSBT default-constructed raygen size must be zero");
 	PROJECTV_RTX_EXPECT(
 		miss.deviceAddress == 0u,

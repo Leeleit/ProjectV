@@ -5,7 +5,7 @@
 
 namespace projectv::voxel {
 
-bool ShouldEmitVoxelFaceCPU(uint8_t materialIndex, uint8_t neighborMaterialIndex)
+bool ShouldEmitVoxelFaceCPU(const uint8_t materialIndex, const uint8_t neighborMaterialIndex)
 {
 	if (materialIndex == 0u) {
 		return false;
@@ -19,7 +19,7 @@ bool ShouldEmitVoxelFaceCPU(uint8_t materialIndex, uint8_t neighborMaterialIndex
 	return neighborMaterialIndex == 0u;
 }
 
-bool IsSameMeshingGroupCPU(uint8_t materialA, uint8_t materialB)
+bool IsSameMeshingGroupCPU(const uint8_t materialA, const uint8_t materialB)
 {
 	if (materialA == materialB) { return true; }
 	const bool aIsFloor = materialA == 3u || materialA == 4u;
@@ -27,48 +27,48 @@ bool IsSameMeshingGroupCPU(uint8_t materialA, uint8_t materialB)
 	return aIsFloor && bIsFloor;
 }
 
-uint32_t PackLocalVoxelFaceCPU(uint32_t x, uint32_t y, uint32_t z, uint32_t faceIndex)
+uint32_t PackLocalVoxelFaceCPU(const uint32_t x, const uint32_t y, const uint32_t z, const uint32_t faceIndex)
 {
 	return (x & 0xFFu) | ((y & 0xFFu) << 8u) | ((z & 0xFFu) << 16u) | ((faceIndex & 0xFFu) << 24u);
 }
 
-uint32_t PackQuadExtentsCPU(uint32_t width, uint32_t height)
+uint32_t PackQuadExtentsCPU(const uint32_t width, const uint32_t height)
 {
 	return (width & 0xFFu) | ((height & 0xFFu) << 8u);
 }
 
-uint32_t PackChunkIndexMaterialCPU(uint32_t chunkIndex, uint32_t materialIndex)
+uint32_t PackChunkIndexMaterialCPU(const uint32_t chunkIndex, const uint32_t materialIndex)
 {
 	return (chunkIndex & 0x00FFFFFFu) | ((materialIndex & 0xFFu) << 24u);
 }
 
-UnpackedLocalVoxelFace UnpackLocalVoxelFaceCPU(uint32_t packed)
+UnpackedLocalVoxelFace UnpackLocalVoxelFaceCPU(const uint32_t packed)
 {
 	return {packed & 0xFFu, (packed >> 8u) & 0xFFu, (packed >> 16u) & 0xFFu, (packed >> 24u) & 0xFFu};
 }
 
-UnpackedQuadExtents UnpackQuadExtentsCPU(uint32_t packed)
+UnpackedQuadExtents UnpackQuadExtentsCPU(const uint32_t packed)
 {
 	return {packed & 0xFFu, (packed >> 8u) & 0xFFu};
 }
 
-UnpackedChunkIndexMaterial UnpackChunkIndexMaterialCPU(uint32_t packed)
+UnpackedChunkIndexMaterial UnpackChunkIndexMaterialCPU(const uint32_t packed)
 {
 	return {packed & 0x00FFFFFFu, (packed >> 24u) & 0xFFu};
 }
 
-uint8_t ReadVoxelMaterialCPU(const CpuGreedyInput &input, int32_t wx, int32_t wy, int32_t wz)
+uint8_t ReadVoxelMaterialCPU(const CpuGreedyInput &input, const int32_t worldX, const int32_t worldY, const int32_t worldZ)
 {
 	const int32_t maxX = input.worldMin[0] + input.worldDim[0];
 	const int32_t maxY = input.worldMin[1] + input.worldDim[1];
 	const int32_t maxZ = input.worldMin[2] + input.worldDim[2];
-	if (wx < input.worldMin[0] || wy < input.worldMin[1] || wz < input.worldMin[2] ||
-		wx >= maxX || wy >= maxY || wz >= maxZ) {
+	if (worldX < input.worldMin[0] || worldY < input.worldMin[1] || worldZ < input.worldMin[2] ||
+		worldX >= maxX || worldY >= maxY || worldZ >= maxZ) {
 		return 0u;
 	}
-	const int32_t lx = wx - input.worldMin[0];
-	const int32_t ly = wy - input.worldMin[1];
-	const int32_t lz = wz - input.worldMin[2];
+	const int32_t lx = worldX - input.worldMin[0];
+	const int32_t ly = worldY - input.worldMin[1];
+	const int32_t lz = worldZ - input.worldMin[2];
 	const size_t idx = static_cast<size_t>(lx) +
 		static_cast<size_t>(input.worldDim[0]) *
 			(static_cast<size_t>(ly) + static_cast<size_t>(input.worldDim[1]) * static_cast<size_t>(lz));
@@ -77,7 +77,7 @@ uint8_t ReadVoxelMaterialCPU(const CpuGreedyInput &input, int32_t wx, int32_t wy
 
 namespace {
 
-uint8_t GetCellMaterialCPU(const CpuGreedyInput &input, uint32_t lx, uint32_t ly, uint32_t lz)
+uint8_t GetCellMaterialCPU(const CpuGreedyInput &input, const uint32_t lx, const uint32_t ly, const uint32_t lz)
 {
 	if (input.lodLevel == 0u) {
 		const int32_t wx = input.chunk.chunkOrigin[0] + static_cast<int32_t>(lx);
@@ -92,8 +92,8 @@ uint8_t GetCellMaterialCPU(const CpuGreedyInput &input, uint32_t lx, uint32_t ly
 	return input.lodVoxels[idx];
 }
 
-void EmitFace(uint8_t materialIndex, uint32_t faceIndex, const uint32_t localCoord[3],
-	uint32_t chunkIndex, uint32_t W, uint32_t H, CpuGreedyMeshResult &result)
+void EmitFace(const uint8_t materialIndex, const uint32_t faceIndex, const uint32_t localCoord[3],
+			  const uint32_t chunkIndex, const uint32_t W, const uint32_t H, CpuGreedyMeshResult &result)
 {
 	CpuGreedyFace face{};
 	face.localVoxelFace = PackLocalVoxelFaceCPU(localCoord[0], localCoord[1], localCoord[2], faceIndex);
@@ -110,8 +110,8 @@ void EmitFace(uint8_t materialIndex, uint32_t faceIndex, const uint32_t localCoo
 // EVIL: uint64_t visited (not uint32 like the shader) so extents up to 64 work correctly.
 // The shader uses uint visited[64] (32-bit rows), which is buggy for extentU > 32.
 // In practice chunkSize=8 so both agree. Property tests use sizes <= 32.
-void GreedyFacePassCPU(uint32_t faceIndex, uint32_t axisN, uint32_t axisU, uint32_t axisV,
-	int32_t signN, const CpuGreedyInput &input, CpuGreedyMeshResult &result)
+void GreedyFacePassCPU(const uint32_t faceIndex, const uint32_t axisN, const uint32_t axisU, const uint32_t axisV,
+					   const int32_t signN, const CpuGreedyInput &input, CpuGreedyMeshResult &result)
 {
 	const uint32_t extentN = (input.lodLevel == 0u) ? input.chunk.extent[axisN] : input.lodExtent;
 	const uint32_t extentU = (input.lodLevel == 0u) ? input.chunk.extent[axisU] : input.lodExtent;
@@ -271,7 +271,7 @@ CpuGreedyMeshResult GenerateCpuGreedyMesh(const CpuGreedyInput &input)
 	return result;
 }
 
-bool IsChunkVisibleCPU(const CpuGreedyChunkDesc &chunk, const CpuChunkCullingParams &c)
+bool IsChunkVisibleCPU(const CpuGreedyChunkDesc &chunk, const CpuChunkCullingParams &culling)
 {
 	if (chunk.nonAirCount == 0u) {
 		return false;

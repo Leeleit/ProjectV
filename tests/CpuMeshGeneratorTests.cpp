@@ -17,7 +17,7 @@ struct TestContext {
 	}
 };
 
-void ExpectTrue(TestContext &context, bool condition, int line, std::string_view expr)
+void ExpectTrue(TestContext &context, const bool condition, const int line, const std::string_view expr)
 {
 	if (!condition) {
 		context.Fail(line, expr);
@@ -26,7 +26,7 @@ void ExpectTrue(TestContext &context, bool condition, int line, std::string_view
 
 void TestEmptyChunkGeneratesNoFaces(TestContext &context)
 {
-	std::vector<uint8_t> voxels(4 * 4 * 4, 0);
+	const std::vector<uint8_t> voxels(4 * 4 * 4, 0);
 	projectv::voxel::CpuMeshInput input{};
 	input.voxels = voxels.data();
 	input.widthX = 4;
@@ -94,7 +94,7 @@ void TestNullInputReturnsEmpty(TestContext &context)
 
 void TestZeroDimensionsReturnEmpty(TestContext &context)
 {
-	std::vector<uint8_t> voxels(1, 1);
+	const std::vector<uint8_t> voxels(1, 1);
 	for (int i = 0; i < 3; ++i) {
 		projectv::voxel::CpuMeshInput input{};
 		input.voxels = voxels.data();
@@ -108,7 +108,7 @@ void TestZeroDimensionsReturnEmpty(TestContext &context)
 
 void TestOversizedExtentReturnsEmpty(TestContext &context)
 {
-	std::vector<uint8_t> voxels(1, 1);
+	const std::vector<uint8_t> voxels(1, 1);
 	projectv::voxel::CpuMeshInput input{};
 	input.voxels = voxels.data();
 	input.widthX = 65;
@@ -148,7 +148,7 @@ void TestSameMaterialDoesNotEmitInterior(TestContext &context)
 
 void TestSingleVoxelAt1x1x1(TestContext &context)
 {
-	std::vector<uint8_t> voxels(1, 3);
+	const std::vector<uint8_t> voxels(1, 3);
 	projectv::voxel::CpuMeshInput input{};
 	input.voxels = voxels.data();
 	input.widthX = 1;

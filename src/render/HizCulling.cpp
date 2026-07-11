@@ -3,12 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdint>
 #include <cstdlib>
 #include <limits>
 #include <vector>
 
-#include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
@@ -17,7 +15,7 @@ namespace {
 constexpr uint32_t kHizCullingDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kHizCullingShaderFilename[] = "hzb_cull.comp.spv";
 
-constexpr std::array<VkDescriptorSetLayoutBinding, 6> kHizCullingDescriptorBindings{
+constexpr std::array kHizCullingDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -70,7 +68,7 @@ constexpr VkDescriptorSetLayoutCreateInfo kHizCullingDescriptorSetLayoutInfo{
 	.pBindings = kHizCullingDescriptorBindings.data(),
 };
 
-constexpr std::array<VkDescriptorPoolSize, 4> kHizCullingDescriptorPoolSizes{
+constexpr std::array kHizCullingDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = kHizCullingDescriptorSetCount * 4u,
@@ -88,7 +86,7 @@ constexpr std::array<VkDescriptorPoolSize, 4> kHizCullingDescriptorPoolSizes{
 		.descriptorCount = 0u,
 	},
 };
-}  // namespace
+} // namespace
 
 namespace projectv::render {
 
@@ -138,7 +136,7 @@ uint32_t ComputeBlendWidthForChunkMip(
 		return 0u;
 	}
 	const uint32_t texelsAtMip = std::max<uint32_t>(maxExtent >> mipLevel, 1u);
-	const uint32_t frac = maxExtent > 0u ? (maxExtent % (1u << std::min<uint32_t>(mipLevel, 16u))) : 0u;
+	const uint32_t frac = maxExtent % (1u << std::min<uint32_t>(mipLevel, 16u));
 	const uint32_t blendEstimate = std::min<uint32_t>(texelsAtMip / 4u + frac / 8u, maxBlendWidth);
 	return std::min<uint32_t>(blendEstimate, maxBlendWidth);
 }
@@ -170,7 +168,7 @@ bool CreateHizBuffer(
 
 	const uint32_t mipLevels = ComputeHzbMipLevelCount(baseWidth, baseHeight);
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.format = VK_FORMAT_R32_SFLOAT;
@@ -576,9 +574,7 @@ bool CreateHizCullingPipeline(
 		.pSpecializationInfo = nullptr,
 	};
 
-	VkComputePipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	pipelineInfo.stage = cullStage;
+	VkComputePipelineCreateInfo pipelineInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .stage = cullStage};
 	pipelineInfo.layout = render->hizCullingPipelineLayout;
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 	pipelineInfo.basePipelineIndex = 0;
@@ -697,7 +693,7 @@ void DestroyHizCullingPipeline(
 }
 
 bool RecordHzbCullingDispatch(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	VulkanContextState *context,
 	RenderState &render,
 	SceneFrameResources &frameResources,
@@ -950,10 +946,14 @@ uint32_t ComputePerChunkMipLevelsFromAabbs(
 					const float ndcY = clipY / clipW;
 					const float uvX = ndcX * 0.5f + 0.5f;
 					const float uvY = ndcY * 0.5f + 0.5f;
-					if (uvX < minX) minX = uvX;
-					if (uvY < minY) minY = uvY;
-					if (uvX > maxX) maxX = uvX;
-					if (uvY > maxY) maxY = uvY;
+					if (uvX < minX)
+						minX = uvX;
+					if (uvY < minY)
+						minY = uvY;
+					if (uvX > maxX)
+						maxX = uvX;
+					if (uvY > maxY)
+						maxY = uvY;
 				}
 			}
 		}
@@ -965,7 +965,7 @@ uint32_t ComputePerChunkMipLevelsFromAabbs(
 				projectedYTexels,
 				maxMipLevel);
 		}
-		next_chunk:;
+	next_chunk:;
 	}
 	return static_cast<uint32_t>(count);
 }
@@ -1014,10 +1014,14 @@ uint32_t ComputePerChunkMipAndBlendWidthsFromAabbs(
 					const float ndcY = clipY / clipW;
 					const float uvX = ndcX * 0.5f + 0.5f;
 					const float uvY = ndcY * 0.5f + 0.5f;
-					if (uvX < minX) minX = uvX;
-					if (uvY < minY) minY = uvY;
-					if (uvX > maxX) maxX = uvX;
-					if (uvY > maxY) maxY = uvY;
+					if (uvX < minX)
+						minX = uvX;
+					if (uvY < minY)
+						minY = uvY;
+					if (uvX > maxX)
+						maxX = uvX;
+					if (uvY > maxY)
+						maxY = uvY;
 				}
 			}
 		}
@@ -1030,14 +1034,14 @@ uint32_t ComputePerChunkMipAndBlendWidthsFromAabbs(
 				maxMipLevel);
 			outMipAndBlendWidths[i * 2u] = mip;
 			outMipAndBlendWidths[i * 2u + 1u] = (mip == 0u)
-				? 0u
-				: ComputeBlendWidthForChunkMip(
-					projectedXTexels,
-					projectedYTexels,
-					mip,
-					maxBlendWidth);
+													? 0u
+													: ComputeBlendWidthForChunkMip(
+														  projectedXTexels,
+														  projectedYTexels,
+														  mip,
+														  maxBlendWidth);
 		}
-		next_chunk_blend:;
+	next_chunk_blend:;
 		(void)skipBlend;
 	}
 	return static_cast<uint32_t>(count);
@@ -1054,7 +1058,7 @@ void WritePerChunkMipAndBlendWidthsToBuffer(
 	// chunkCount frozen at frame start; consumer (hzb_cull.comp) reads same chunkCount.
 	// Layout invariant: each chunk takes exactly 2 uint32 words (mip, blendWidth).
 	static_assert(kHizMipAndBlendWidthWordsPerChunk == 2u,
-		"kHizMipAndBlendWidthWordsPerChunk must equal 2 (mip + blendWidth packed)");
+				  "kHizMipAndBlendWidthWordsPerChunk must equal 2 (mip + blendWidth packed)");
 	auto *dest = static_cast<uint32_t *>(mappedData);
 	for (uint32_t i = 0u; i < chunkCount; ++i) {
 		const uint32_t baseIndex = i * kHizMipAndBlendWidthWordsPerChunk;
@@ -1063,4 +1067,4 @@ void WritePerChunkMipAndBlendWidthsToBuffer(
 	}
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

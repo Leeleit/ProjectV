@@ -48,7 +48,7 @@ struct RtxGiProbeConfig {
 class RtxGiProbes {
 public:
 	RtxGiProbes() = default;
-	~RtxGiProbes();
+	~RtxGiProbes() = default;
 
 	RtxGiProbes(const RtxGiProbes &) = delete;
 	RtxGiProbes &operator=(const RtxGiProbes &) = delete;

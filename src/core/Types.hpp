@@ -45,7 +45,7 @@ namespace projectv::audio {
 class AudioEngine;
 } // namespace projectv::audio
 void DestroyEcsState(EcsState *ecs);
-void DestroyPhysicsState(PhysicsState *physics);
+void DestroyPhysicsState(PhysicsState *physics); // NOLINT(readability-redundant-declaration): shared with PhysicsWorld.hpp
 void DestroyAudioEngine(projectv::audio::AudioEngine *engine);
 using EcsStatePtr = std::unique_ptr<EcsState, void (*)(EcsState *)>;
 using PhysicsStatePtr = std::unique_ptr<PhysicsState, void (*)(PhysicsState *)>;
@@ -571,6 +571,7 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;
 	VkPipeline graphicsPipelineRtx = VK_NULL_HANDLE;
 	VkPipeline transparentGraphicsPipeline = VK_NULL_HANDLE;
+	VkPipeline transparentDebugGraphicsPipeline = VK_NULL_HANDLE;
 	VkPipeline shadowGraphicsPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout debugOverlayPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline debugOverlayPipeline = VK_NULL_HANDLE;
@@ -752,36 +753,36 @@ struct AppStateImpl {
 struct AppState {
 	std::unique_ptr<AppStateImpl> impl{std::make_unique<AppStateImpl>()};
 
-	PlatformState &platform() noexcept { return impl->platform; }
-	const PlatformState &platform() const noexcept { return impl->platform; }
-	VulkanContextState &context() noexcept { return impl->context; }
-	const VulkanContextState &context() const noexcept { return impl->context; }
-	SwapchainState &swapchain() noexcept { return impl->swapchain; }
-	const SwapchainState &swapchain() const noexcept { return impl->swapchain; }
-	WorldState &world() noexcept { return impl->world; }
-	const WorldState &world() const noexcept { return impl->world; }
-	RenderState &render() noexcept { return impl->render; }
-	const RenderState &render() const noexcept { return impl->render; }
-	FrameState &frame() noexcept { return impl->frame; }
-	const FrameState &frame() const noexcept { return impl->frame; }
-	SimulationState &simulation() noexcept { return impl->simulation; }
-	const SimulationState &simulation() const noexcept { return impl->simulation; }
-	InputState &input() noexcept { return impl->input; }
-	const InputState &input() const noexcept { return impl->input; }
-	InteractionState &interaction() noexcept { return impl->interaction; }
-	const InteractionState &interaction() const noexcept { return impl->interaction; }
-	LookDevCaptureAutomationState &lookDevCapture() noexcept { return impl->lookDevCapture; }
-	const LookDevCaptureAutomationState &lookDevCapture() const noexcept { return impl->lookDevCapture; }
-	BenchmarkAutomationState &benchmark() noexcept { return impl->benchmark; }
-	const BenchmarkAutomationState &benchmark() const noexcept { return impl->benchmark; }
-	EcsStatePtr &ecs() noexcept { return impl->ecs; }
-	const EcsStatePtr &ecs() const noexcept { return impl->ecs; }
-	PhysicsStatePtr &physics() noexcept { return impl->physics; }
-	const PhysicsStatePtr &physics() const noexcept { return impl->physics; }
-	AudioEnginePtr &audio() noexcept { return impl->audio; }
-	const AudioEnginePtr &audio() const noexcept { return impl->audio; }
-	bool &shutdownDone() noexcept { return impl->shutdownDone; }
-	const bool &shutdownDone() const noexcept { return impl->shutdownDone; }
+	PlatformState &platform() noexcept { return impl->platform; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const PlatformState &platform() const noexcept { return impl->platform; }
+	VulkanContextState &context() noexcept { return impl->context; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const VulkanContextState &context() const noexcept { return impl->context; }
+	SwapchainState &swapchain() noexcept { return impl->swapchain; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const SwapchainState &swapchain() const noexcept { return impl->swapchain; }
+	WorldState &world() noexcept { return impl->world; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const WorldState &world() const noexcept { return impl->world; }
+	RenderState &render() noexcept { return impl->render; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const RenderState &render() const noexcept { return impl->render; }
+	FrameState &frame() noexcept { return impl->frame; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const FrameState &frame() const noexcept { return impl->frame; }
+	SimulationState &simulation() noexcept { return impl->simulation; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const SimulationState &simulation() const noexcept { return impl->simulation; }
+	InputState &input() noexcept { return impl->input; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const InputState &input() const noexcept { return impl->input; }
+	InteractionState &interaction() noexcept { return impl->interaction; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const InteractionState &interaction() const noexcept { return impl->interaction; }
+	LookDevCaptureAutomationState &lookDevCapture() noexcept { return impl->lookDevCapture; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const LookDevCaptureAutomationState &lookDevCapture() const noexcept { return impl->lookDevCapture; }
+	BenchmarkAutomationState &benchmark() noexcept { return impl->benchmark; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const BenchmarkAutomationState &benchmark() const noexcept { return impl->benchmark; }
+	EcsStatePtr &ecs() noexcept { return impl->ecs; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const EcsStatePtr &ecs() const noexcept { return impl->ecs; }
+	PhysicsStatePtr &physics() noexcept { return impl->physics; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const PhysicsStatePtr &physics() const noexcept { return impl->physics; }
+	AudioEnginePtr &audio() noexcept { return impl->audio; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const AudioEnginePtr &audio() const noexcept { return impl->audio; }
+	bool &shutdownDone() noexcept { return impl->shutdownDone; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const bool &shutdownDone() const noexcept { return impl->shutdownDone; }
 };
 
 void ShutdownVulkan(AppState *state);

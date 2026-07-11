@@ -724,7 +724,7 @@ void TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(TestContext &cont
 	if (!loadResult.has_value()) {
 		return;
 	}
-	std::unique_ptr<VoxelWorld> world = std::move(loadResult).value();
+	const std::unique_ptr<VoxelWorld> world = std::move(loadResult).value();
 
 	std::fprintf(
 		stderr,

@@ -52,6 +52,7 @@ bool CreateDebugOverlayPipeline(
 	const SwapchainState &swapchain,
 	RenderState &render)
 {
+	(void)swapchain;
 	std::vector<char> vertexShaderCode = ReadShaderFile("debug_overlay.vert.spv");
 	std::vector<char> fragmentShaderCode = ReadShaderFile("debug_overlay.frag.spv");
 	if (vertexShaderCode.empty() || fragmentShaderCode.empty()) {
@@ -188,7 +189,7 @@ bool CreateDebugOverlayPipeline(
 		return false;
 	}
 
-	const VkFormat overlayColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+	static constexpr VkFormat overlayColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,
@@ -286,6 +287,7 @@ bool CreateDebugHudPipeline(
 	const SwapchainState &swapchain,
 	RenderState &render)
 {
+	(void)swapchain;
 	std::vector<char> vertexShaderCode = ReadShaderFile("debug_hud.vert.spv");
 	std::vector<char> fragmentShaderCode = ReadShaderFile("debug_hud.frag.spv");
 	if (vertexShaderCode.empty() || fragmentShaderCode.empty()) {
@@ -414,7 +416,7 @@ bool CreateDebugHudPipeline(
 		return false;
 	}
 
-	const VkFormat hudColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+	static constexpr VkFormat hudColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,

@@ -71,7 +71,7 @@ void TestComputeChunkLodLevelsCapacityAtLeastOne(TestContext &context)
 void TestRefreshLodDownsampledBuffersRejectsNullContext(TestContext &context)
 {
 	RenderState render{};
-	VoxelWorld world{};
+	const VoxelWorld world{};
 	if (projectv::render::RefreshLodDownsampledBuffers(nullptr, &render, world)) {
 		context.Fail(__LINE__, "RefreshLodDownsampledBuffers(nullptr context) must return false");
 	}
@@ -79,7 +79,7 @@ void TestRefreshLodDownsampledBuffersRejectsNullContext(TestContext &context)
 
 void TestLodPayloadWordStrideMatchesConstant(TestContext &context)
 {
-	if (projectv::render::kLodPayloadWordStride != 16u) {
+	if constexpr (projectv::render::kLodPayloadWordStride != 16u) {
 		context.Fail(__LINE__, "kLodPayloadWordStride must be 16 for chunkSize=8, LOD 1");
 	}
 }

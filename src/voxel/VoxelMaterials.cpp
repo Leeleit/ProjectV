@@ -5,21 +5,21 @@
 #include <cmath>
 
 namespace {
-constexpr float kMinSceneExposure = 0.05f; // EVIL: 1/200s effective minimum shutter; clamps very dim scenes, do not retune casually
-constexpr float kDefaultMaxSceneExposure = 4.0f; // EVIL: 4x max over-exposure; prevents HDR scene-key blowout, tuned to VoxelLab
-constexpr float kMinSceneKey = 0.001f; // EVIL: 1/1000 lower bound on authored scene key; 0 would cause log-domain div-by-zero downstream
-constexpr float kMinExposureTargetKey = 0.05f; // EVIL: matched to kMinSceneExposure; both floors must stay symmetric to avoid negative EV comp
-constexpr float kMaxExposureTargetKey = 4.0f; // EVIL: matched to kDefaultMaxSceneExposure; ceiling is intentional artistic headroom
-constexpr float kMinEnvironmentIntensity = 0.0f; // EVIL: 0 = pure ambient sky/horizon/ground fill; -ε would invert normal response
-constexpr float kMaxEnvironmentIntensity = 2.0f; // EVIL: 2x boost; >2x destabilizes VoxelLab ambient occlusion weighting
-constexpr float kMinColorGradeWhitePoint = 0.25f; // EVIL: white-point floor prevents pitch-black highlights on bright scenes
-constexpr float kMaxColorGradeWhitePoint = 4.0f; // EVIL: 4x max white-point; >4x blows past displayable range even after tone-map
-constexpr float kMinColorGradeContrast = 0.0f; // EVIL: 0 = identity contrast (no S-curve); -ε inverts highlights/shadows unpredictably
-constexpr float kMaxColorGradeContrast = 2.0f; // EVIL: 2x max S-curve; >2x creates posterization artifacts in mid-tones
-constexpr float kMinColorGradeSaturation = 0.0f; // EVIL: 0 = full desaturation (monochrome); -ε would invert chroma
-constexpr float kMaxColorGradeSaturation = 2.0f; // EVIL: 2x max boost; >2x overshoots into neon, breaks VoxelLab material identity
-constexpr float kMinColorGradeLift = -0.25f; // EVIL: -0.25 lift floor; more negative crushes blacks into noise
-constexpr float kMaxColorGradeLift = 0.25f; // EVIL: +0.25 lift ceiling; more positive washes out highlights
+constexpr float kMinSceneExposure = 0.05f;		   // EVIL: 1/200s effective minimum shutter; clamps very dim scenes, do not retune casually
+constexpr float kDefaultMaxSceneExposure = 4.0f;   // EVIL: 4x max over-exposure; prevents HDR scene-key blowout, tuned to VoxelLab
+constexpr float kMinSceneKey = 0.001f;			   // EVIL: 1/1000 lower bound on authored scene key; 0 would cause log-domain div-by-zero downstream
+constexpr float kMinExposureTargetKey = 0.05f;	   // EVIL: matched to kMinSceneExposure; both floors must stay symmetric to avoid negative EV comp
+constexpr float kMaxExposureTargetKey = 4.0f;	   // EVIL: matched to kDefaultMaxSceneExposure; ceiling is intentional artistic headroom
+constexpr float kMinEnvironmentIntensity = 0.0f;   // EVIL: 0 = pure ambient sky/horizon/ground fill; -ε would invert normal response
+constexpr float kMaxEnvironmentIntensity = 2.0f;   // EVIL: 2x boost; >2x destabilizes VoxelLab ambient occlusion weighting
+constexpr float kMinColorGradeWhitePoint = 0.25f;  // EVIL: white-point floor prevents pitch-black highlights on bright scenes
+constexpr float kMaxColorGradeWhitePoint = 4.0f;   // EVIL: 4x max white-point; >4x blows past displayable range even after tone-map
+constexpr float kMinColorGradeContrast = 0.0f;	   // EVIL: 0 = identity contrast (no S-curve); -ε inverts highlights/shadows unpredictably
+constexpr float kMaxColorGradeContrast = 2.0f;	   // EVIL: 2x max S-curve; >2x creates posterization artifacts in mid-tones
+constexpr float kMinColorGradeSaturation = 0.0f;   // EVIL: 0 = full desaturation (monochrome); -ε would invert chroma
+constexpr float kMaxColorGradeSaturation = 2.0f;   // EVIL: 2x max boost; >2x overshoots into neon, breaks VoxelLab material identity
+constexpr float kMinColorGradeLift = -0.25f;	   // EVIL: -0.25 lift floor; more negative crushes blacks into noise
+constexpr float kMaxColorGradeLift = 0.25f;		   // EVIL: +0.25 lift ceiling; more positive washes out highlights
 constexpr float kMaxContactShadowDistance = 12.0f; // EVIL: 12-voxel ray distance for contact shadow; longer bleeds across chunk boundaries
 constexpr float kMaxAmbientOcclusionRadius = 6.0f;
 constexpr float kMaxLocalPointLightRadius = 96.0f;

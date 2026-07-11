@@ -6943,7 +6943,7 @@ void TestVoxelChunkStaticPromotionThresholdFromEnv(TestContext &context)
 void TestIncrementalJoltPerChunkBodyMap(TestContext &context)
 {
 	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	auto physics = std::unique_ptr<PhysicsState, decltype(&DestroyPhysicsState)>(
+	const auto physics = std::unique_ptr<PhysicsState, decltype(&DestroyPhysicsState)>(
 		CreatePhysicsState(), &DestroyPhysicsState);
 
 	SetVoxelMaterial(world, {1, 1, 1}, VoxelMaterial::FloorWhite, nullptr);

@@ -17,14 +17,14 @@ struct TestContext {
 	}
 };
 
-void ExpectFalse(TestContext &context, bool condition, int line, std::string_view expr)
+void ExpectFalse(TestContext &context, const bool condition, const int line, const std::string_view expr)
 {
 	if (condition) {
 		context.Fail(line, expr);
 	}
 }
 
-void ExpectEqualUInt(TestContext &context, uint32_t expected, uint32_t actual, int line, std::string_view expr)
+void ExpectEqualUInt(TestContext &context, const uint32_t expected, const uint32_t actual, const int line, const std::string_view expr)
 {
 	if (expected != actual) {
 		std::fprintf(stderr, "Test failure at line %d: %.*s (expected %u, got %u)\n", line, static_cast<int>(expr.size()), expr.data(), expected, actual);

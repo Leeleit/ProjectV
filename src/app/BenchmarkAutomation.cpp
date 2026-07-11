@@ -18,7 +18,7 @@ constexpr char kBenchmarkWarmupFramesEnvVar[] = "PROJECTV_BENCHMARK_WARMUP_FRAME
 constexpr char kBenchmarkQuitEnvVar[] = "PROJECTV_BENCHMARK_QUIT";
 constexpr char kBenchmarkLogEveryEnvVar[] = "PROJECTV_BENCHMARK_LOG_EVERY";
 constexpr uint32_t kDefaultBenchmarkWarmupFrames = 30u; // EVIL: warmup default. Long enough for VMA/Tracy/JIT cache to reach steady state (~0.5s @ 60fps).
-constexpr uint32_t kDefaultBenchmarkLogEvery = 60u;	   // EVIL: log interval default. 60 frames = 1s wall @ 60fps — readable without spamming.
+constexpr uint32_t kDefaultBenchmarkLogEvery = 60u;		// EVIL: log interval default. 60 frames = 1s wall @ 60fps — readable without spamming.
 
 bool IsValueSeparator(const char value)
 {

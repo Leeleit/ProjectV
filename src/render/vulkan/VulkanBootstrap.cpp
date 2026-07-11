@@ -13,7 +13,6 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
-#include <cstdlib>
 #include <set>
 #include <string>
 #include <string_view>
@@ -267,7 +266,7 @@ bool FindGraphicsPresentQueueFamily(
 
 bool FindDedicatedComputeQueueFamily(
 	const VkPhysicalDevice physicalDevice,
-	uint32_t graphicsFamilyIndex,
+	const uint32_t graphicsFamilyIndex,
 	uint32_t *outQueueFamilyIndex)
 {
 	uint32_t familyCount = 0;
@@ -519,8 +518,7 @@ VkPhysicalDeviceVulkan12Features BuildEnabledFeatures12(const PhysicalDeviceCand
 	// feature structs). MSAA + single-sample attachments in the same dynamic
 	// rendering pass requires this feature, deferred to a follow-up that enables
 	// the EXT extension or makes every attachment in the main pass multi-sampled.
-	if (selected.supportsAccelerationStructure && selected.supportsRayQuery
-		&& selected.rayTracingSupport.bufferDeviceAddress) {
+	if (selected.supportsAccelerationStructure && selected.supportsRayQuery && selected.rayTracingSupport.bufferDeviceAddress) {
 		enabled.bufferDeviceAddress = VK_TRUE;
 		enabled.bufferDeviceAddressCaptureReplay = selected.features12.bufferDeviceAddressCaptureReplay ? VK_TRUE : VK_FALSE;
 	}
@@ -803,7 +801,7 @@ bool InitializeVulkanBase(
 		context->dedicatedComputeQueueFamilyIndex = UINT32_MAX;
 	}
 
-	std::vector<const char *> deviceExtensions(
+	std::vector deviceExtensions(
 		kRequiredDeviceExtensions.begin(),
 		kRequiredDeviceExtensions.end());
 	if (selected.supportsTracyCalibratedTimestamps) {
@@ -834,7 +832,7 @@ bool InitializeVulkanBase(
 	// Dedup: same extension may be both in kRequired and conditionally added
 	// (e.g., if a future required list includes VK_KHR_swapchain_maintenance1).
 	// Vulkan spec allows duplicates silently, but cleaner to dedup here.
-	std::set<const char *> uniqueExtensions(deviceExtensions.begin(), deviceExtensions.end());
+	std::set uniqueExtensions(deviceExtensions.begin(), deviceExtensions.end());
 	deviceExtensions.assign(uniqueExtensions.begin(), uniqueExtensions.end());
 
 	VkPhysicalDeviceFeatures enabledFeatures = BuildEnabledFeatures(selected);
@@ -983,8 +981,7 @@ bool InitializeVulkanBase(
 	allocInfo.device = context->device;
 	allocInfo.instance = context->instance;
 	allocInfo.vulkanApiVersion = GetMinVulkanApiVersion();
-	if (selected.supportsAccelerationStructure && selected.supportsRayQuery
-		&& selected.rayTracingSupport.bufferDeviceAddress) {
+	if (selected.supportsAccelerationStructure && selected.supportsRayQuery && selected.rayTracingSupport.bufferDeviceAddress) {
 		allocInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 	}
 

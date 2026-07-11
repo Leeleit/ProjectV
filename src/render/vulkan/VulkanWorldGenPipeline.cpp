@@ -3,14 +3,11 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
-#include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "voxel/VoxelWorld.hpp"
 
-#include <cstring>
 #include <vector>
 
-#include <vk_mem_alloc.h>
 
 namespace projectv::render {
 
@@ -19,6 +16,7 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 	if (render->worldGenPipelineEnabled) {
 		return true;
 	}
+	// noinspection CppDFAConstantConditions, CppDFAUnreachableCode
 	if (!context || !render) {
 		return false;
 	}
@@ -53,13 +51,13 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 		VK_OBJECT_TYPE_SHADER_MODULE,
 		"WorldGenShaderModule");
 
-	const VkPushConstantRange pushConstantRange{
+	static constexpr VkPushConstantRange pushConstantRange{
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		.offset = 0u,
 		.size = sizeof(WorldGenPushConstants),
 	};
 
-	const std::array<VkDescriptorSetLayoutBinding, 1> bindings{{
+	static constexpr std::array<VkDescriptorSetLayoutBinding, 1> bindings{{
 		{
 			.binding = 0u,
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -103,13 +101,17 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"WorldGenPipelineLayout");
 
-	VkComputePipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	pipelineInfo.layout = render->worldGenPipelineLayout;
-	pipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	pipelineInfo.stage.module = render->worldGenShaderModule;
-	pipelineInfo.stage.pName = "main";
+	const VkPipelineShaderStageCreateInfo stage{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		.module = render->worldGenShaderModule,
+		.pName = "main",
+	};
+	VkComputePipelineCreateInfo pipelineInfo{
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.stage = stage,
+		.layout = render->worldGenPipelineLayout,
+	};
 	if (vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->worldGenPipeline) != VK_SUCCESS) {
 		vkDestroyPipelineLayout(context->device, render->worldGenPipelineLayout, nullptr);
 		render->worldGenPipelineLayout = VK_NULL_HANDLE;

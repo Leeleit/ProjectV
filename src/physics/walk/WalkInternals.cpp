@@ -2206,6 +2206,7 @@ bool RebuildCharacterFromCamera(
 			return true;
 		}
 
+		// noinspection CppDFAUnreachableCode, CppDFAUnusedValue, CppDFAUnreadVariable
 		const std::array topDownProbeOrigin{
 			camera.position[0],
 			std::max(camera.position[1] + 16.0f, static_cast<float>(world.maxExclusive.y) + 16.0f),

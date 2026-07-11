@@ -9,7 +9,7 @@ namespace {
 
 struct TestContext {
 	int failures = 0;
-	void Fail(int line, std::string_view msg)
+	void Fail(const int line, const std::string_view msg)
 	{
 		std::fprintf(stderr, "FAIL line %d: %.*s\n", line, static_cast<int>(msg.size()), msg.data());
 		++failures;
@@ -18,7 +18,7 @@ struct TestContext {
 
 using namespace projectv::voxel;
 
-CpuGreedyChunkDesc MakeChunk(int ox, int oy, int oz, int ex, int ey, int ez, uint32_t nonAir = 1u)
+CpuGreedyChunkDesc MakeChunk(const int ox, const int oy, const int oz, const int ex, const int ey, const int ez, const uint32_t nonAir = 1u)
 {
 	CpuGreedyChunkDesc c{};
 	c.chunkOrigin[0] = ox;
@@ -31,7 +31,7 @@ CpuGreedyChunkDesc MakeChunk(int ox, int oy, int oz, int ex, int ey, int ez, uin
 	return c;
 }
 
-CpuChunkCullingParams MakeCameraLookingForward(float camX, float camY, float camZ, float maxDist = 1000.0f)
+CpuChunkCullingParams MakeCameraLookingForward(const float camX, const float camY, const float camZ, const float maxDist = 1000.0f)
 {
 	CpuChunkCullingParams c{};
 	c.cameraX = camX;
@@ -163,7 +163,7 @@ void TestMaxDistanceZeroMeansNoDistanceCulling(TestContext &ctx)
 void TestChunkAtOriginVisibleFromOrigin(TestContext &ctx)
 {
 	const auto chunk = MakeChunk(0, 0, 0, 8, 8, 8, 1u);
-	auto cam = MakeCameraLookingForward(0, 0, 0);
+	const auto cam = MakeCameraLookingForward(0, 0, 0);
 	if (!IsChunkVisibleCPU(chunk, cam)) {
 		ctx.Fail(__LINE__, "chunk at camera position must be visible");
 	}

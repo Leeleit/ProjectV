@@ -34,7 +34,7 @@ void ParseArtistTitle(const std::string &filename,
 	std::string stem = filename;
 	if (stem.size() >= 4) {
 		std::string ext = stem.substr(stem.size() - 4);
-		std::ranges::transform(ext, ext.begin(),
+		std::transform(ext.begin(), ext.end(), ext.begin(),
 							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		if (ext == ".mp3") {
 			stem = stem.substr(0, stem.size() - 4);
@@ -164,7 +164,7 @@ size_t AudioEngine::scanPlaylist()
 		}
 		const auto &path = entry.path();
 		std::string ext = path.extension().string();
-		std::ranges::transform(ext, ext.begin(),
+		std::transform(ext.begin(), ext.end(), ext.begin(),
 							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		if (ext != ".mp3") {
 			continue;
@@ -172,7 +172,7 @@ size_t AudioEngine::scanPlaylist()
 		m_playlist.push_back(path);
 	}
 
-	std::ranges::sort(m_playlist);
+	std::sort(m_playlist.begin(), m_playlist.end());
 
 	if (m_playlist.empty()) {
 		m_currentIndex = 0;
@@ -438,14 +438,14 @@ void AudioEngine::RefreshPlaylistAsync()
 		m_scanThread.join();
 	}
 	m_scanInProgress.store(true);
-	m_scanThread = std::jthread([this](std::stop_token stopToken) {
-		const std::stop_callback<std::function<void()>> onStop(stopToken, [this]() {
+	m_scanThread = std::jthread([this](const std::stop_token &stopToken) {
+		const std::stop_callback<std::function<void()>> onStop(stopToken, [this] {
 			m_scanInProgress.store(false);
 		});
 		if (stopToken.stop_requested()) {
 			return;
 		}
-		const std::lock_guard<std::mutex> lock(m_playlistMutex);
+		const std::lock_guard lock(m_playlistMutex);
 		if (stopToken.stop_requested()) {
 			return;
 		}

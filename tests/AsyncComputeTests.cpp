@@ -52,7 +52,7 @@ void TestEnsureAsyncComputeResourcesRejectsNullContext(TestContext &context)
 
 void TestIsAsyncComputeResourcesAllocatedDefaultsFalse(TestContext &context)
 {
-	VulkanContextState empty{};
+	const VulkanContextState empty{};
 	if (projectv::render::IsAsyncComputeResourcesAllocated(empty)) {
 		context.Fail(__LINE__, "default VulkanContextState must report IsAsyncComputeResourcesAllocated=false");
 	}
@@ -114,11 +114,11 @@ void TestSubmitHzbAsyncCullToComputeQueueRejectsNullCommandBuffer(TestContext &c
 
 void TestHzbBuildTimelineSemaphoreDefaultsNull(TestContext &context)
 {
-	VulkanContextState contextState{};
-	if (contextState.hzbBuildTimelineSemaphore != VK_NULL_HANDLE) {
+	constexpr VulkanContextState contextState{};
+	if constexpr (contextState.hzbBuildTimelineSemaphore != VK_NULL_HANDLE) {
 		context.Fail(__LINE__, "default hzbBuildTimelineSemaphore must be VK_NULL_HANDLE");
 	}
-	if (contextState.hzbBuildLastTimelineValue != 0u) {
+	if constexpr (contextState.hzbBuildLastTimelineValue != 0u) {
 		context.Fail(__LINE__, "default hzbBuildLastTimelineValue must be 0");
 	}
 }

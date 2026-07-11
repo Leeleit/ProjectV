@@ -18,15 +18,15 @@ struct TestContext {
 
 void TestStructSizes(TestContext &context)
 {
-	if (sizeof(projectv::voxel::nanovdb::NanoVdbUpper) != 8u) {
+	if constexpr (sizeof(projectv::voxel::nanovdb::NanoVdbUpper) != 8u) {
 		std::fprintf(stderr, "Test failure at line %d: NanoVdbUpper expected 8 bytes (got %zu)\n", __LINE__, sizeof(projectv::voxel::nanovdb::NanoVdbUpper));
 		++context.failures;
 	}
-	if (sizeof(projectv::voxel::nanovdb::NanoVdbLower) != 16u) {
+	if constexpr (sizeof(projectv::voxel::nanovdb::NanoVdbLower) != 16u) {
 		std::fprintf(stderr, "Test failure at line %d: NanoVdbLower expected 16 bytes (got %zu)\n", __LINE__, sizeof(projectv::voxel::nanovdb::NanoVdbLower));
 		++context.failures;
 	}
-	if (sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) != 24u) {
+	if constexpr (sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) != 24u) {
 		std::fprintf(stderr, "Test failure at line %d: NanoVdbLeaf expected 24 bytes (got %zu)\n", __LINE__, sizeof(projectv::voxel::nanovdb::NanoVdbLeaf));
 		++context.failures;
 	}
@@ -34,10 +34,10 @@ void TestStructSizes(TestContext &context)
 
 void TestInvalidIndexConstant(TestContext &context)
 {
-	if (projectv::voxel::nanovdb::kNanoVdbInvalidIndex != 0xFFFFFFFFu) {
+	if constexpr (projectv::voxel::nanovdb::kNanoVdbInvalidIndex != 0xFFFFFFFFu) {
 		context.Fail(__LINE__, "kNanoVdbInvalidIndex must be 0xFFFFFFFF");
 	}
-	if (projectv::voxel::nanovdb::kNanoVdbMaxLevelCount != 8u) {
+	if constexpr (projectv::voxel::nanovdb::kNanoVdbMaxLevelCount != 8u) {
 		context.Fail(__LINE__, "kNanoVdbMaxLevelCount must be 8");
 	}
 }

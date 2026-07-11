@@ -4,9 +4,7 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 #include "render/SceneResourcesInternal.hpp"
 
 #include "render/LodDownsampleGpuConsume.hpp"
-#include "render/VoxelMeshingPushConstants.hpp"
 
-#include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
@@ -20,11 +18,9 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 #include <span>
 
 namespace {
-constexpr uint32_t kVoxelMaterialsPerWord = 4u;
-
 std::span<const VoxelMaterialVisual> BuildMaterialVisualTable()
 {
-	static const std::array<VoxelMaterialVisual, kVoxelMaterialCount> visuals{
+	static const std::array visuals{
 		GetVoxelMaterialVisual(VoxelMaterial::Air),
 		GetVoxelMaterialVisual(VoxelMaterial::Glass),
 		GetVoxelMaterialVisual(VoxelMaterial::Fluid),
@@ -330,7 +326,7 @@ bool CreateSceneResources(
 
 		const VkDeviceSize chunkAabbStrideBytes = sizeof(PackedSceneChunkAabb);
 		const VkDeviceSize chunkAabbBufferBytes = chunkAabbStrideBytes *
-			static_cast<VkDeviceSize>(world->voxelWorld->chunks.size());
+			world->voxelWorld->chunks.size();
 		if (chunkAabbBufferBytes > 0) {
 			VmaAllocationInfo chunkAabbAllocationInfo{};
 			if (!CreateBuffer(
@@ -560,7 +556,7 @@ bool CreateSceneResources(
 				pingPongAllocationInfo.size,
 				pingPong == 0u ? "SceneFluidCaSourceBufferAllocation" : "SceneFluidCaDestinationBufferAllocation");
 			render->sceneMemoryBytes += pingPongAllocationInfo.size;
-			std::memset(targetMappedData, 0, static_cast<size_t>(fluidCaPingPongBytes));
+			std::memset(targetMappedData, 0, fluidCaPingPongBytes);
 		}
 
 		constexpr VkDeviceSize kNanoVdbInitialUpperCapacityBytes = sizeof(projectv::voxel::nanovdb::NanoVdbUpper) * 1u;
@@ -657,7 +653,7 @@ bool CreateSceneResources(
 		}
 
 		const VkDeviceSize kWorldGenVoxelBufferBytes = sizeof(uint32_t) * 8u * 8u * 8u *
-			std::max(static_cast<size_t>(world->voxelWorld->chunks.size()), static_cast<size_t>(1u));
+			std::max(world->voxelWorld->chunks.size(), static_cast<size_t>(1u));
 		{
 			VmaAllocationInfo worldGenVoxelAllocationInfo{};
 			if (!CreateBuffer(

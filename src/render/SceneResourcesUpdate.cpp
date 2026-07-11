@@ -6,6 +6,7 @@ bool UpdateSceneResources(
 	const ChunkCullingParameters &chunkCullingParameters,
 	const VkExtent2D swapchainExtent)
 {
+	(void)chunkCullingParameters;
 	PV_PROFILE_ZONE_N("UpdateSceneResources");
 	if (!world || !render || !world->voxelWorld) {
 		return false;
@@ -205,16 +206,16 @@ bool UploadSceneFrameResources(
 
 	if (frameResources.uploadedNanoVdbVersion != render.sceneNanoVdbVersion) {
 		const VkDeviceSize upperRequired =
-			static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.uppers.size()) *
+			render.sceneNanoVdbFlatten.uppers.size() *
 				sizeof(projectv::voxel::nanovdb::NanoVdbUpper);
 		const VkDeviceSize lowerRequired =
-			static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.lowers.size()) *
+			render.sceneNanoVdbFlatten.lowers.size() *
 				sizeof(projectv::voxel::nanovdb::NanoVdbLower);
 		const VkDeviceSize leafRequired =
-			static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.leaves.size()) *
+			render.sceneNanoVdbFlatten.leaves.size() *
 				sizeof(projectv::voxel::nanovdb::NanoVdbLeaf);
 		const VkDeviceSize materialRequired =
-			static_cast<VkDeviceSize>(render.sceneNanoVdbFlatten.materials.size()) *
+			render.sceneNanoVdbFlatten.materials.size() *
 				sizeof(uint8_t);
 		const bool flattenedWithinCapacity =
 			frameResources.nanovdbUpperCapacityBytes >= upperRequired &&

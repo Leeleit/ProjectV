@@ -2,7 +2,6 @@
 #include "render/RtxGiProbes.hpp"
 
 #include <algorithm>
-#include <cstring>
 
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
@@ -45,9 +44,7 @@ bool IsRtxGiProbeFieldEnabled(const VulkanContextState &context) noexcept
 	return context.rayTracing.accelerationStructure && context.rayTracing.rayQuery;
 }
 
-RtxGiProbes::~RtxGiProbes()
-{
-}
+
 
 bool RtxGiProbes::Initialize(
 	const VulkanContextState &context,
@@ -209,7 +206,7 @@ bool RtxGiProbes::AllocateTextures(
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
-	const VmaAllocationCreateInfo irradianceAllocInfo{
+	static constexpr VmaAllocationCreateInfo irradianceAllocInfo{
 		.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
 		.usage = VMA_MEMORY_USAGE_GPU_ONLY,
 	};

@@ -6,7 +6,6 @@ import projectv.string_id;
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
-#include "debug/Profiling.hpp"
 #include "fmt/format.h"
 
 #include <algorithm>
@@ -437,7 +436,7 @@ std::unique_ptr<VoxelWorld> CreateEmptyVoxelWorld(
 	int width = 0;
 	int height = 0;
 	int depth = 0;
-	
+
 	// TryComputeVoxelWorldDimensions uses output pointers, so we declare them first
 	const int64_t width64 = static_cast<int64_t>(maxExclusive.x) - static_cast<int64_t>(min.x);
 	const int64_t height64 = static_cast<int64_t>(maxExclusive.y) - static_cast<int64_t>(min.y);

@@ -223,8 +223,8 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	};
 
 	const float aspect = extent.height > 0u
-		? static_cast<float>(extent.width) / static_cast<float>(extent.height)
-		: 1.0f;
+							 ? static_cast<float>(extent.width) / static_cast<float>(extent.height)
+							 : 1.0f;
 	const float tanHalfFov = std::tan(camera.verticalFovRadians * 0.5f);
 	const float nearPlane = camera.nearPlane;
 	const float farPlane = camera.farPlane;

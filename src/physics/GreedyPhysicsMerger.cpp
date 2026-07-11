@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <cstdlib>
-#include <cstring>
 #include <vector>
 
 #include "voxel/VoxelWorld.hpp"
@@ -74,7 +73,7 @@ uint32_t GreedyMergeSolidVoxelsInBounds(
 		return 0u;
 	}
 
-	const size_t strideX = static_cast<size_t>(1);
+	const size_t strideX = 1;
 	const size_t strideY = static_cast<size_t>(endX - startX);
 	const size_t strideZ = static_cast<size_t>(endY - startY) * strideY;
 	std::vector<uint8_t> consumed(
@@ -161,10 +160,10 @@ uint32_t GreedyMergeSolidVoxelsInBounds(
 #ifndef NDEBUG
 	{
 		uint64_t sumBoxVolume = 0u;
-		for (const MergedVoxelBox &box : outBoxes) {
-			const int64_t dx = static_cast<int64_t>(box.maxX) - static_cast<int64_t>(box.minX);
-			const int64_t dy = static_cast<int64_t>(box.maxY) - static_cast<int64_t>(box.minY);
-			const int64_t dz = static_cast<int64_t>(box.maxZ) - static_cast<int64_t>(box.minZ);
+		for (const auto &[minX, minY, minZ, maxX, maxY, maxZ] : outBoxes) {
+			const int64_t dx = static_cast<int64_t>(maxX) - static_cast<int64_t>(minX);
+			const int64_t dy = static_cast<int64_t>(maxY) - static_cast<int64_t>(minY);
+			const int64_t dz = static_cast<int64_t>(maxZ) - static_cast<int64_t>(minZ);
 			sumBoxVolume += static_cast<uint64_t>(dx * dy * dz);
 		}
 		uint64_t solidVoxelCount = 0u;

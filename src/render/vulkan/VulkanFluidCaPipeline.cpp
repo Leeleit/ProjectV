@@ -3,12 +3,9 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
-#include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
-#include "render/vulkan/VulkanSyncPrimitives.hpp"
 
 #include <array>
-#include <cstring>
 #include <vector>
 
 #include "SDL3/SDL_log.h"
@@ -17,7 +14,7 @@ namespace {
 constexpr uint32_t kFluidCaDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kFluidCaShaderFilename[] = "fluid_ca.comp.spv";
 
-constexpr std::array<VkDescriptorSetLayoutBinding, 5> kFluidCaDescriptorBindings{
+constexpr std::array kFluidCaDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -63,21 +60,12 @@ constexpr VkDescriptorSetLayoutCreateInfo kFluidCaDescriptorSetLayoutInfo{
 	.pBindings = kFluidCaDescriptorBindings.data(),
 };
 
-constexpr std::array<VkDescriptorPoolSize, 1> kFluidCaDescriptorPoolSizes{
+constexpr std::array kFluidCaDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = kFluidCaDescriptorSetCount * 5u,
 	},
 };
-
-// EVIL: kFluidCaStatsResetValue=0,0,0,0. fluidStats buffer holds activeFluidCells/droppedFluidCells/iteration/reserved. Per-tick reset to 0 before dispatch (workgroup atomicAdd/atomicOr increments). uint32_t cast, no float issues.
-constexpr uint32_t kFluidCaStatsResetValue = 0u;
-
-// EVIL: kFluidCaActiveChunkIdStride=4. activeChunkIds[] SSBO holds uint32 indices, one per active chunk. chunkDescriptorCount upper bound = world.chunkCount, allocated once at world creation.
-constexpr VkDeviceSize kFluidCaActiveChunkIdStride = sizeof(uint32_t);
-
-// EVIL: kFluidCaFluidCellStride=16. ChunkFluidCell struct = 4*uint32 = 16 bytes. ping-pong buffer size = chunkCount * chunkSize^3 * 16. 8^3 = 512 voxels/chunk, 8 KiB/chunk.
-constexpr VkDeviceSize kFluidCaFluidCellStride = sizeof(uint32_t) * 4u;
 
 VkShaderModule CreateFluidCaShaderModule(const VkDevice device, const std::vector<char> &code)
 {
@@ -214,13 +202,15 @@ bool CreateFluidCaPipelines(VulkanContextState *context, RenderState *render)
 	}
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->fluidCaPipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "FluidCaPipelineLayout");
 
-	VkComputePipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	pipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	pipelineInfo.stage.module = shaderModule;
-	pipelineInfo.stage.pName = "main";
-	pipelineInfo.layout = render->fluidCaPipelineLayout;
+	VkComputePipelineCreateInfo pipelineInfo{
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.stage =
+			{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			 .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			 .module = shaderModule,
+			 .pName = "main"},
+		.layout = render->fluidCaPipelineLayout,
+	};
 	VkResult pipelineResult = vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->fluidCaPipeline);
 	if (pipelineResult != VK_SUCCESS) {
 		runtime::LogVkFailure("CreateFluidCaPipelines.vkCreateComputePipelines", pipelineResult);
@@ -258,7 +248,7 @@ bool RefreshFluidCaResourceBindings(
 		render->fluidCaDescriptorPool = VK_NULL_HANDLE;
 	}
 
-	const VkDescriptorPoolCreateInfo poolInfo{
+	static constexpr VkDescriptorPoolCreateInfo poolInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
@@ -320,7 +310,7 @@ bool RefreshFluidCaResourceBindings(
 			.range = VK_WHOLE_SIZE,
 		};
 
-		const std::array<VkWriteDescriptorSet, 5> descriptorWrites{
+		const std::array descriptorWrites{
 			VkWriteDescriptorSet{
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.pNext = nullptr,
@@ -455,7 +445,7 @@ bool RecordFluidCaDispatch(
 	activeChunkIdBarrier.size = VK_WHOLE_SIZE;
 
 	{
-		const std::array<VkBufferMemoryBarrier2, 3> preBarriers{statsFillBarrier, sourceBarrier, activeChunkIdBarrier};
+		const std::array preBarriers{statsFillBarrier, sourceBarrier, activeChunkIdBarrier};
 		VkDependencyInfo depInfo{};
 		depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
 		depInfo.bufferMemoryBarrierCount = static_cast<uint32_t>(preBarriers.size());
@@ -506,7 +496,7 @@ bool RecordFluidCaDispatch(
 	destBarrier.size = VK_WHOLE_SIZE;
 
 	{
-		const std::array<VkBufferMemoryBarrier2, 2> postBarriers{postBarrier, destBarrier};
+		const std::array postBarriers{postBarrier, destBarrier};
 		VkDependencyInfo depInfo{};
 		depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
 		depInfo.bufferMemoryBarrierCount = static_cast<uint32_t>(postBarriers.size());

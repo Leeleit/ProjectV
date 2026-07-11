@@ -2,8 +2,6 @@
 #include "render/RayTracedShadows.hpp"
 
 #include <algorithm>
-#include <cstdlib>
-#include <cstring>
 
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
@@ -16,23 +14,21 @@ constexpr uint32_t kRtxMaxInitialBlasCount = 4096u;
 constexpr uint32_t kRtxMaxPrimitivesPerBlas = 8192u;
 constexpr VkDeviceSize kRtxScratchBufferBytes = 32ull * 1024ull * 1024ull;
 
-}  // namespace
+} // namespace
 
 bool IsRayTracedShadowEnabled(const VulkanContextState &context) noexcept
 {
 	return context.rayTracing.accelerationStructure && context.rayTracing.rayQuery;
 }
 
-RayTracedShadows::~RayTracedShadows()
-{
-}
+RayTracedShadows::~RayTracedShadows() = default;
 
 bool RayTracedShadows::Initialize(
 	const VulkanContextState &context,
 	VkCommandPool,
-	uint32_t maxBlasCount,
-	uint32_t maxPrimitivesPerBlas,
-	uint32_t minScratchAlignment)
+	const uint32_t maxBlasCount,
+	const uint32_t maxPrimitivesPerBlas,
+	const uint32_t minScratchAlignment)
 {
 	if (m_initialized.load(std::memory_order_acquire)) {
 		return true;
@@ -99,13 +95,11 @@ bool RayTracedShadows::AllocateBuffers(
 	VkBufferCreateInfo instanceInfo{};
 	instanceInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	instanceInfo.size = sizeof(VkAccelerationStructureInstanceKHR) * maxBlasCount;
-	instanceInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
-						| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	instanceInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 	instanceInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	VmaAllocationCreateInfo instanceAllocInfo{};
 	instanceAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-	instanceAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-							  | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+	instanceAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 	const VkResult createInstanceBufferResult = vmaCreateBuffer(
 		context.allocator,
 		&instanceInfo,
@@ -121,9 +115,9 @@ bool RayTracedShadows::AllocateBuffers(
 	vmaGetAllocationInfo(context.allocator, m_config.tlasInstanceAllocation, &mappedInfo);
 	m_config.tlasInstanceMappedData = mappedInfo.pMappedData;
 	m_config.tlasInstanceCapacityBytes = instanceInfo.size;
-	const VkBufferDeviceAddressInfo addressInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-		nullptr,
-		m_config.tlasInstanceBuffer };
+	const VkBufferDeviceAddressInfo addressInfo{VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+												nullptr,
+												m_config.tlasInstanceBuffer};
 	m_config.tlasInstanceDeviceAddress = vkGetBufferDeviceAddress(context.device, &addressInfo);
 	if (m_config.tlasInstanceDeviceAddress == 0) {
 		runtime::LogRuntimeFailure(
@@ -140,9 +134,7 @@ bool RayTracedShadows::AllocateBuffers(
 	VkBufferCreateInfo scratchInfo{};
 	scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	scratchInfo.size = alignedScratchBytes;
-	scratchInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
-						| VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-						| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	scratchInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 	scratchInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	VmaAllocationCreateInfo scratchAllocInfo{};
 	scratchAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -161,8 +153,7 @@ bool RayTracedShadows::AllocateBuffers(
 	const VkBufferDeviceAddressInfo scratchAddressInfo{
 		VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
 		nullptr,
-		m_config.scratchBuffer
-	};
+		m_config.scratchBuffer};
 	m_config.scratchDeviceAddress = vkGetBufferDeviceAddress(context.device, &scratchAddressInfo);
 	m_config.scratchCapacityBytes = alignedScratchBytes;
 
@@ -181,9 +172,7 @@ bool RayTracedShadows::AllocateBuffers(
 	VkBufferCreateInfo aabbInfo{};
 	aabbInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	aabbInfo.size = sizeof(VkAabbPositionsKHR);
-	aabbInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
-					 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-					 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	aabbInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 	aabbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	VmaAllocationCreateInfo aabbAllocInfo{};
 	aabbAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -201,8 +190,7 @@ bool RayTracedShadows::AllocateBuffers(
 	const VkBufferDeviceAddressInfo aabbAddressInfo{
 		VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
 		nullptr,
-		m_config.aabbScratchBuffer
-	};
+		m_config.aabbScratchBuffer};
 	m_config.aabbScratchDeviceAddress = vkGetBufferDeviceAddress(context.device, &aabbAddressInfo);
 
 	{
@@ -234,14 +222,13 @@ bool RayTracedShadows::AllocateBuffers(
 			&tlasSizingInstanceCount,
 			&tlasSizeInfo);
 		const VkDeviceSize tlasBackingSize = tlasSizeInfo.accelerationStructureSize > 0u
-			? tlasSizeInfo.accelerationStructureSize
-			: static_cast<VkDeviceSize>(1024u * 1024u);
+												 ? tlasSizeInfo.accelerationStructureSize
+												 : static_cast<VkDeviceSize>(1024u * 1024u);
 
 		VkBufferCreateInfo tlasBackingInfo{};
 		tlasBackingInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 		tlasBackingInfo.size = tlasBackingSize;
-		tlasBackingInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
-							 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+		tlasBackingInfo.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 		tlasBackingInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		VmaAllocationCreateInfo tlasBackingAllocInfo{};
 		tlasBackingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -260,8 +247,7 @@ bool RayTracedShadows::AllocateBuffers(
 		const VkBufferDeviceAddressInfo tlasBackingAddressInfo{
 			VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
 			nullptr,
-			m_config.tlasBackingBuffer
-		};
+			m_config.tlasBackingBuffer};
 		m_config.tlasBackingDeviceAddress = vkGetBufferDeviceAddress(context.device, &tlasBackingAddressInfo);
 		m_config.tlasBackingCapacityBytes = tlasBackingSize;
 
@@ -285,7 +271,7 @@ bool RayTracedShadows::AllocateBuffers(
 	return true;
 }
 
-void RayTracedShadows::ReleaseBuffers(const VulkanContextState &context) noexcept
+void RayTracedShadows::ReleaseBuffers(const VulkanContextState &context) noexcept // NOLINT(bugprone-exception-escape): vector assignments are bounded
 {
 	for (size_t i = 0; i < m_config.blasHandles.size(); ++i) {
 		if (m_config.blasHandles[i] != VK_NULL_HANDLE) {
@@ -358,11 +344,11 @@ bool CreateRtxShadowMaskFallbackOnly(VulkanContextState *context, RenderState *r
 		return true;
 	}
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.format = VK_FORMAT_R8_UNORM;
-	imageInfo.extent = { 1u, 1u, 1u };
+	imageInfo.extent = {1u, 1u, 1u};
 	imageInfo.mipLevels = 1u;
 	imageInfo.arrayLayers = 1u;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -390,7 +376,7 @@ bool CreateRtxShadowMaskFallbackOnly(VulkanContextState *context, RenderState *r
 	viewInfo.image = render->rtxShadowMaskFallbackImage;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = VK_FORMAT_R8_UNORM;
-	viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	if (vkCreateImageView(context->device, &viewInfo, nullptr, &render->rtxShadowMaskFallbackView) != VK_SUCCESS) {
 		vmaDestroyImage(context->allocator, render->rtxShadowMaskFallbackImage, render->rtxShadowMaskFallbackAllocation);
 		render->rtxShadowMaskFallbackImage = VK_NULL_HANDLE;
@@ -451,4 +437,4 @@ void DestroyRayTracedShadowResources(VulkanContextState *context, RenderState *r
 	render->rayTracedShadows->Shutdown(*context);
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

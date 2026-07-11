@@ -21,7 +21,7 @@ inline PackedSceneChunkDescriptor MakeUploadedSceneChunkDescriptor(
 }
 
 template <typename GetOrigin, typename GetHalfExtent>
-[[nodiscard]] inline bool FrustumCullVsCamera(
+[[nodiscard]] bool FrustumCullVsCamera(
 	const ChunkCullingParameters &parameters,
 	GetOrigin &&getOrigin,
 	GetHalfExtent &&getHalfExtent)
@@ -128,7 +128,7 @@ inline bool IsAabbVisibleAgainstCameraFrustum(
 {
 	return FrustumCullVsCamera(
 		parameters,
-		[&aabbMin, &aabbMax]() {
+		[&aabbMin, &aabbMax] {
 			return projectv::math::Vec3{
 				(aabbMin.x + aabbMax.x) * 0.5f,
 				(aabbMin.y + aabbMax.y) * 0.5f,
@@ -136,7 +136,7 @@ inline bool IsAabbVisibleAgainstCameraFrustum(
 				0.0f,
 			};
 		},
-		[&aabbMin, &aabbMax]() {
+		[&aabbMin, &aabbMax] {
 			return projectv::math::Vec3{
 				(aabbMax.x - aabbMin.x) * 0.5f,
 				(aabbMax.y - aabbMin.y) * 0.5f,
@@ -157,7 +157,7 @@ inline bool IsSceneChunkVisible(
 
 	return FrustumCullVsCamera(
 		parameters,
-		[&chunkDescriptor]() {
+		[&chunkDescriptor] {
 			return projectv::math::Vec3{
 				static_cast<float>(chunkDescriptor.chunkOrigin[0]) +
 					static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[0]) * 0.5f,
@@ -168,7 +168,7 @@ inline bool IsSceneChunkVisible(
 				0.0f,
 			};
 		},
-		[&chunkDescriptor]() {
+		[&chunkDescriptor] {
 			return projectv::math::Vec3{
 				static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[0]) * 0.5f,
 				static_cast<float>(chunkDescriptor.chunkExtentAndNonAir[1]) * 0.5f,

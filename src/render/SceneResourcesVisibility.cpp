@@ -134,6 +134,7 @@ ChunkVisibilityRebuildResult RebuildChunkVisibilityAndFillCache(
 	const ChunkCullingParameters &parameters,
 	ChunkVisibilityCache &cache)
 {
+	(void)render;
 	ChunkVisibilityRebuildResult result{};
 	if (!frameResources.chunkDescriptorMappedData ||
 		!frameResources.opaqueIndirectMappedData ||
@@ -265,14 +266,14 @@ bool UpdateSceneFrameChunkVisibility(
 		return true;
 	}
 
-	const ChunkVisibilityRebuildResult result = RebuildChunkVisibilityAndFillCache(
+	const auto [visibleChunkCount] = RebuildChunkVisibilityAndFillCache(
 		render,
 		frameResources,
 		parameters,
 		cache);
 	const uint32_t culledChunkCount =
-		frameResources.chunkDescriptorCount > result.visibleChunkCount
-			? frameResources.chunkDescriptorCount - result.visibleChunkCount
+		frameResources.chunkDescriptorCount > visibleChunkCount
+			? frameResources.chunkDescriptorCount - visibleChunkCount
 			: 0u;
 
 	const bool hasGeneratedFaces = frameResources.opaqueFaceCount > 0u ||
@@ -284,14 +285,14 @@ bool UpdateSceneFrameChunkVisibility(
 		cache.hash = hash;
 		cache.sceneVoxelPayloadVersion = render.sceneVoxelPayloadVersion;
 		cache.chunkDescriptorCount = frameResources.chunkDescriptorCount;
-		cache.visibleChunkCount = result.visibleChunkCount;
+		cache.visibleChunkCount = visibleChunkCount;
 		cache.culledChunkCount = culledChunkCount;
 		cache.consecutiveHitCount = 0;
 	} else {
 
 		cache.valid = false;
 	}
-	profiling::PlotValue("Visible Chunks", static_cast<int64_t>(result.visibleChunkCount));
+	profiling::PlotValue("Visible Chunks", static_cast<int64_t>(visibleChunkCount));
 	profiling::PlotValue("Culled Chunks", static_cast<int64_t>(culledChunkCount));
 	profiling::PlotValue("ChunkVisibilityCacheHits", static_cast<int64_t>(0));
 	return true;

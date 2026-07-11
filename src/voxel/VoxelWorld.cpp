@@ -3,8 +3,6 @@ import projectv.string_id;
 
 #include "voxel/VoxelWorldInternal.hpp"
 
-#include "SDL3/SDL_log.h"
-#include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
 #include "debug/Profiling.hpp"
 #include "physics/PhysicsWorld.hpp"
@@ -196,7 +194,7 @@ void MarkVoxelRegionDirty(VoxelWorld &world, const Int3 min, const Int3 maxExclu
 	}
 }
 
-void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material, PhysicsState *physics)
+void SetVoxelMaterial(VoxelWorld &world, const Int3 position, VoxelMaterial material, PhysicsState *physics)
 {
 	if (!IsInsideVoxelWorld(world, position)) {
 		return;
@@ -395,7 +393,7 @@ void MarkAllVoxelChunksDirty(VoxelWorld *world)
 	}
 	world->pendingChunkRebuildIndices.clear();
 	world->pendingChunkRebuildIndices.reserve(world->chunks.size());
-	world->pendingBlasRebuildIndices.clear(); // Clear pending BLAS rebuild queue
+	world->pendingBlasRebuildIndices.clear();						// Clear pending BLAS rebuild queue
 	world->pendingBlasRebuildIndices.reserve(world->chunks.size()); // Reserve space for BLAS rebuilds
 	for (size_t chunkIndex = 0; chunkIndex < world->chunks.size(); ++chunkIndex) {
 		world->pendingChunkRebuildIndices.push_back(chunkIndex);

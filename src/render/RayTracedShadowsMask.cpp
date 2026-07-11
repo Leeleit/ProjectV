@@ -7,7 +7,7 @@
 
 namespace projectv::render {
 
-bool RayTracedShadows::RecreateShadowMaskForExtent(const VulkanContextState &context, uint32_t width, uint32_t height)
+bool RayTracedShadows::RecreateShadowMaskForExtent(const VulkanContextState &context, const uint32_t width, const uint32_t height)
 {
 	if (!m_voxelAwareRtxActive) {
 		return false;
@@ -15,8 +15,7 @@ bool RayTracedShadows::RecreateShadowMaskForExtent(const VulkanContextState &con
 	if (width == 0u || height == 0u) {
 		return false;
 	}
-	if (width == m_shadowMaskWidth && height == m_shadowMaskHeight
-			&& m_shadowMaskImage != VK_NULL_HANDLE) {
+	if (width == m_shadowMaskWidth && height == m_shadowMaskHeight && m_shadowMaskImage != VK_NULL_HANDLE) {
 		return true;
 	}
 	if (context.device == VK_NULL_HANDLE || context.allocator == nullptr) {
@@ -36,11 +35,11 @@ bool RayTracedShadows::RecreateShadowMaskForExtent(const VulkanContextState &con
 	m_shadowMaskWidth = width;
 	m_shadowMaskHeight = height;
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.format = m_shadowMaskFormat;
-	imageInfo.extent = { width, height, 1u };
+	imageInfo.extent = {width, height, 1u};
 	imageInfo.mipLevels = 1u;
 	imageInfo.arrayLayers = 1u;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -69,7 +68,7 @@ bool RayTracedShadows::RecreateShadowMaskForExtent(const VulkanContextState &con
 	viewInfo.image = m_shadowMaskImage;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = m_shadowMaskFormat;
-	viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	if (vkCreateImageView(context.device, &viewInfo, nullptr, &m_shadowMaskImageView) != VK_SUCCESS) {
 		runtime::LogVkFailure("RayTracedShadows.RecreateShadowMaskForExtent.vkCreateImageView", VK_ERROR_INITIALIZATION_FAILED);
 		vmaDestroyImage(context.allocator, m_shadowMaskImage, m_shadowMaskAllocation);
@@ -112,9 +111,9 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	if (!m_rtxSbt.Initialize(
 			context,
 			m_rtxPipeline.GetPipeline(),
-			m_rtxPipeline.GetRayGenGroupIndex(),
-			m_rtxPipeline.GetMissGroupIndex(),
-			m_rtxPipeline.GetHitGroupIndex())) {
+			projectv::render::RtxShadowPipeline::GetRayGenGroupIndex(),
+			projectv::render::RtxShadowPipeline::GetMissGroupIndex(),
+			projectv::render::RtxShadowPipeline::GetHitGroupIndex())) {
 		m_rtxSbt.Shutdown(context);
 		m_rtxPipeline.Shutdown(context);
 		return false;
@@ -123,11 +122,11 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	m_shadowMaskWidth = 1920u;
 	m_shadowMaskHeight = 1080u;
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.format = m_shadowMaskFormat;
-	imageInfo.extent = { m_shadowMaskWidth, m_shadowMaskHeight, 1u };
+	imageInfo.extent = {m_shadowMaskWidth, m_shadowMaskHeight, 1u};
 	imageInfo.mipLevels = 1u;
 	imageInfo.arrayLayers = 1u;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -155,7 +154,7 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	viewInfo.image = m_shadowMaskImage;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = m_shadowMaskFormat;
-	viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	if (vkCreateImageView(device, &viewInfo, nullptr, &m_shadowMaskImageView) != VK_SUCCESS) {
 		runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vkCreateImageView", VK_ERROR_INITIALIZATION_FAILED);
 		ReleaseVoxelAwareRtxResources(context);
@@ -183,6 +182,7 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	}
 
 	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+		// noinspection CppUseStructuredBinding
 		RtxFrameResources &frame = m_rtxFrames[i];
 
 		VkBufferCreateInfo uboInfo{};
@@ -192,10 +192,9 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 		uboInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		VmaAllocationCreateInfo uboAllocInfo{};
 		uboAllocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-		uboAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-							 | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+		uboAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 		if (vmaCreateBuffer(context.allocator, &uboInfo, &uboAllocInfo,
-				&frame.cameraUboBuffer, &frame.cameraUboAllocation, nullptr) != VK_SUCCESS) {
+							&frame.cameraUboBuffer, &frame.cameraUboAllocation, nullptr) != VK_SUCCESS) {
 			runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vmaCreateBuffer.Ubo", VK_ERROR_INITIALIZATION_FAILED);
 			ReleaseVoxelAwareRtxResources(context);
 			return false;
@@ -225,6 +224,7 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 void RayTracedShadows::ReleaseVoxelAwareRtxResources(const VulkanContextState &context) noexcept
 {
 	const VkDevice device = context.device;
+	// noinspection CppUseStructuredBinding
 	for (RtxFrameResources &frame : m_rtxFrames) {
 		if (frame.cameraUboBuffer != VK_NULL_HANDLE && context.allocator != nullptr) {
 			vmaDestroyBuffer(context.allocator, frame.cameraUboBuffer, frame.cameraUboAllocation);
@@ -254,10 +254,9 @@ void RayTracedShadows::ReleaseVoxelAwareRtxResources(const VulkanContextState &c
 	m_voxelAwareRtxActive = false;
 }
 
-bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &context)
+bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &context) const
 {
-	if (m_shadowMaskImage == VK_NULL_HANDLE || context.device == VK_NULL_HANDLE
-			|| context.commandPool == VK_NULL_HANDLE || context.queue == VK_NULL_HANDLE) {
+	if (m_shadowMaskImage == VK_NULL_HANDLE || context.device == VK_NULL_HANDLE || context.commandPool == VK_NULL_HANDLE || context.queue == VK_NULL_HANDLE) {
 		return false;
 	}
 
@@ -288,18 +287,18 @@ bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &conte
 	toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toTransfer.image = m_shadowMaskImage;
-	toTransfer.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	toTransfer.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	vkCmdPipelineBarrier(cmd,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		0u, 0u, nullptr, 0u, nullptr, 1u, &toTransfer);
+						 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+						 VK_PIPELINE_STAGE_TRANSFER_BIT,
+						 0u, 0u, nullptr, 0u, nullptr, 1u, &toTransfer);
 
 	VkClearColorValue clearValue{};
 	clearValue.float32[0] = 1.0f;
 	clearValue.float32[1] = 1.0f;
 	clearValue.float32[2] = 1.0f;
 	clearValue.float32[3] = 1.0f;
-	VkImageSubresourceRange range{ VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	vkCmdClearColorImage(cmd, m_shadowMaskImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
 
 	VkImageMemoryBarrier toGeneral{};
@@ -311,11 +310,11 @@ bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &conte
 	toGeneral.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toGeneral.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toGeneral.image = m_shadowMaskImage;
-	toGeneral.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	toGeneral.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	vkCmdPipelineBarrier(cmd,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-		0u, 0u, nullptr, 0u, nullptr, 1u, &toGeneral);
+						 VK_PIPELINE_STAGE_TRANSFER_BIT,
+						 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+						 0u, 0u, nullptr, 0u, nullptr, 1u, &toGeneral);
 
 	vkEndCommandBuffer(cmd);
 
@@ -353,11 +352,11 @@ bool RayTracedShadows::CreateShadowMaskFallback(const VulkanContextState &contex
 		return false;
 	}
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.format = VK_FORMAT_R8_UNORM;
-	imageInfo.extent = { 1u, 1u, 1u };
+	imageInfo.extent = {1u, 1u, 1u};
 	imageInfo.mipLevels = 1u;
 	imageInfo.arrayLayers = 1u;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -385,7 +384,7 @@ bool RayTracedShadows::CreateShadowMaskFallback(const VulkanContextState &contex
 	viewInfo.image = render->rtxShadowMaskFallbackImage;
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = VK_FORMAT_R8_UNORM;
-	viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	if (vkCreateImageView(context.device, &viewInfo, nullptr, &render->rtxShadowMaskFallbackView) != VK_SUCCESS) {
 		vmaDestroyImage(context.allocator, render->rtxShadowMaskFallbackImage, render->rtxShadowMaskFallbackAllocation);
 		render->rtxShadowMaskFallbackImage = VK_NULL_HANDLE;

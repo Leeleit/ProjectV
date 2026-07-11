@@ -51,7 +51,7 @@ void StopChunkStreamerWorker();
 
 bool IsChunkStreamerWorkerActive();
 
-void ProcessPendingRequests(std::stop_token stopToken);
+void ProcessPendingRequests(const std::stop_token& stopToken);
 
 std::string GetChunkStreamerCachePath();
 

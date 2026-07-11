@@ -19,6 +19,13 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 ## 1. Now
 **2026-07-11 session (Refactoring readability per docs/philosophy + doc audit + -march=native policy change).**
 
+**2026-07-12 follow-up — Разбор папки `problems/`:**
+- `ClangTidy.xml`: все предупреждения по `src/` устранены (`run-clang-tidy -fix` + ручные `NOLINT` для не-автофиксируемых случаев: recursion, exception-escape, redundant declarations, branch-clone).
+- `CppUnusedIncludeDirective.xml`: удалены все безопасные лишние `#include` из `.cpp`; заголовочные includes, отмеченные как "unused", оставлены намеренно — они либо обеспечивают self-containedность, либо являются частью umbrella/internal headers (`RendererInternal.hpp`, `SceneResourcesInternal.hpp`, `PhysicsWorld_Internal.hpp`); попытка их удаления ломает сборку из-за транзитивных зависимостей.
+- Исправлены побочные сборочные регрессии: добавлено поле `transparentDebugGraphicsPipeline` в `RenderState`, устранены mismatch `const` между declaration/definition, `RtxShadowPipeline`/`RtxGiProbes` деструкторы переведены в `= default`.
+- Файлы `problems/ClangTidy.xml` и `problems/CppUnusedIncludeDirective.xml` удалены.
+- Сборка `ProjectV` green, `ctest` 43/43 pass, `run-clang-tidy` по `src/` не выдаёт предупреждений.
+
 **Что сделано в этой сессии:**
 
 - **Debug modes rebranding + GreedyMeshing view:** Полный ребрендинг `LightingDebugView` enum (12→14 values), исправлен критический shader/enum desync (branches в `voxel.frag` были offset на 1 начиная с Occlusion, половина views показывала не тот компонент). Новые views: `GreedyMeshing(13)` — рисует красные borders + крестики per merged greedy quad через normalized [0,1] UV varying (`outQuadUV`/`inQuadUV`, location 4), добавлен в `voxel.vert` + `voxel_mesh.mesh` + `voxel.frag`. `RtxSpecular(10)` — ранее unreachable branch теперь доступен. `VctDiffuse`→`DiffuseGI`, `VctSpecular`→`SpecularGI` (точные имена после DDGI миграции). Dead code removal: `DebugState::showCascadeSplitPlanes`, `DebugStats::sunShadow*` (4 поля), `shadowMapResolution`, ghost HUD helper lines (O/U/I/L), vestigial `camera`/`render` params в `BuildDebugOverlayBoxes`. Build green (449/449), 43/43 tests pass.

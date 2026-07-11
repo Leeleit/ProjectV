@@ -7,10 +7,9 @@
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include <array>
-#include <cstring>
+#include <cstddef>
 #include <vector>
 
-#include "SDL3/SDL_log.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/packing.hpp>
 
@@ -26,24 +25,7 @@ constexpr VkDescriptorSetLayoutCreateInfo kSkyAtmosphereDescriptorSetLayoutInfo{
 	.pBindings = nullptr,
 };
 
-constexpr std::array<VkDescriptorSetLayoutBinding, 2> kSkyAtmosphereDescriptorBindings{
-	VkDescriptorSetLayoutBinding{
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = nullptr,
-	},
-	VkDescriptorSetLayoutBinding{
-		.binding = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = nullptr,
-	},
-};
-
-constexpr std::array<VkDescriptorPoolSize, 1> kSkyAtmosphereDescriptorPoolSizes{
+constexpr std::array kSkyAtmosphereDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = MAX_FRAMES_IN_FLIGHT * 2u,
@@ -166,7 +148,7 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 		return true;
 	}
 
-	std::vector<glm::vec4> lutData(kSkyViewLutWidth * kSkyViewLutHeight);
+	std::vector<glm::vec4> lutData(static_cast<std::size_t>(kSkyViewLutWidth) * kSkyViewLutHeight);
 	constexpr float kPi = 3.14159265f;
 	for (uint32_t y = 0; y < kSkyViewLutHeight; ++y) {
 		const float sunZenith = static_cast<float>(y) / static_cast<float>(kSkyViewLutHeight - 1);
@@ -182,9 +164,6 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 			const float cosScattering = cosViewZenith * cosSunZenith +
 									   sinViewZenith * sinSunZenith * std::cos(0.0f);
 
-			glm::vec3 transmittance(1.0f);
-			glm::vec3 inscatter(0.0f);
-
 			float opticalDepth = 0.0f;
 			for (int step = 0; step < sky_atmosphere_constants::kRaymarchStepCount; ++step) {
 				const float t = (static_cast<float>(step) + 0.5f) /
@@ -193,9 +172,10 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 				const float density = RayleighDensity(sampleAltitude);
 				opticalDepth += density * 0.01f;
 			}
-			transmittance = glm::vec3(std::exp(-opticalDepth * sky_atmosphere_constants::kRayleighBetaR),
-									  std::exp(-opticalDepth * sky_atmosphere_constants::kRayleighBetaG),
-									  std::exp(-opticalDepth * sky_atmosphere_constants::kRayleighBetaB));
+			const glm::vec3 transmittance(
+				std::exp(-opticalDepth * sky_atmosphere_constants::kRayleighBetaR),
+				std::exp(-opticalDepth * sky_atmosphere_constants::kRayleighBetaG),
+				std::exp(-opticalDepth * sky_atmosphere_constants::kRayleighBetaB));
 
 			float miePhase = 0.0f;
 			float rayleighPhase = 0.0f;
@@ -204,18 +184,18 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 				rayleighPhase = 0.75f * (1.0f + cosScattering * cosScattering);
 			}
 
-			const glm::vec3 rayleighBeta(
+			static constexpr glm::vec3 rayleighBeta(
 				sky_atmosphere_constants::kRayleighBetaR,
 				sky_atmosphere_constants::kRayleighBetaG,
 				sky_atmosphere_constants::kRayleighBetaB);
-			inscatter = transmittance * (rayleighBeta * 60000.0f * rayleighPhase +
-										sky_atmosphere_constants::kMieBeta * 60000.0f * miePhase);
+			const glm::vec3 inscatter = transmittance * (rayleighBeta * 60000.0f * rayleighPhase +
+																sky_atmosphere_constants::kMieBeta * 60000.0f * miePhase);
 
 			lutData[y * kSkyViewLutWidth + x] = glm::vec4(inscatter, transmittance.r);
 		}
 	}
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.format = kSkyViewLutFormat;
@@ -271,7 +251,7 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 		return false;
 	}
 
-	std::vector<uint16_t> halfFloats(kSkyViewLutWidth * kSkyViewLutHeight * 4);
+	std::vector<uint16_t> halfFloats(static_cast<std::size_t>(kSkyViewLutWidth) * kSkyViewLutHeight * 4);
 	for (size_t i = 0; i < lutData.size(); ++i) {
 		halfFloats[i * 4 + 0] = glm::packHalf1x16(lutData[i].r);
 		halfFloats[i * 4 + 1] = glm::packHalf1x16(lutData[i].g);
@@ -297,9 +277,8 @@ bool CreateMultiScatteringLut(VulkanContextState *context, RenderState *render)
 		return true;
 	}
 
-	std::vector<glm::vec4> lutData(kMultiScatteringLutWidth * kMultiScatteringLutHeight);
+	std::vector<glm::vec4> lutData(static_cast<std::size_t>(kMultiScatteringLutWidth) * kMultiScatteringLutHeight);
 	for (uint32_t y = 0; y < kMultiScatteringLutHeight; ++y) {
-		const float sunZenith = static_cast<float>(y) / static_cast<float>(kMultiScatteringLutHeight - 1);
 		for (uint32_t x = 0; x < kMultiScatteringLutWidth; ++x) {
 			const float altitude = static_cast<float>(x) / static_cast<float>(kMultiScatteringLutWidth - 1);
 			const float altitudeMeters = altitude * sky_atmosphere_constants::kAtmosphereHeight;
@@ -316,7 +295,7 @@ bool CreateMultiScatteringLut(VulkanContextState *context, RenderState *render)
 		}
 	}
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.format = kMultiScatteringLutFormat;
@@ -372,7 +351,7 @@ bool CreateMultiScatteringLut(VulkanContextState *context, RenderState *render)
 		return false;
 	}
 
-	std::vector<uint16_t> halfFloats(kMultiScatteringLutWidth * kMultiScatteringLutHeight * 4);
+	std::vector<uint16_t> halfFloats(static_cast<std::size_t>(kMultiScatteringLutWidth) * kMultiScatteringLutHeight * 4);
 	for (size_t i = 0; i < lutData.size(); ++i) {
 		halfFloats[i * 4 + 0] = glm::packHalf1x16(lutData[i].r);
 		halfFloats[i * 4 + 1] = glm::packHalf1x16(lutData[i].g);
@@ -568,7 +547,7 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 		.pName = "main",
 	};
 
-	const VkPipelineVertexInputStateCreateInfo vertexInputState{
+	static constexpr VkPipelineVertexInputStateCreateInfo vertexInputState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 		.vertexBindingDescriptionCount = 0,
 		.pVertexBindingDescriptions = nullptr,
@@ -576,13 +555,13 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 		.pVertexAttributeDescriptions = nullptr,
 	};
 
-	const VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{
+	static constexpr VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 		.primitiveRestartEnable = VK_FALSE,
 	};
 
-	const VkPipelineViewportStateCreateInfo viewportState{
+	static constexpr VkPipelineViewportStateCreateInfo viewportState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
 		.viewportCount = 1,
 		.pViewports = nullptr,
@@ -590,7 +569,7 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 		.pScissors = nullptr,
 	};
 
-	const VkPipelineRasterizationStateCreateInfo rasterizationState{
+	static constexpr VkPipelineRasterizationStateCreateInfo rasterizationState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 		.polygonMode = VK_POLYGON_MODE_FILL,
 		.cullMode = VK_CULL_MODE_NONE,
@@ -598,12 +577,12 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 		.lineWidth = 1.0f,
 	};
 
-	const VkPipelineMultisampleStateCreateInfo multisampleState{
+	static constexpr VkPipelineMultisampleStateCreateInfo multisampleState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 	};
 
-	const VkPipelineDepthStencilStateCreateInfo depthStencilState{
+	static constexpr VkPipelineDepthStencilStateCreateInfo depthStencilState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_TRUE,
@@ -612,7 +591,7 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 		.stencilTestEnable = VK_FALSE,
 	};
 
-	const VkPipelineColorBlendAttachmentState colorBlendAttachment{
+	static constexpr VkPipelineColorBlendAttachmentState colorBlendAttachment{
 		.blendEnable = VK_FALSE,
 		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT,
 	};
@@ -623,8 +602,8 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 		.pAttachments = &colorBlendAttachment,
 	};
 
-	const VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-	const VkPipelineDynamicStateCreateInfo dynamicState{
+	static constexpr VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+	static constexpr VkPipelineDynamicStateCreateInfo dynamicState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		.dynamicStateCount = static_cast<uint32_t>(std::size(dynamicStates)),
 		.pDynamicStates = dynamicStates,

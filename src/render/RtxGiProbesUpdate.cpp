@@ -6,13 +6,13 @@
 namespace projectv::render {
 
 bool RtxGiProbes::RecordUpdatePass(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	const VulkanContextState &context,
-	uint32_t frameIndex,
-	VkBuffer chunkDescriptorBuffer,
-	VkBuffer sceneLightingBuffer,
-	VkBuffer chunkVoxelPayloadBuffer,
-	VkBuffer materialVisualBuffer,
+	const uint32_t frameIndex,
+	const VkBuffer chunkDescriptorBuffer,
+	const VkBuffer sceneLightingBuffer,
+	const VkBuffer chunkVoxelPayloadBuffer,
+	const VkBuffer materialVisualBuffer,
 	VkAccelerationStructureKHR tlas,
 	const FrameRenderData &renderData)
 {
@@ -23,31 +23,28 @@ bool RtxGiProbes::RecordUpdatePass(
 		return false;
 	}
 
-	VkDescriptorBufferInfo chunkDescInfo{ chunkDescriptorBuffer, 0, VK_WHOLE_SIZE };
-	VkDescriptorBufferInfo materialInfo{ materialVisualBuffer, 0, VK_WHOLE_SIZE };
-	VkDescriptorBufferInfo sceneLightingInfo{ sceneLightingBuffer, 0, VK_WHOLE_SIZE };
-	VkDescriptorBufferInfo voxelPayloadInfo{ chunkVoxelPayloadBuffer, 0, VK_WHOLE_SIZE };
-	VkDescriptorBufferInfo volumeDescInfo{ m_config.volumeDescBuffer, 0, VK_WHOLE_SIZE };
+	const VkDescriptorBufferInfo chunkDescInfo{chunkDescriptorBuffer, 0, VK_WHOLE_SIZE};
+	const VkDescriptorBufferInfo materialInfo{materialVisualBuffer, 0, VK_WHOLE_SIZE};
+	const VkDescriptorBufferInfo sceneLightingInfo{sceneLightingBuffer, 0, VK_WHOLE_SIZE};
+	const VkDescriptorBufferInfo voxelPayloadInfo{chunkVoxelPayloadBuffer, 0, VK_WHOLE_SIZE};
+	const VkDescriptorBufferInfo volumeDescInfo{m_config.volumeDescBuffer, 0, VK_WHOLE_SIZE};
 
-	VkDescriptorImageInfo irradianceInfo{
+	const VkDescriptorImageInfo irradianceInfo{
 		.sampler = VK_NULL_HANDLE,
 		.imageView = m_config.irradianceView,
-		.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-	};
-	VkDescriptorImageInfo distanceInfo{
+		.imageLayout = VK_IMAGE_LAYOUT_GENERAL};
+	const VkDescriptorImageInfo distanceInfo{
 		.sampler = VK_NULL_HANDLE,
 		.imageView = m_config.distanceView,
-		.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-	};
+		.imageLayout = VK_IMAGE_LAYOUT_GENERAL};
 
-	VkWriteDescriptorSetAccelerationStructureKHR tlasInfo{
+	const VkWriteDescriptorSetAccelerationStructureKHR tlasInfo{
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
 		.pNext = nullptr,
 		.accelerationStructureCount = 1,
-		.pAccelerationStructures = &tlas
-	};
+		.pAccelerationStructures = &tlas};
 
-	std::array<VkWriteDescriptorSet, 8> writes = {
+	const std::array writes = {
 		VkWriteDescriptorSet{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
@@ -58,8 +55,7 @@ bool RtxGiProbes::RecordUpdatePass(
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			.pImageInfo = nullptr,
 			.pBufferInfo = &chunkDescInfo,
-			.pTexelBufferView = nullptr
-		},
+			.pTexelBufferView = nullptr},
 		VkWriteDescriptorSet{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
@@ -70,8 +66,7 @@ bool RtxGiProbes::RecordUpdatePass(
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			.pImageInfo = nullptr,
 			.pBufferInfo = &materialInfo,
-			.pTexelBufferView = nullptr
-		},
+			.pTexelBufferView = nullptr},
 		VkWriteDescriptorSet{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
@@ -82,8 +77,7 @@ bool RtxGiProbes::RecordUpdatePass(
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			.pImageInfo = nullptr,
 			.pBufferInfo = &sceneLightingInfo,
-			.pTexelBufferView = nullptr
-		},
+			.pTexelBufferView = nullptr},
 		VkWriteDescriptorSet{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
@@ -94,8 +88,7 @@ bool RtxGiProbes::RecordUpdatePass(
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			.pImageInfo = nullptr,
 			.pBufferInfo = &voxelPayloadInfo,
-			.pTexelBufferView = nullptr
-		},
+			.pTexelBufferView = nullptr},
 		VkWriteDescriptorSet{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = &tlasInfo,
@@ -106,8 +99,7 @@ bool RtxGiProbes::RecordUpdatePass(
 			.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
 			.pImageInfo = nullptr,
 			.pBufferInfo = nullptr,
-			.pTexelBufferView = nullptr
-		},
+			.pTexelBufferView = nullptr},
 		VkWriteDescriptorSet{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
@@ -118,8 +110,7 @@ bool RtxGiProbes::RecordUpdatePass(
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 			.pImageInfo = &irradianceInfo,
 			.pBufferInfo = nullptr,
-			.pTexelBufferView = nullptr
-		},
+			.pTexelBufferView = nullptr},
 		VkWriteDescriptorSet{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
@@ -130,8 +121,7 @@ bool RtxGiProbes::RecordUpdatePass(
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 			.pImageInfo = &distanceInfo,
 			.pBufferInfo = nullptr,
-			.pTexelBufferView = nullptr
-		},
+			.pTexelBufferView = nullptr},
 		VkWriteDescriptorSet{
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.pNext = nullptr,
@@ -142,9 +132,7 @@ bool RtxGiProbes::RecordUpdatePass(
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			.pImageInfo = nullptr,
 			.pBufferInfo = &volumeDescInfo,
-			.pTexelBufferView = nullptr
-		}
-	};
+			.pTexelBufferView = nullptr}};
 
 	vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 
@@ -157,7 +145,7 @@ bool RtxGiProbes::RecordUpdatePass(
 	imageBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	imageBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	imageBarriers[0].image = m_config.irradianceImage;
-	imageBarriers[0].subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	imageBarriers[0].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 
 	imageBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
 	imageBarriers[1].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -167,7 +155,7 @@ bool RtxGiProbes::RecordUpdatePass(
 	imageBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	imageBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	imageBarriers[1].image = m_config.distanceImage;
-	imageBarriers[1].subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u };
+	imageBarriers[1].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 
 	if (m_config.updateDispatchCount > 0u) {
 		imageBarriers[0].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -209,7 +197,7 @@ bool RtxGiProbes::RecordUpdatePass(
 		sizeof(GraphicsPushConstants),
 		&renderData.graphicsPushConstants);
 
-	uint32_t totalProbes = m_config.probeCountAxisX * m_config.probeCountAxisY * m_config.probeCountAxisZ;
+	const uint32_t totalProbes = m_config.probeCountAxisX * m_config.probeCountAxisY * m_config.probeCountAxisZ;
 	vkCmdDispatch(commandBuffer, 1, 1, totalProbes);
 
 	imageBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -237,15 +225,15 @@ bool RtxGiProbes::RecordUpdatePass(
 }
 
 bool RecordRtxGiProbeUpdatePass(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RtxGiProbes *probes,
 	const VulkanContextState &context,
-	uint32_t frameIndex,
-	VkBuffer chunkDescriptorBuffer,
-	VkBuffer sceneLightingBuffer,
-	VkBuffer chunkVoxelPayloadBuffer,
-	VkBuffer materialVisualBuffer,
-	VkAccelerationStructureKHR tlas,
+	const uint32_t frameIndex,
+	const VkBuffer chunkDescriptorBuffer,
+	const VkBuffer sceneLightingBuffer,
+	const VkBuffer chunkVoxelPayloadBuffer,
+	const VkBuffer materialVisualBuffer,
+	const VkAccelerationStructureKHR tlas,
 	const FrameRenderData &renderData)
 {
 	if (probes == nullptr) {

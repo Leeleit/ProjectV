@@ -63,7 +63,7 @@ struct PhysicsBroadphaseStats {
 PhysicsBroadphaseStats GetPhysicsBroadphaseStats(const PhysicsState *physics);
 
 PhysicsState *CreatePhysicsState();
-void DestroyPhysicsState(PhysicsState *physics);
+void DestroyPhysicsState(PhysicsState *physics); // NOLINT(readability-redundant-declaration): also declared in Types.hpp for deleter visibility
 bool SyncPhysicsWorld(PhysicsState *physics, const VoxelWorld *world);
 void QueueChunkRebuildRequest(PhysicsState *physics, uint32_t chunkIndex);
 uint32_t ProcessChunkRebuildQueue(PhysicsState *physics, const VoxelWorld *world);
@@ -110,6 +110,6 @@ bool IsPhysicsWalkAutoJumpEnabled(const PhysicsState *physics);
 void SetPhysicsWalkAutoJumpDelayEnabled(PhysicsState *physics, bool enabled);
 bool IsPhysicsWalkAutoJumpDelayEnabled(const PhysicsState *physics);
 PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics);
-uint64_t GetPhysicsWorldSyncVersion(const PhysicsState *physics);
+
 
 

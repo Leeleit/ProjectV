@@ -3,7 +3,6 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "render/ScreenshotCapture.hpp"
-#include "render/vulkan/VulkanInit.hpp"
 
 #include <filesystem>
 

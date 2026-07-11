@@ -76,6 +76,7 @@ void RecordGraphicsCommands(
 	const VkCommandBuffer cmd,
 	const uint32_t imageIndex)
 {
+	(void)context;
 	ScopedPassTimer passTimer(render.renderPassTimings.graphicsMs);
 	PV_PROFILE_ZONE_N("RecordGraphicsCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Graphics Pass");
@@ -270,16 +271,14 @@ void RecordGraphicsCommands(
 					meshDrawPush,
 					frameRenderData.chunkDescriptorCount);
 			} else {
-			const bool rtxPathActive = render.rayTracedShadows != nullptr
-				&& render.rayTracedShadows->IsEnabled()
-				&& render.rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
-			VkPipeline opaquePipeline = VK_NULL_HANDLE;
-			if (rtxPathActive) {
-				opaquePipeline = render.graphicsPipelineRtx;
-			}
-			if (opaquePipeline == VK_NULL_HANDLE) {
-				opaquePipeline = render.graphicsPipeline;
-			}
+				const bool rtxPathActive = render.rayTracedShadows != nullptr && render.rayTracedShadows->IsEnabled() && render.rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
+				VkPipeline opaquePipeline = VK_NULL_HANDLE;
+				if (rtxPathActive) {
+					opaquePipeline = render.graphicsPipelineRtx;
+				}
+				if (opaquePipeline == VK_NULL_HANDLE) {
+					opaquePipeline = render.graphicsPipeline;
+				}
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
 				vkCmdPushConstants(
 					cmd,
@@ -376,7 +375,11 @@ void RecordGraphicsCommands(
 			frameRenderData.transparentIndirectBuffer != VK_NULL_HANDLE &&
 			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Transparent Pass");
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.transparentGraphicsPipeline);
+			const bool greedyDebug = render.lightingDebugControls.debugView == LightingDebugView::GreedyMeshing;
+			const VkPipeline transparentPipeline = greedyDebug && render.transparentDebugGraphicsPipeline
+													   ? render.transparentDebugGraphicsPipeline
+													   : render.transparentGraphicsPipeline;
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline);
 			vkCmdPushConstants(
 				cmd,
 				render.graphicsPipelineLayout,
@@ -396,7 +399,7 @@ void RecordGraphicsCommands(
 		RecordDebugHudCommands(render, frameRenderData, cmd);
 
 		const bool cloudscapePassActive = projectv::render::IsCloudscapeEnabled() &&
-										 render.cloudscapePipelineEnabled;
+										  render.cloudscapePipelineEnabled;
 		if (cloudscapePassActive && render.sceneColorImageView != VK_NULL_HANDLE) {
 			projectv::render::CloudscapePushConstants cloudPush{};
 			cloudPush.cloudColorAndCoverage = {
@@ -474,11 +477,9 @@ void RecordGraphicsCommands(
 
 			const VkImageBlit blitRegion{
 				.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
-				.srcOffsets = {{0, 0, 0}, {static_cast<int32_t>(swapchain.extent.width),
-										   static_cast<int32_t>(swapchain.extent.height), 1}},
+				.srcOffsets = {{0, 0, 0}, {static_cast<int32_t>(swapchain.extent.width), static_cast<int32_t>(swapchain.extent.height), 1}},
 				.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
-				.dstOffsets = {{0, 0, 0}, {static_cast<int32_t>(swapchain.extent.width),
-										   static_cast<int32_t>(swapchain.extent.height), 1}},
+				.dstOffsets = {{0, 0, 0}, {static_cast<int32_t>(swapchain.extent.width), static_cast<int32_t>(swapchain.extent.height), 1}},
 			};
 			vkCmdBlitImage(
 				cmd,

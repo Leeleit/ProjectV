@@ -144,7 +144,7 @@ bool PrepareFrameRenderData(
 		profiling::PlotValue("Chunk Stream Pending", static_cast<int64_t>(projectv::voxel::DrainChunkStreamQueueSize()));
 
 		if (projectv::voxel::IsChunkStreamerPrebakeReady()) {
-			const uint32_t kPreloadRadiusChunks = 8u;
+			static constexpr uint32_t kPreloadRadiusChunks = 8u;
 			const uint32_t enqueued = projectv::voxel::PreloadChunksAroundCamera(
 				*world->voxelWorld,
 				camera->position.x,

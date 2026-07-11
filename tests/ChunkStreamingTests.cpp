@@ -177,7 +177,7 @@ void TestBakeAllChunksDisabledWhenStreamingOff(StreamTestContext &test)
 		test.Fail(__LINE__, "setenv failed");
 		return;
 	}
-	VoxelWorld world{};
+	const VoxelWorld world{};
 	projectv::voxel::ChunkPrebakeStats stats{};
 	const bool result = projectv::voxel::BakeAllChunksToDisk(world, stats);
 	if (result) {
@@ -194,7 +194,7 @@ void TestPreloadAroundCameraDisabledWhenStreamingOff(StreamTestContext &test)
 		test.Fail(__LINE__, "setenv failed");
 		return;
 	}
-	VoxelWorld world{};
+	const VoxelWorld world{};
 	const uint32_t enqueued = projectv::voxel::PreloadChunksAroundCamera(world, 0.0f, 0.0f, 0.0f, 4u);
 	if (enqueued != 0u) {
 		test.Fail(__LINE__, "PreloadChunksAroundCamera must return 0 when streaming disabled");

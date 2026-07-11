@@ -45,7 +45,7 @@ void TestCloudscapeEnvZeroIsOff(TestContext &context)
 
 void TestCloudscapePushConstantsSize(TestContext &context)
 {
-	if (sizeof(projectv::render::CloudscapePushConstants) != 64u) {
+	if constexpr (sizeof(projectv::render::CloudscapePushConstants) != 64u) {
 		std::fprintf(stderr, "sizeof(CloudscapePushConstants)=%zu expected=64\n", sizeof(projectv::render::CloudscapePushConstants));
 		context.Fail(__LINE__, "CloudscapePushConstants must remain 64 bytes");
 	}
@@ -53,10 +53,10 @@ void TestCloudscapePushConstantsSize(TestContext &context)
 
 void TestCloudscapeConstants(TestContext &context)
 {
-	if (projectv::render::kCloudscapeNoiseTextureSize != 128u) {
+	if constexpr (projectv::render::kCloudscapeNoiseTextureSize != 128u) {
 		context.Fail(__LINE__, "kCloudscapeNoiseTextureSize must be 128 (Schneider Nubis 2017 reference)");
 	}
-	if (projectv::render::kCloudscapeRaymarchStepCount != 24u) {
+	if constexpr (projectv::render::kCloudscapeRaymarchStepCount != 24u) {
 		context.Fail(__LINE__, "kCloudscapeRaymarchStepCount must be 24 (Schneider Nubis 2017 reference)");
 	}
 }
@@ -77,7 +77,7 @@ void TestDestroyCloudscapeResourcesRejectsNull(TestContext &context)
 void TestRecordCloudscapeRaymarchPassRejectsNullCommandBuffer(TestContext &context)
 {
 	RenderState render{};
-	projectv::render::CloudscapePushConstants push{};
+	constexpr projectv::render::CloudscapePushConstants push{};
 	if (projectv::render::RecordCloudscapeRaymarchPass(VK_NULL_HANDLE, render, push, VK_NULL_HANDLE, VK_NULL_HANDLE, {1280u, 720u}, 0u)) {
 		context.Fail(__LINE__, "RecordCloudscapeRaymarchPass(null CB) must return false");
 	}
@@ -86,7 +86,7 @@ void TestRecordCloudscapeRaymarchPassRejectsNullCommandBuffer(TestContext &conte
 void TestRecordCloudscapeRaymarchPassRejectsBadFrameIndex(TestContext &context)
 {
 	RenderState render{};
-	projectv::render::CloudscapePushConstants push{};
+	constexpr projectv::render::CloudscapePushConstants push{};
 	if (projectv::render::RecordCloudscapeRaymarchPass(VK_NULL_HANDLE, render, push, VK_NULL_HANDLE, VK_NULL_HANDLE, {1280u, 720u}, MAX_FRAMES_IN_FLIGHT)) {
 	}
 }
@@ -94,7 +94,7 @@ void TestRecordCloudscapeRaymarchPassRejectsBadFrameIndex(TestContext &context)
 void TestRecordCloudscapeRaymarchPassRejectsZeroExtent(TestContext &context)
 {
 	RenderState render{};
-	projectv::render::CloudscapePushConstants push{};
+	constexpr projectv::render::CloudscapePushConstants push{};
 	if (projectv::render::RecordCloudscapeRaymarchPass(VK_NULL_HANDLE, render, push, VK_NULL_HANDLE, VK_NULL_HANDLE, {0u, 0u}, 0u)) {
 	}
 }

@@ -156,7 +156,7 @@ inline void RecordAllocation(
 		return;
 	}
 
-	if (name) {
+	if (name) { // NOLINT(bugprone-branch-clone): named vs default Tracy macros are different
 		TracyAllocN(pointer, size, name);
 	} else {
 		TracyAlloc(pointer, size);
@@ -177,7 +177,7 @@ inline void RecordFree(
 		return;
 	}
 
-	if (name) {
+	if (name) { // NOLINT(bugprone-branch-clone): named vs default Tracy macros are different
 		TracyFreeN(pointer, name);
 	} else {
 		TracyFree(pointer);

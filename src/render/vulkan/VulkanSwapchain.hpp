@@ -63,7 +63,7 @@ inline VkPresentModeKHR GetActivePresentMode()
 }
 
 namespace projectv::present_mode {
-inline std::vector<VkPresentModeKHR> &MutableCycle() noexcept
+inline std::vector<VkPresentModeKHR> &MutableCycle() noexcept // NOLINT(bugprone-exception-escape): static cycle is small and fixed
 {
 	static std::vector g_cycle = {VK_PRESENT_MODE_FIFO_KHR};
 	return g_cycle;

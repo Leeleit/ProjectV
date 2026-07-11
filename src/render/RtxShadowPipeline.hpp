@@ -18,7 +18,7 @@ struct RtxShadowPipelineConfig {
 class RtxShadowPipeline {
 public:
 	RtxShadowPipeline() = default;
-	~RtxShadowPipeline();
+	~RtxShadowPipeline() = default;
 
 	RtxShadowPipeline(const RtxShadowPipeline &) = delete;
 	RtxShadowPipeline &operator=(const RtxShadowPipeline &) = delete;
@@ -34,9 +34,9 @@ public:
 	[[nodiscard]] VkPipeline GetPipeline() const noexcept { return m_pipeline; }
 	[[nodiscard]] VkPipelineLayout GetPipelineLayout() const noexcept { return m_pipelineLayout; }
 	[[nodiscard]] const VkDescriptorSetLayout &GetDescriptorSetLayout() const noexcept { return m_descriptorSetLayout; }
-	[[nodiscard]] uint32_t GetRayGenGroupIndex() const noexcept { return 0u; }
-	[[nodiscard]] uint32_t GetMissGroupIndex() const noexcept { return 1u; }
-	[[nodiscard]] uint32_t GetHitGroupIndex() const noexcept { return 2u; }
+	[[nodiscard]] static uint32_t GetRayGenGroupIndex() noexcept { return 0u; }
+	[[nodiscard]] static uint32_t GetMissGroupIndex() noexcept { return 1u; }
+	[[nodiscard]] static uint32_t GetHitGroupIndex() noexcept { return 2u; }
 
 private:
 	VkShaderModule m_rayGenModule = VK_NULL_HANDLE;

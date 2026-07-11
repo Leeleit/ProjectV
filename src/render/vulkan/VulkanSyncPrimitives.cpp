@@ -93,7 +93,7 @@ bool SignalTimelineSemaphoreOnQueue(
 	return true;
 }
 
-bool DestroyTimelineSemaphore(const VkDevice device, VkSemaphore semaphore)
+bool DestroyTimelineSemaphore(const VkDevice device, const VkSemaphore semaphore)
 {
 	if (device == VK_NULL_HANDLE || semaphore == VK_NULL_HANDLE) {
 		return false;
@@ -102,4 +102,4 @@ bool DestroyTimelineSemaphore(const VkDevice device, VkSemaphore semaphore)
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

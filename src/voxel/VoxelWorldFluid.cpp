@@ -5,9 +5,7 @@ import projectv.string_id;
 #include "debug/Profiling.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 
-#include <cstdlib>
 #include <vector>
-#include <algorithm>
 
 namespace {
 bool gFluidCaGpuEnabledForTesting = false;
@@ -81,12 +79,18 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 	int readMaxX = world.fluidCAAabbMaxExclusive.x + 1;
 	int readMaxY = world.fluidCAAabbMaxExclusive.y + 1;
 	int readMaxZ = world.fluidCAAabbMaxExclusive.z + 1;
-	if (readMinX < world.min.x) readMinX = world.min.x;
-	if (readMinY < world.min.y) readMinY = world.min.y;
-	if (readMinZ < world.min.z) readMinZ = world.min.z;
-	if (readMaxX > world.maxExclusive.x) readMaxX = world.maxExclusive.x;
-	if (readMaxY > world.maxExclusive.y) readMaxY = world.maxExclusive.y;
-	if (readMaxZ > world.maxExclusive.z) readMaxZ = world.maxExclusive.z;
+	if (readMinX < world.min.x)
+		readMinX = world.min.x;
+	if (readMinY < world.min.y)
+		readMinY = world.min.y;
+	if (readMinZ < world.min.z)
+		readMinZ = world.min.z;
+	if (readMaxX > world.maxExclusive.x)
+		readMaxX = world.maxExclusive.x;
+	if (readMaxY > world.maxExclusive.y)
+		readMaxY = world.maxExclusive.y;
+	if (readMaxZ > world.maxExclusive.z)
+		readMaxZ = world.maxExclusive.z;
 
 	const int simMinX = (readMinX < world.min.x) ? world.min.x : readMinX;
 	const int simMinY = (readMinY < world.min.y) ? world.min.y : readMinY;
@@ -95,7 +99,7 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 	const int simMaxY = (readMaxY > world.maxExclusive.y) ? world.maxExclusive.y : readMaxY;
 	const int simMaxZ = (readMaxZ > world.maxExclusive.z) ? world.maxExclusive.z : readMaxZ;
 
-	profiling::PlotValue("Fluid CA Cells Read", static_cast<int64_t>((readMaxX - readMinX) * (readMaxY - readMinY) * (readMaxZ - readMinZ)));
+	profiling::PlotValue("Fluid CA Cells Read", static_cast<int64_t>(readMaxX - readMinX) * (readMaxY - readMinY) * (readMaxZ - readMinZ));
 
 	{
 		PV_PROFILE_ZONE_N("UpdateFluidCA.ReadPass");

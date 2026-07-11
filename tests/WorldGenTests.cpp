@@ -55,15 +55,15 @@ void TestEnvGateOn(WorldGenTestContext &test)
 
 void TestWorldGenPushConstantContract(WorldGenTestContext &test)
 {
-	if (sizeof(projectv::render::WorldGenPushConstants) != 64u) {
+	if constexpr (sizeof(projectv::render::WorldGenPushConstants) != 64u) {
 		test.Fail(__LINE__, "WorldGenPushConstants must remain 64 bytes (4 vec4 + 1 uint + 3 reserved)");
 	}
-	projectv::render::WorldGenPushConstants defaults{};
-	if (defaults.chunkOriginAndChunkSize[0] != 0 || defaults.chunkOriginAndChunkSize[1] != 0 ||
+	constexpr projectv::render::WorldGenPushConstants defaults{};
+	if constexpr (defaults.chunkOriginAndChunkSize[0] != 0 || defaults.chunkOriginAndChunkSize[1] != 0 ||
 		defaults.chunkOriginAndChunkSize[2] != 0 || defaults.chunkOriginAndChunkSize[3] != 0) {
 		test.Fail(__LINE__, "default chunkOriginAndChunkSize must be zero-initialized");
 	}
-	if (defaults.seed != 0u) {
+	if constexpr (defaults.seed != 0u) {
 		test.Fail(__LINE__, "default seed must be zero");
 	}
 }
@@ -71,7 +71,7 @@ void TestWorldGenPushConstantContract(WorldGenTestContext &test)
 void TestWorldGenVoxelBufferBytesPerChunkContract(WorldGenTestContext &test)
 {
 	constexpr VkDeviceSize expected = sizeof(uint32_t) * 8u * 8u * 8u;
-	if (projectv::render::kWorldGenVoxelBufferBytesPerChunk != expected) {
+	if constexpr (projectv::render::kWorldGenVoxelBufferBytesPerChunk != expected) {
 		test.Fail(__LINE__, "kWorldGenVoxelBufferBytesPerChunk must equal 8*8*8 uint32 = 2048 bytes per chunk");
 	}
 }
@@ -95,11 +95,11 @@ void TestWorldGenSeedTickVariability(WorldGenTestContext &test)
 	if (pushA.seed == pushB.seed) {
 		test.Fail(__LINE__, "Different simulation ticks must produce different world gen seeds");
 	}
-	const uint64_t tickA = 1000u;
-	const uint64_t tickB = 1001u;
-	const uint32_t seedA = static_cast<uint32_t>(tickA);
-	const uint32_t seedB = static_cast<uint32_t>(tickB);
-	if (seedA == seedB) {
+	constexpr uint64_t tickA = 1000u;
+	constexpr uint64_t tickB = 1001u;
+	constexpr uint32_t seedA = static_cast<uint32_t>(tickA);
+	constexpr uint32_t seedB = static_cast<uint32_t>(tickB);
+	if constexpr (seedA == seedB) {
 		test.Fail(__LINE__, "Cast to uint32 must preserve tick difference for typical tick range");
 	}
 }

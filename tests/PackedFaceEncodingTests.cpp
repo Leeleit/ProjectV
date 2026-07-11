@@ -8,7 +8,7 @@ namespace {
 
 struct TestContext {
 	int failures = 0;
-	void Fail(int line, std::string_view msg)
+	void Fail(const int line, const std::string_view msg)
 	{
 		std::fprintf(stderr, "FAIL line %d: %.*s\n", line, static_cast<int>(msg.size()), msg.data());
 		++failures;
@@ -105,13 +105,13 @@ void TestUnpackQuadExtentsRoundTrip(TestContext &ctx)
 
 void TestUnpackChunkIndexMaterialRoundTrip(TestContext &ctx)
 {
-	const uint32_t chunks[] = {0u, 1u, 255u, 65535u, 0x00FFFFFFu};
-	const uint32_t mats[] = {0u, 1u, 2u, 3u, 4u, 255u};
-	for (uint32_t ci : chunks) {
-		for (uint32_t mi : mats) {
+	constexpr uint32_t chunks[] = {0u, 1u, 255u, 65535u, 0x00FFFFFFu};
+	constexpr uint32_t mats[] = {0u, 1u, 2u, 3u, 4u, 255u};
+	for (const uint32_t ci : chunks) {
+		for (const uint32_t mi : mats) {
 			const uint32_t packed = PackChunkIndexMaterialCPU(ci, mi);
-			const auto u = UnpackChunkIndexMaterialCPU(packed);
-			if (u.chunkIndex != ci || u.materialIndex != mi) {
+			const auto [chunkIndex, materialIndex] = UnpackChunkIndexMaterialCPU(packed);
+			if (chunkIndex != ci || materialIndex != mi) {
 				ctx.Fail(__LINE__, "UnpackChunkIndexMaterial round-trip failed");
 			}
 		}

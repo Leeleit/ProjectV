@@ -377,7 +377,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	} else {
 
 		const size_t trackCount = state->audio()->loadMusicFolder(
-												  projectv::audio::GetMusicDirectoryPath())
+													projectv::audio::GetMusicDirectoryPath())
 									  .value_or(0);
 		SDL_Log("[ProjectV][Audio] miniaudio initialized; %zu mp3 track(s) in %s",
 				trackCount,
@@ -555,7 +555,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		TickBenchmarkAutomationSystem(state->ecs().get());
 	}
 	if (world->snapshotSaveRequested &&
-			   !SaveActiveVoxelWorldSnapshot(state)) {
+		!SaveActiveVoxelWorldSnapshot(state)) {
 		runtime::LogRuntimeFailure(
 			"App",
 			"SDL_AppIterate.SaveActiveVoxelWorldSnapshot",

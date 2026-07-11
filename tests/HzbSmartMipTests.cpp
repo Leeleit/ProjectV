@@ -186,7 +186,7 @@ void TestComputePerChunkMipLevelsFromAabbs(SmartMipTestContext &test)
 	halfExtents.push_back({0.1f, 0.1f, 0.1f, 0.1f});
 	centers.push_back({0.5f, 0.5f, -1.0f, 0.0f});
 	halfExtents.push_back({0.01f, 0.01f, 0.01f, 0.01f});
-	std::array<float, 16> viewProjection = {
+	constexpr std::array viewProjection = {
 		1.0f, 0.0f, 0.0f, 0.0f,
 		0.0f, 1.0f, 0.0f, 0.0f,
 		0.0f, 0.0f, 1.0f, 0.0f,

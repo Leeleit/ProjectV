@@ -1,20 +1,16 @@
 #include "render/vulkan/VulkanAsyncCompute.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "core/RuntimeDiagnostics.hpp"
-#include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
 #include "render/HizCulling.hpp"
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
-#include "render/vulkan/VulkanSyncPrimitives.hpp"
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
 
 #include <array>
-#include <cstring>
 #include <vector>
 
-#include "SDL3/SDL_log.h"
 
 namespace projectv::render {
 
@@ -325,6 +321,7 @@ bool RecordHzbAsyncCullPass(
 	if (render.hizCullingPipeline == VK_NULL_HANDLE) {
 		return false;
 	}
+	// noinspection CppDFAUnreachableCode
 	if (render.sceneFrameResources.empty()) {
 		return false;
 	}
@@ -358,7 +355,7 @@ bool RecordHzbAsyncCullPass(
 		return false;
 	}
 
-	const uint32_t currentFrame = 0u;
+	static constexpr uint32_t currentFrame = 0u;
 	SceneFrameResources &frameResources = render.sceneFrameResources[currentFrame];
 
 	VkImageMemoryBarrier2 hizBarrier{};

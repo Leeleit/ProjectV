@@ -4,7 +4,6 @@
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
 #include "render/RayTracedShadows.hpp"
-#include "render/RtxGiProbes.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include <array>
@@ -292,7 +291,7 @@ bool CreateGraphicsPipeline(
 	shadowRasterizer.depthBiasEnable = VK_TRUE;
 	shadowRasterizer.depthBiasConstantFactor = 1.25f;
 	shadowRasterizer.depthBiasSlopeFactor = 1.75f;
-	VkPipelineMultisampleStateCreateInfo multisampling{};
+	VkPipelineMultisampleStateCreateInfo multisampling{.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.pNext = nullptr;
 	multisampling.flags = 0;
@@ -422,16 +421,6 @@ bool CreateGraphicsPipeline(
 		.depthAttachmentFormat = ChooseDepthFormat(context->physicalDevice),
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
 	};
-	const VkPipelineRenderingCreateInfo shadowRenderingInfo{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.pNext = nullptr,
-		.viewMask = 0,
-		.colorAttachmentCount = 0,
-		.pColorAttachmentFormats = nullptr,
-		.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT,
-		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
-	};
-
 	VkGraphicsPipelineCreateInfo pipelineBase{};
 	pipelineBase.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineBase.pNext = &renderingInfo;

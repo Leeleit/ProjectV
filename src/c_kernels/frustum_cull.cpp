@@ -18,19 +18,19 @@ struct ProjectvCPlane3 {
 	float offset;
 };
 
-[[nodiscard]] inline float projectv_absf(const float value) noexcept
+[[nodiscard]] float projectv_absf(const float value) noexcept
 {
 	return value < 0.0f ? -value : value;
 }
 
-[[nodiscard]] inline float projectv_dot3(
+[[nodiscard]] float projectv_dot3(
 	const float ax, const float ay, const float az,
 	const float bx, const float by, const float bz) noexcept
 {
 	return ax * bx + ay * by + az * bz;
 }
 
-inline void projectv_build_planes(
+void projectv_build_planes(
 	const ProjectvCFrustumCullParameters &parameters,
 	ProjectvCPlane3 (&planes)[5]) noexcept
 {

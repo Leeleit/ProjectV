@@ -41,7 +41,7 @@ void TestProcessChunkRebuildQueueRejectsNullInputs(TestContext &context)
 		context.Fail(__LINE__, "ProcessChunkRebuildQueue(null, null) must return 0");
 	}
 	PhysicsState *physics = CreatePhysicsState();
-	VoxelWorld world{};
+	const VoxelWorld world{};
 	if (ProcessChunkRebuildQueue(physics, nullptr) != 0u) {
 		context.Fail(__LINE__, "ProcessChunkRebuildQueue(physics, null world) must return 0");
 	}

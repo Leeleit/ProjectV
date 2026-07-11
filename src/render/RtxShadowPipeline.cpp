@@ -21,7 +21,7 @@ VkShaderModule CreateShaderModule(VkDevice device, const std::vector<char> &code
 {
 	VkShaderModuleCreateInfo moduleInfo{};
 	moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	moduleInfo.codeSize = static_cast<size_t>(code.size());
+	moduleInfo.codeSize = code.size();
 	moduleInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
 	VkShaderModule module = VK_NULL_HANDLE;
 	if (vkCreateShaderModule(device, &moduleInfo, nullptr, &module) != VK_SUCCESS) {
@@ -62,9 +62,7 @@ void DestroyShaderModule(VkDevice device, VkShaderModule &module) noexcept
 
 }  // namespace
 
-RtxShadowPipeline::~RtxShadowPipeline()
-{
-}
+
 
 bool RtxShadowPipeline::Initialize(
 	const VulkanContextState &context,
@@ -145,23 +143,12 @@ bool RtxShadowPipeline::Initialize(
 		return false;
 	}
 
-	std::array<VkPipelineShaderStageCreateInfo, 4> stages{};
-	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stages[0].stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-	stages[0].module = m_rayGenModule;
-	stages[0].pName = "main";
-	stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stages[1].stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
-	stages[1].module = m_intersectionModule;
-	stages[1].pName = "main";
-	stages[2].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stages[2].stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-	stages[2].module = m_closestHitModule;
-	stages[2].pName = "main";
-	stages[3].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stages[3].stage = VK_SHADER_STAGE_MISS_BIT_KHR;
-	stages[3].module = m_missModule;
-	stages[3].pName = "main";
+	const std::array<VkPipelineShaderStageCreateInfo, 4> stages{{
+		{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
+		{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
+		{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, .module = m_closestHitModule, .pName = "main"},
+		{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_MISS_BIT_KHR, .module = m_missModule, .pName = "main"},
+	}};
 
 	std::array<VkRayTracingShaderGroupCreateInfoKHR, 3> groups{};
 	groups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;

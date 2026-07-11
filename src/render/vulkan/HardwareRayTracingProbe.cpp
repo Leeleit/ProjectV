@@ -1,6 +1,5 @@
 #include "render/vulkan/HardwareRayTracingProbe.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
-#include <cstring>
 #include <vector>
 
 #include "SDL3/SDL_log.h"
@@ -27,15 +26,16 @@ bool HasDeviceExtension(
 	if (vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, extensions.data()) != VK_SUCCESS) {
 		return false;
 	}
-	for (const VkExtensionProperties &ext : extensions) {
-		if (std::strcmp(ext.extensionName, extensionName) == 0) {
+	for (const auto &[extName, specVersion] : extensions) {
+		(void)specVersion;
+		if (std::strcmp(extName, extensionName) == 0) {
 			return true;
 		}
 	}
 	return false;
 }
 
-}  // namespace
+} // namespace
 
 bool ProbeHardwareRayTracingSupport(
 	const VkPhysicalDevice physicalDevice,
@@ -66,11 +66,9 @@ bool ProbeHardwareRayTracingSupport(
 	VkPhysicalDeviceAccelerationStructurePropertiesKHR asProperties{};
 	asProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
 	VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtpProperties{};
-	VkBaseOutStructure *propertiesChainTail = reinterpret_cast<VkBaseOutStructure *>(&asProperties);
 	if (outSupport->rayTracingPipeline) {
 		rtpProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
-		propertiesChainTail->pNext = reinterpret_cast<VkBaseOutStructure *>(&rtpProperties);
-		propertiesChainTail = reinterpret_cast<VkBaseOutStructure *>(&rtpProperties);
+		asProperties.pNext = reinterpret_cast<VkBaseOutStructure *>(&rtpProperties);
 	}
 	VkPhysicalDeviceProperties2 deviceProperties2{};
 	deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
@@ -114,8 +112,8 @@ bool ProbeHardwareRayTracingSupport(
 	VkPhysicalDeviceFeatures2 features2{};
 	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 	features2.pNext = outSupport->rayTracingPipeline
-		? reinterpret_cast<void *>(&rtpFeaturesStruct)
-		: reinterpret_cast<void *>(&bdaFeatures);
+						  ? reinterpret_cast<void *>(&rtpFeaturesStruct)
+						  : reinterpret_cast<void *>(&bdaFeatures);
 	vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
 	outSupport->accelerationStructureHostCommands = asFeatures.accelerationStructureHostCommands == VK_TRUE;
 	outSupport->bufferDeviceAddress =
@@ -125,8 +123,8 @@ bool ProbeHardwareRayTracingSupport(
 		"Render: ProbeHardwareRayTracingSupport: RTX path available (accelerationStructure=%d rayQuery=%d "
 		"rayTracingPipeline=%d deferredHostOps=%d hostCommands=%d bufferDeviceAddress=%d "
 		"maxPrimitives=%llu minScratchAlign=%u sbtHandle=%u sbtBaseAlign=%u sbtHandleAlign=%u)",
-		outSupport->accelerationStructure ? 1 : 0,
-		outSupport->rayQuery ? 1 : 0,
+		1,
+		1,
 		outSupport->rayTracingPipeline ? 1 : 0,
 		outSupport->deferredHostOperations ? 1 : 0,
 		outSupport->accelerationStructureHostCommands ? 1 : 0,
@@ -139,4 +137,4 @@ bool ProbeHardwareRayTracingSupport(
 	return true;
 }
 
-}  // namespace projectv::render
+} // namespace projectv::render

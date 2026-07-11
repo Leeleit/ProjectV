@@ -4,8 +4,8 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <deque>
 #include <filesystem>
@@ -53,7 +53,7 @@ std::jthread &GetWorkerThread()
 
 std::atomic<bool> &GetWorkerActiveFlag()
 {
-	static std::atomic<bool> active{false};
+	static std::atomic active{false};
 	return active;
 }
 
@@ -118,12 +118,12 @@ std::expected<ChunkData, ChunkStreamError> ReadChunkBinaryFile(
 		(static_cast<uint64_t>(header[13]) << 40) |
 		(static_cast<uint64_t>(header[14]) << 48) |
 		(static_cast<uint64_t>(header[15]) << 56);
-	if (voxelByteCount > 16u * 1024u * 1024u) {
+	if (voxelByteCount > static_cast<uint64_t>(16u) * 1024u * 1024u) {
 		return std::unexpected(ChunkStreamError::FileReadFailed);
 	}
 
 	ChunkData data{};
-	data.voxelBytes.resize(static_cast<size_t>(voxelByteCount));
+	data.voxelBytes.resize(voxelByteCount);
 	if (voxelByteCount > 0u) {
 		file.read(reinterpret_cast<char *>(data.voxelBytes.data()),
 			static_cast<std::streamsize>(data.voxelBytes.size()));
@@ -162,7 +162,7 @@ bool WriteChunkBinaryFile(
 	header[5] = static_cast<uint8_t>((kChunkFileFormatVersion >> 8) & 0xFFu);
 	header[6] = 0u;
 	header[7] = 0u;
-	const uint64_t voxelByteCount = static_cast<uint64_t>(voxelBytes.size());
+	const uint64_t voxelByteCount = voxelBytes.size();
 	header[8] = static_cast<uint8_t>(voxelByteCount & 0xFFu);
 	header[9] = static_cast<uint8_t>((voxelByteCount >> 8) & 0xFFu);
 	header[10] = static_cast<uint8_t>((voxelByteCount >> 16) & 0xFFu);
@@ -172,7 +172,7 @@ bool WriteChunkBinaryFile(
 	header[14] = static_cast<uint8_t>((voxelByteCount >> 48) & 0xFFu);
 	header[15] = static_cast<uint8_t>((voxelByteCount >> 56) & 0xFFu);
 
-	file.write(reinterpret_cast<const char *>(header.data()), static_cast<std::streamsize>(header.size()));
+	file.write(reinterpret_cast<const char *>(header.data()), header.size());
 	if (!voxelBytes.empty()) {
 		file.write(reinterpret_cast<const char *>(voxelBytes.data()),
 			static_cast<std::streamsize>(voxelBytes.size()));
@@ -198,14 +198,14 @@ bool EnqueueChunkStreamRequest(const ChunkStreamRequest &request)
 		return false;
 	}
 	StartChunkStreamerWorker();
-	const std::lock_guard<std::mutex> lock(GetQueueMutex());
+	const std::lock_guard lock(GetQueueMutex());
 	GetPendingQueue().push_back(request);
 	return true;
 }
 
 uint32_t DrainChunkStreamQueueSize()
 {
-	const std::lock_guard<std::mutex> lock(GetQueueMutex());
+	const std::lock_guard lock(GetQueueMutex());
 	return static_cast<uint32_t>(GetPendingQueue().size());
 }
 
@@ -214,7 +214,7 @@ std::expected<ChunkData, ChunkStreamError> TryDequeueChunkData()
 	if (!IsChunkStreamingEnabled()) {
 		return std::unexpected(ChunkStreamError::NotInitialized);
 	}
-	const std::lock_guard<std::mutex> lock(GetQueueMutex());
+	const std::lock_guard lock(GetQueueMutex());
 	if (GetReadyQueue().empty()) {
 		return std::unexpected(ChunkStreamError::QueueFull);
 	}
@@ -223,16 +223,16 @@ std::expected<ChunkData, ChunkStreamError> TryDequeueChunkData()
 	return data;
 }
 
-void ProcessPendingRequests(std::stop_token stopToken)
+void ProcessPendingRequests(const std::stop_token& stopToken)
 {
 	const std::string cachePath = GetChunkStreamerCachePathFromEnvironment();
 	while (!stopToken.stop_requested()) {
 		std::deque<ChunkStreamRequest> localPending;
 		{
-			const std::lock_guard<std::mutex> lock(GetQueueMutex());
+			const std::lock_guard lock(GetQueueMutex());
 			if (!GetPendingQueue().empty()) {
 				for (auto it = GetPendingQueue().begin(); it != GetPendingQueue().end(); ) {
-					localPending.push_back(std::move(*it));
+					localPending.push_back(*it);
 					it = GetPendingQueue().erase(it);
 				}
 			}
@@ -241,14 +241,15 @@ void ProcessPendingRequests(std::stop_token stopToken)
 			std::this_thread::sleep_for(kWorkerIdleSleep);
 			continue;
 		}
-		for (const ChunkStreamRequest &request : localPending) {
+		for (const auto &[chunkIndex, priority] : localPending) {
+			(void)priority;
 			if (stopToken.stop_requested()) {
 				return;
 			}
 			std::expected<ChunkData, ChunkStreamError> result =
-				ReadChunkBinaryFile(cachePath, request.chunkIndex);
+				ReadChunkBinaryFile(cachePath, chunkIndex);
 			if (result.has_value()) {
-				const std::lock_guard<std::mutex> lock(GetQueueMutex());
+				const std::lock_guard lock(GetQueueMutex());
 				GetReadyQueue().push_back(std::move(result.value()));
 			}
 		}
@@ -304,10 +305,7 @@ bool BakeAllChunksToDisk(
 					const int wx = chunk.min.x + static_cast<int>(x) - world.min.x;
 					const int wy = chunk.min.y + static_cast<int>(y) - world.min.y;
 					const int wz = chunk.min.z + static_cast<int>(z) - world.min.z;
-					const uint8_t material = world.sparseStorage.GetCell(
-						static_cast<uint32_t>(wx),
-						static_cast<uint32_t>(wy),
-						static_cast<uint32_t>(wz));
+					const uint8_t material = world.sparseStorage.GetCell(wx, wy, wz);
 					voxelBytes[(static_cast<size_t>(z) * chunkSize + y) * chunkSize + x] = material;
 				}
 			}
@@ -348,18 +346,18 @@ uint32_t PreloadChunksAroundCamera(
 		return 0u;
 	}
 	const float invChunkSize = 1.0f / static_cast<float>(chunkSize);
-	const int cameraChunkX = static_cast<int>(std::floor(static_cast<float>(cameraX - world.min.x) * invChunkSize));
-	const int cameraChunkY = static_cast<int>(std::floor(static_cast<float>(cameraY - world.min.y) * invChunkSize));
-	const int cameraChunkZ = static_cast<int>(std::floor(static_cast<float>(cameraZ - world.min.z) * invChunkSize));
+	const int cameraChunkX = static_cast<int>(std::floor(cameraX - static_cast<float>(world.min.x) * invChunkSize)); // NOLINT(bugprone-narrowing-conversions): small coordinate values
+	const int cameraChunkY = static_cast<int>(std::floor(cameraY - static_cast<float>(world.min.y) * invChunkSize)); // NOLINT(bugprone-narrowing-conversions): small coordinate values
+	const int cameraChunkZ = static_cast<int>(std::floor(cameraZ - static_cast<float>(world.min.z) * invChunkSize)); // NOLINT(bugprone-narrowing-conversions): small coordinate values
 	const int minX = cameraChunkX - static_cast<int>(radiusChunks);
 	const int maxX = cameraChunkX + static_cast<int>(radiusChunks);
 	const int minY = cameraChunkY - static_cast<int>(radiusChunks);
 	const int maxY = cameraChunkY + static_cast<int>(radiusChunks);
 	const int minZ = cameraChunkZ - static_cast<int>(radiusChunks);
 	const int maxZ = cameraChunkZ + static_cast<int>(radiusChunks);
-	const int gridWidth = (world.width > 0) ? ((world.width + chunkSize - 1) / chunkSize) : 0;
-	const int gridHeight = (world.height > 0) ? ((world.height + chunkSize - 1) / chunkSize) : 0;
-	const int gridDepth = (world.depth > 0) ? ((world.depth + chunkSize - 1) / chunkSize) : 0;
+	const int gridWidth = (world.width > 0) ? static_cast<int>((world.width + chunkSize - 1u) / chunkSize) : 0;
+	const int gridHeight = (world.height > 0) ? static_cast<int>((world.height + chunkSize - 1u) / chunkSize) : 0;
+	const int gridDepth = (world.depth > 0) ? static_cast<int>((world.depth + chunkSize - 1u) / chunkSize) : 0;
 	uint32_t enqueued = 0u;
 	for (int gz = minZ; gz <= maxZ; ++gz) {
 		if (gridDepth > 0 && (gz < 0 || gz >= gridDepth)) {

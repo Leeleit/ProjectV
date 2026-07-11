@@ -1,6 +1,5 @@
 #include "voxel/CpuMeshGenerator.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
-#include <algorithm>
 
 namespace projectv::voxel {
 
@@ -8,6 +7,7 @@ namespace {
 
 bool ShouldEmitFaceAtXPlus(const uint8_t *const voxels, const int x, const int y, const int z, const int widthX, const int heightY, const int depthZ)
 {
+	(void)depthZ;
 	const int flatIndex = x + widthX * (y + heightY * z);
 	const uint8_t current = voxels[flatIndex];
 	if (current == 0) {
@@ -29,7 +29,7 @@ std::vector<PackedSceneVoxelFace> GenerateCpuChunkMeshXPositive(const CpuMeshInp
 		return out;
 	}
 
-	const int kMaxExtent = 64;
+	static constexpr int kMaxExtent = 64;
 	if (input.widthX > kMaxExtent || input.heightY > kMaxExtent || input.depthZ > kMaxExtent) {
 		return out;
 	}

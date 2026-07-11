@@ -7,16 +7,14 @@
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include <array>
-#include <cstring>
 #include <vector>
 
-#include "SDL3/SDL_log.h"
 
 namespace {
 constexpr uint32_t kVoxelizeDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kVoxelizeShaderFilename[] = "voxelize.comp.spv";
 
-constexpr std::array<VkDescriptorSetLayoutBinding, 3> kVoxelizeDescriptorBindings{
+constexpr std::array kVoxelizeDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -48,7 +46,7 @@ constexpr VkDescriptorSetLayoutCreateInfo kVoxelizeDescriptorSetLayoutInfo{
 	.pBindings = kVoxelizeDescriptorBindings.data(),
 };
 
-constexpr std::array<VkDescriptorPoolSize, 2> kVoxelizeDescriptorPoolSizes{
+constexpr std::array kVoxelizeDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = kVoxelizeDescriptorSetCount * 2u,
@@ -77,7 +75,7 @@ bool CreateVoxelizeClipmapImage(
 		return false;
 	}
 
-	VkImageCreateInfo imageInfo{};
+	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_3D;
 	imageInfo.format = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -369,9 +367,7 @@ bool CreateVoxelizePipelines(VulkanContextState *context, RenderState *render)
 		.pSpecializationInfo = nullptr,
 	};
 
-	VkComputePipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	pipelineInfo.stage = stage;
+	VkComputePipelineCreateInfo pipelineInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .stage = stage};
 	pipelineInfo.layout = render->vctVoxelizePipelineLayout;
 	if (vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->vctVoxelizePipeline) != VK_SUCCESS) {
 		DestroyVoxelizePipelines(context, render);
@@ -548,8 +544,8 @@ bool BuildVctClipmapMipChain(
 
 	profiling::PlotValue("VCT Mip Chain Mips", static_cast<int64_t>(mipLevels - 1u));
 
-	const VkImageLayout prevLayout = VK_IMAGE_LAYOUT_GENERAL;
-	const VkImageLayout newLayout = VK_IMAGE_LAYOUT_GENERAL;
+	static constexpr VkImageLayout prevLayout = VK_IMAGE_LAYOUT_GENERAL;
+	static constexpr VkImageLayout newLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 	VkImageMemoryBarrier preBarrier{};
 	preBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;

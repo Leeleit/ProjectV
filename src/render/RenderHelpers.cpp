@@ -5,41 +5,6 @@
 #include "debug/ProfilingGpu.hpp"
 #include "volk.h"
 
-namespace {
-
-void TransitionImage(
-	const VkCommandBuffer cmd,
-	const VkImage image,
-	const VkImageAspectFlags aspectMask,
-	const VkImageLayout oldLayout,
-	const VkImageLayout newLayout,
-	const VkPipelineStageFlags2 srcStageMask,
-	const VkAccessFlags2 srcAccessMask,
-	const VkPipelineStageFlags2 dstStageMask,
-	const VkAccessFlags2 dstAccessMask,
-	const uint32_t layerCount = 1u)
-{
-	VkImageMemoryBarrier2 imageBarrier{};
-	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	imageBarrier.srcStageMask = srcStageMask;
-	imageBarrier.srcAccessMask = srcAccessMask;
-	imageBarrier.dstStageMask = dstStageMask;
-	imageBarrier.dstAccessMask = dstAccessMask;
-	imageBarrier.oldLayout = oldLayout;
-	imageBarrier.newLayout = newLayout;
-	imageBarrier.image = image;
-	imageBarrier.subresourceRange = {aspectMask, 0, 1, 0, layerCount};
-
-	VkDependencyInfo depInfo{};
-	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	depInfo.imageMemoryBarrierCount = 1;
-	depInfo.pImageMemoryBarriers = &imageBarrier;
-
-	vkCmdPipelineBarrier2(cmd, &depInfo);
-}
-
-} // namespace
-
 void projectv::render::TransitionImage(
 	const VkCommandBuffer cmd,
 	const VkImage image,

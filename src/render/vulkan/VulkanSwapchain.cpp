@@ -106,7 +106,7 @@ VkPresentModeKHR PickBestAvailablePresentMode(
 		VK_PRESENT_MODE_FIFO_KHR,
 	};
 	for (const VkPresentModeKHR candidate : priority) {
-		if (std::ranges::find(presentModes, candidate) != presentModes.end()) {
+		if (std::find(presentModes.begin(), presentModes.end(), candidate) != presentModes.end()) {
 			return candidate;
 		}
 	}
@@ -439,7 +439,7 @@ bool RecreateSwapchain(
 		if (render->sceneColorImage != VK_NULL_HANDLE) {
 			vkDestroyImageView(context->device, render->sceneColorImageView, nullptr);
 			render->sceneColorImageView = VK_NULL_HANDLE;
-			vmaDestroyImage(context->allocator, render->sceneColorImage, static_cast<VmaAllocation>(render->sceneColorAllocation));
+			vmaDestroyImage(context->allocator, render->sceneColorImage, render->sceneColorAllocation);
 			render->sceneColorImage = VK_NULL_HANDLE;
 			render->sceneColorAllocation = nullptr;
 		}
@@ -486,7 +486,7 @@ bool RecreateSwapchain(
 	// Scene color target: offscreen color attachment for voxel/model/transparent passes.
 	constexpr VkFormat kSceneColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 	const VkExtent3D imageExtent{swapchain->extent.width, swapchain->extent.height, 1u};
-	VkImageCreateInfo sceneImageInfo{};
+	VkImageCreateInfo sceneImageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	sceneImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	sceneImageInfo.imageType = VK_IMAGE_TYPE_2D;
 	sceneImageInfo.format = kSceneColorFormat;
@@ -505,7 +505,7 @@ bool RecreateSwapchain(
 		render->sceneColorImageView = VK_NULL_HANDLE;
 	}
 	if (render->sceneColorImage != VK_NULL_HANDLE) {
-		vmaDestroyImage(context->allocator, render->sceneColorImage, static_cast<VmaAllocation>(render->sceneColorAllocation));
+		vmaDestroyImage(context->allocator, render->sceneColorImage, render->sceneColorAllocation);
 		render->sceneColorImage = VK_NULL_HANDLE;
 		render->sceneColorAllocation = nullptr;
 	}

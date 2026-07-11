@@ -56,26 +56,26 @@ void TestDepthComputation(TestContext &context)
 
 void TestSlotEncoding(TestContext &context)
 {
-	const uint32_t airLeaf = projectv::voxel::MakeSparse64Leaf(0);
+	constexpr uint32_t airLeaf = projectv::voxel::MakeSparse64Leaf(0);
 	ExpectTrue(context, projectv::voxel::IsSparse64Leaf(airLeaf), __LINE__, "MakeSparse64Leaf(0) is leaf");
 	ExpectEqualI(context, 0, projectv::voxel::Sparse64LeafMaterial(airLeaf), __LINE__, "air material = 0");
 
-	const uint32_t glassLeaf = projectv::voxel::MakeSparse64Leaf(1);
+	constexpr uint32_t glassLeaf = projectv::voxel::MakeSparse64Leaf(1);
 	ExpectTrue(context, projectv::voxel::IsSparse64Leaf(glassLeaf), __LINE__, "MakeSparse64Leaf(1) is leaf");
 	ExpectEqualI(context, 1, projectv::voxel::Sparse64LeafMaterial(glassLeaf), __LINE__, "glass material = 1");
 
-	const uint32_t maxLeaf = projectv::voxel::MakeSparse64Leaf(255);
+	constexpr uint32_t maxLeaf = projectv::voxel::MakeSparse64Leaf(255);
 	ExpectTrue(context, projectv::voxel::IsSparse64Leaf(maxLeaf), __LINE__, "MakeSparse64Leaf(255) is leaf");
 	ExpectEqualI(context, 255, projectv::voxel::Sparse64LeafMaterial(maxLeaf), __LINE__, "max material = 255");
 
-	const uint32_t nodeSlot = 42u;
+	constexpr uint32_t nodeSlot = 42u;
 	ExpectTrue(context, !projectv::voxel::IsSparse64Leaf(nodeSlot), __LINE__, "raw index is not leaf");
 	ExpectEqualI(context, 42, static_cast<int>(projectv::voxel::Sparse64NodeIndex(nodeSlot)), __LINE__, "node index preserved");
 }
 
 void TestEmptyTree(TestContext &context)
 {
-	projectv::voxel::Sparse64Tree tree(8, 8, 8);
+	const projectv::voxel::Sparse64Tree tree(8, 8, 8);
 	ExpectEqualI(context, 8, tree.SideX(), __LINE__, "sideX=8");
 	ExpectEqualI(context, 8, tree.SideY(), __LINE__, "sideY=8");
 	ExpectEqualI(context, 8, tree.SideZ(), __LINE__, "sideZ=8");

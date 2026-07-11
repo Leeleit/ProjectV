@@ -11,7 +11,7 @@ namespace projectv::render {
 class RtxShadowSBT {
 public:
 	RtxShadowSBT() = default;
-	~RtxShadowSBT();
+	~RtxShadowSBT() = default;
 
 	RtxShadowSBT(const RtxShadowSBT &) = delete;
 	RtxShadowSBT &operator=(const RtxShadowSBT &) = delete;

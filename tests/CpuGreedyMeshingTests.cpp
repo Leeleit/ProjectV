@@ -10,7 +10,7 @@ namespace {
 
 struct TestContext {
 	int failures = 0;
-	void Fail(int line, std::string_view msg)
+	void Fail(const int line, const std::string_view msg)
 	{
 		std::fprintf(stderr, "FAIL line %d: %.*s\n", line, static_cast<int>(msg.size()), msg.data());
 		++failures;
@@ -24,7 +24,7 @@ struct TestWorld {
 	int dim[3] = {};
 	int32_t origin[3] = {};
 
-	CpuGreedyInput MakeInput(uint32_t chunkIndex = 0u) const
+	[[nodiscard]] CpuGreedyInput MakeInput(const uint32_t chunkIndex = 0u) const
 	{
 		CpuGreedyInput input{};
 		input.worldVoxels = voxels.data();
@@ -42,7 +42,7 @@ struct TestWorld {
 		input.chunk.extent[2] = static_cast<uint32_t>(dim[2]);
 		input.chunk.chunkIndex = chunkIndex;
 		uint32_t nonAir = 0u;
-		for (uint8_t v : voxels) {
+		for (const uint8_t v : voxels) {
 			if (v != 0u) {
 				++nonAir;
 			}
@@ -52,7 +52,7 @@ struct TestWorld {
 	}
 };
 
-TestWorld MakeWorld(int sx, int sy, int sz, uint8_t fillValue = 0u)
+TestWorld MakeWorld(const int sx, const int sy, const int sz, const uint8_t fillValue = 0u)
 {
 	TestWorld w;
 	w.dim[0] = sx;
@@ -65,7 +65,7 @@ TestWorld MakeWorld(int sx, int sy, int sz, uint8_t fillValue = 0u)
 	return w;
 }
 
-void SetVoxel(TestWorld &w, int x, int y, int z, uint8_t mat)
+void SetVoxel(TestWorld &w, const int x, const int y, const int z, const uint8_t mat)
 {
 	const size_t idx = static_cast<size_t>(x) + static_cast<size_t>(w.dim[0]) * (static_cast<size_t>(y) + static_cast<size_t>(w.dim[1]) * static_cast<size_t>(z));
 	w.voxels[idx] = mat;
@@ -86,7 +86,7 @@ uint32_t SumQuadAreas(const std::vector<CpuGreedyFace> &faces)
 	return sum;
 }
 
-uint32_t SumQuadAreaForFace(const std::vector<CpuGreedyFace> &faces, uint32_t faceIndex)
+uint32_t SumQuadAreaForFace(const std::vector<CpuGreedyFace> &faces, const uint32_t faceIndex)
 {
 	uint32_t sum = 0u;
 	for (const auto &f : faces) {
@@ -164,7 +164,7 @@ void CheckVolumePreservation(TestContext &ctx, const CpuGreedyInput &input, cons
 
 void TestEmptyChunk(TestContext &ctx)
 {
-	TestWorld w = MakeWorld(4, 4, 4);
+	const TestWorld w = MakeWorld(4, 4, 4);
 	const auto input = w.MakeInput();
 	const auto mesh = GenerateCpuGreedyMesh(input);
 	if (TotalFaces(mesh) != 0u) {
@@ -208,7 +208,7 @@ void TestSingleVoxelCorner(TestContext &ctx)
 
 void TestFullyFilledChunk(TestContext &ctx)
 {
-	TestWorld w = MakeWorld(4, 4, 4, 3u);
+	const TestWorld w = MakeWorld(4, 4, 4, 3u);
 	const auto input = w.MakeInput();
 	const auto mesh = GenerateCpuGreedyMesh(input);
 	if (mesh.opaqueFaces.size() != 6u) {
@@ -283,12 +283,12 @@ void TestGlassGoesTransparent(TestContext &ctx)
 
 void TestFullyFilledFluidEmitsInteriorFaces(TestContext &ctx)
 {
-	TestWorld w = MakeWorld(4, 4, 4, 2u);
+	const TestWorld w = MakeWorld(4, 4, 4, 2u);
 	const auto input = w.MakeInput();
 	const auto mesh = GenerateCpuGreedyMesh(input);
 	CheckVolumePreservation(ctx, input, mesh);
 	const BruteForceCounts bf = CountFacesBruteForce(input);
-	const uint32_t expectedPerDir = 4u * 4u * 4u;
+	constexpr uint32_t expectedPerDir = 4u * 4u * 4u;
 	for (int d = 0; d < 6; ++d) {
 		if (bf.perDir[d] != expectedPerDir) {
 			ctx.Fail(__LINE__, "Fluid must emit faces for every voxel in every direction");
@@ -298,7 +298,7 @@ void TestFullyFilledFluidEmitsInteriorFaces(TestContext &ctx)
 
 void TestFullyFilledGlassOnlyShell(TestContext &ctx)
 {
-	TestWorld w = MakeWorld(4, 4, 4, 1u);
+	const TestWorld w = MakeWorld(4, 4, 4, 1u);
 	const auto input = w.MakeInput();
 	const auto mesh = GenerateCpuGreedyMesh(input);
 	if (!mesh.opaqueFaces.empty()) {
@@ -371,7 +371,7 @@ void TestNonOriginChunk(TestContext &ctx)
 
 void TestSlabGreedyMerge(TestContext &ctx)
 {
-	TestWorld w = MakeWorld(8, 8, 8, 3u);
+	const TestWorld w = MakeWorld(8, 8, 8, 3u);
 	const auto input = w.MakeInput();
 	const auto mesh = GenerateCpuGreedyMesh(input);
 	const uint32_t xPlusArea = SumQuadAreaForFace(mesh.opaqueFaces, 0u);
@@ -414,7 +414,7 @@ void TestChunkIndexEncoding(TestContext &ctx)
 
 void TestLargerChunk16(TestContext &ctx)
 {
-	TestWorld w = MakeWorld(16, 16, 16, 3u);
+	const TestWorld w = MakeWorld(16, 16, 16, 3u);
 	const auto input = w.MakeInput();
 	const auto mesh = GenerateCpuGreedyMesh(input);
 	if (mesh.opaqueFaces.size() != 6u) {
@@ -461,7 +461,7 @@ void TestNonUniformSlab(TestContext &ctx)
 
 void Test1x1x1Chunk(TestContext &ctx)
 {
-	TestWorld w = MakeWorld(1, 1, 1, 3u);
+	const TestWorld w = MakeWorld(1, 1, 1, 3u);
 	const auto input = w.MakeInput();
 	const auto mesh = GenerateCpuGreedyMesh(input);
 	if (mesh.opaqueFaces.size() != 6u) {

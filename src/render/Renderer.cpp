@@ -2,11 +2,6 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 
 #include "render/RendererInternal.hpp"
 
-#include "debug/ProfilingGpu.hpp"
-#include "render/ScreenshotCapture.hpp"
-#include "render/vulkan/VulkanInit.hpp"
-#include "render/vulkan/VulkanResult.hpp"
-#include "voxel/VoxelMaterials.hpp"
 
 void TransitionImage(
 	const VkCommandBuffer cmd,

@@ -19,7 +19,7 @@ struct TestContext {
 	}
 };
 
-void ExpectEqualUInt(TestContext &context, uint32_t expected, uint32_t actual, int line, std::string_view expr)
+void ExpectEqualUInt(TestContext &context, const uint32_t expected, const uint32_t actual, const int line, const std::string_view expr)
 {
 	if (expected != actual) {
 		std::fprintf(stderr, "Test failure at line %d: %.*s (expected %u, got %u)\n", line, static_cast<int>(expr.size()), expr.data(), expected, actual);
@@ -27,7 +27,7 @@ void ExpectEqualUInt(TestContext &context, uint32_t expected, uint32_t actual, i
 	}
 }
 
-void ExpectEqualU8(TestContext &context, uint8_t expected, uint8_t actual, int line, std::string_view expr)
+void ExpectEqualU8(TestContext &context, const uint8_t expected, const uint8_t actual, const int line, const std::string_view expr)
 {
 	if (expected != actual) {
 		std::fprintf(stderr, "Test failure at line %d: %.*s (expected %u, got %u)\n", line, static_cast<int>(expr.size()), expr.data(), expected, actual);
@@ -94,7 +94,7 @@ void TestLodDownsampledExtentForLod(TestContext &context)
 
 void TestSurfacePreserveUniformAir(TestContext &context)
 {
-	VoxelWorld world = BuildUniformWorld(0u);
+	const VoxelWorld world = BuildUniformWorld(0u);
 	std::vector<uint8_t> downsampled;
 	projectv::voxel::DownsampleChunkForLodSurfacePreserve(world, 0u, 1u, downsampled);
 	if (downsampled.size() != 64u) {
@@ -109,7 +109,7 @@ void TestSurfacePreserveUniformAir(TestContext &context)
 
 void TestSurfacePreserveUniformSolid(TestContext &context)
 {
-	VoxelWorld world = BuildUniformWorld(3u);
+	const VoxelWorld world = BuildUniformWorld(3u);
 	std::vector<uint8_t> downsampled;
 	projectv::voxel::DownsampleChunkForLodSurfacePreserve(world, 0u, 1u, downsampled);
 	if (downsampled.size() != 64u) {
@@ -139,7 +139,7 @@ void TestSurfacePreserveMixedHalf(TestContext &context)
 		++context.failures;
 		return;
 	}
-	const uint8_t expected[4] = {3u, 3u, 0u, 0u};
+	constexpr uint8_t expected[4] = {3u, 3u, 0u, 0u};
 	for (uint32_t ox = 0; ox < 4u; ++ox) {
 		const uint8_t material = downsampled[ox];
 		ExpectEqualU8(context, expected[ox], material, __LINE__, "mixed half: solid + Air per output");
@@ -148,7 +148,7 @@ void TestSurfacePreserveMixedHalf(TestContext &context)
 
 void TestSurfacePreserveLod0NoOp(TestContext &context)
 {
-	VoxelWorld world = BuildUniformWorld(0u);
+	const VoxelWorld world = BuildUniformWorld(0u);
 	std::vector<uint8_t> downsampled;
 	projectv::voxel::DownsampleChunkForLodSurfacePreserve(world, 0u, 0u, downsampled);
 	if (!downsampled.empty()) {

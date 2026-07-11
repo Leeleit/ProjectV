@@ -302,8 +302,8 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 
 	if (!projectv::render::CreateRtxShadowMaskFallbackOnly(&state->context(), &state->render())) {
 		return fail(projectv::vulkan_init::VulkanInitError::ShadowResourcesFailed,
-			"InitVulkan.CreateRtxShadowMaskFallbackOnly",
-			"failed to allocate RTX shadow mask fallback image");
+					"InitVulkan.CreateRtxShadowMaskFallbackOnly",
+					"failed to allocate RTX shadow mask fallback image");
 	}
 
 	// EVIL: deferred from CreateGraphicsPipeline (8x V C bug: descriptor set writes
@@ -334,8 +334,8 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 	}
 	if (!projectv::render::CreateRayTracedShadowResources(&state->context(), &state->render())) {
 		return fail(projectv::vulkan_init::VulkanInitError::ShadowResourcesFailed,
-			"InitVulkan.CreateRayTracedShadowResources",
-			"RTX-capable GPU required (NVIDIA RTX 20 series or newer with RT cores)");
+					"InitVulkan.CreateRayTracedShadowResources",
+					"RTX-capable GPU required (NVIDIA RTX 20 series or newer with RT cores)");
 	}
 
 	// EVIL: re-run RefreshGraphicsResourceBindings now that rayTracedShadows is
@@ -347,7 +347,7 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 
 	if (!projectv::render::CreateRtxGiProbeResources(&state->context(), &state->render())) {
 		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-			"InitVulkan.CreateRtxGiProbeResources: probe field init failed; shader will fall back to VCT diffuse");
+					"InitVulkan.CreateRtxGiProbeResources: probe field init failed; shader will fall back to VCT diffuse");
 	}
 
 	if (projectv::render::IsAsyncComputeEnabled()) {

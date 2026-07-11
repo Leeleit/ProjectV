@@ -15,31 +15,12 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 
 namespace {
 constexpr float kMaxFrameDeltaSeconds = 0.25f;		   // EVIL: 250ms cap; prevents huge dt spikes after pause/focus loss; tuned for 60 FPS frame budget
 constexpr float kLightingExposureStepStops = 0.25f;	   // EVIL: 1/4 stop per keyboard step; smaller → sluggish, larger → jarring
 constexpr float kMinLightingExposureBiasStops = -4.0f; // EVIL: -4 stops lower; matches ACES tone-map dark floor per VoxelMaterials.cpp:62
 constexpr float kMaxLightingExposureBiasStops = 4.0f;  // EVIL: +4 stops upper; symmetric to kMin; prevents exposure runaway
-constexpr float kShadowStrengthStep = 0.05f;		   // EVIL: 5% per keyboard step; matches shadow_tuning ladder in DebugHud
-constexpr float kShadowDepthBiasStep = 0.0001f;		   // EVIL: 0.1mm depth bias step; finer than shadow texel size (2mm @ 2048² / 4m)
-constexpr float kShadowNormalBiasStep = 0.0005f;	   // EVIL: 0.5mm normal bias step; tuned for VoxelLab voxel normal consistency
-constexpr float kShadowFilterRadiusStep = 0.10f;	   // EVIL: 10% PCF kernel step; 1.0 = 1 texel PCF radius per step
-constexpr float kShadowCoverageScaleStep = 0.10f;	   // EVIL: 10% coverage scale step; range 0.5-3.0 per ShadowProjection.cpp:14-15
-constexpr float kShadowCascadeBlendStep = 0.02f;	   // EVIL: 2% blend width per step; range -0.5 to +0.5 per ShadowProjection.cpp:42-43
-constexpr float kMinShadowStrengthOffset = -1.0f;	   // EVIL: full off lower; 0 = default per-vertex strength
-constexpr float kMaxShadowStrengthOffset = 1.0f;	   // EVIL: 2x upper; doubles sun shadow contribution at max
-constexpr float kMinShadowDepthBiasOffset = -0.01f;	   // EVIL: -1cm lower; prevents inverse-cusp at low bias
-constexpr float kMaxShadowDepthBiasOffset = 0.01f;	   // EVIL: +1cm upper; prevents peter-panning at high bias
-constexpr float kMinShadowNormalBiasOffset = -0.05f;   // EVIL: -5cm lower; symmetric to max
-constexpr float kMaxShadowNormalBiasOffset = 0.05f;	   // EVIL: +5cm upper; prevents shadow detachment from surface
-constexpr float kMinShadowFilterRadiusOffset = -4.0f;  // EVIL: -4 lower; range matches kShadowFilterRadiusStep
-constexpr float kMaxShadowFilterRadiusOffset = 4.0f;   // EVIL: +4 upper; range matches kShadowFilterRadiusStep
-constexpr float kMinShadowCoverageScale = 0.5f;		   // EVIL: 0.5x lower; matches ShadowProjection.cpp:14
-constexpr float kMaxShadowCoverageScale = 3.0f;		   // EVIL: 3x upper; matches ShadowProjection.cpp:15
-constexpr float kMinShadowCascadeBlendOffset = -0.50f; // EVIL: -50% blend offset; full pre-cascade overlap
-constexpr float kMaxShadowCascadeBlendOffset = 0.50f;  // EVIL: +50% blend offset; symmetric
 
 bool UsesPhysicsCharacter(const CameraState::ControlMode controlMode)
 {
@@ -265,9 +246,9 @@ void MirrorAudioStatsToDebugStats(
 		stats.audioMusicVolume = 0.0f;
 		stats.audioMusicPlaylistSize = 0;
 		stats.audioMusicCurrentIndex = 0;
-		std::ranges::fill(stats.audioMusicTrackName, '\0');
-		std::ranges::fill(stats.audioMusicArtist, '\0');
-		std::ranges::fill(stats.audioMusicTitle, '\0');
+		std::fill(stats.audioMusicTrackName.begin(), stats.audioMusicTrackName.end(), '\0');
+		std::fill(stats.audioMusicArtist.begin(), stats.audioMusicArtist.end(), '\0');
+		std::fill(stats.audioMusicTitle.begin(), stats.audioMusicTitle.end(), '\0');
 		stats.audioMusicPositionSec = 0.0f;
 		stats.audioMusicDurationSec = 0.0f;
 		return;
@@ -279,20 +260,20 @@ void MirrorAudioStatsToDebugStats(
 	stats.audioMusicPlaylistSize = static_cast<uint32_t>(audio->playlistSize());
 	stats.audioMusicCurrentIndex = static_cast<uint32_t>(audio->currentIndex());
 	const std::string &trackName = audio->currentTrackName();
-	std::ranges::fill(stats.audioMusicTrackName, '\0');
+	std::fill(stats.audioMusicTrackName.begin(), stats.audioMusicTrackName.end(), '\0');
 	const size_t copyLen = std::min(trackName.size(),
 									stats.audioMusicTrackName.size() - 1);
 	std::copy_n(trackName.begin(), copyLen, stats.audioMusicTrackName.begin());
 	const std::string &artist = audio->currentArtist();
-	std::ranges::fill(stats.audioMusicArtist, '\0');
+	std::fill(stats.audioMusicArtist.begin(), stats.audioMusicArtist.end(), '\0');
 	const size_t artistCopyLen = std::min(artist.size(),
-											stats.audioMusicArtist.size() - 1);
+										  stats.audioMusicArtist.size() - 1);
 	std::copy_n(artist.begin(), artistCopyLen, stats.audioMusicArtist.begin());
 
 	const std::string &title = audio->currentTitle();
-	std::ranges::fill(stats.audioMusicTitle, '\0');
+	std::fill(stats.audioMusicTitle.begin(), stats.audioMusicTitle.end(), '\0');
 	const size_t titleCopyLen = std::min(title.size(),
-										stats.audioMusicTitle.size() - 1);
+										 stats.audioMusicTitle.size() - 1);
 	std::copy_n(title.begin(), titleCopyLen, stats.audioMusicTitle.begin());
 
 	stats.audioMusicPositionSec = audio->positionSeconds();
@@ -304,6 +285,7 @@ void MirrorRenderLightingToDebugStats(
 	const CameraState &camera,
 	DebugStats &stats)
 {
+	(void)camera;
 	stats.sceneExposure = render.currentSceneLighting.postProcess[0];
 	stats.sceneEnvironmentIntensity = render.currentSceneLighting.postProcess[1];
 	stats.sceneColorGradeWhitePoint = render.currentSceneLighting.colorGrading[0];

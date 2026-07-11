@@ -1,6 +1,5 @@
 #include "render/RtxShadowSBT.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
-#include <algorithm>
 #include <vector>
 
 #include "SDL3/SDL_log.h"
@@ -8,9 +7,7 @@
 
 namespace projectv::render {
 
-RtxShadowSBT::~RtxShadowSBT()
-{
-}
+
 
 bool RtxShadowSBT::Initialize(
 	const VulkanContextState &context,
@@ -69,7 +66,7 @@ bool RtxShadowSBT::Initialize(
 	VmaAllocationInfo mappedInfo{};
 	vmaGetAllocationInfo(context.allocator, m_allocation, &mappedInfo);
 	void *mappedData = mappedInfo.pMappedData;
-	std::memset(mappedData, 0, static_cast<size_t>(totalSize));
+	std::memset(mappedData, 0, totalSize);
 
 	const uint32_t groupCount = hitGroupIndex + 1u;
 	std::vector<uint8_t> handles(static_cast<size_t>(groupCount) * handleSize, 0u);

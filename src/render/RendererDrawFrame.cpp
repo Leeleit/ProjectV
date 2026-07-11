@@ -372,7 +372,7 @@ SDL_AppResult DrawFrame(
 				0,
 				0,
 				0,
-				static_cast<int32_t>(voxelWorld->chunkSize),
+				voxelWorld->chunkSize,
 			};
 			worldGenPush.chunkCountAndFlags = {
 				worldGenChunkCount,

@@ -27,4 +27,4 @@ void DownsampleChunkForLodSurfacePreserve(
 uint32_t RunLodDownsampleJobs(VoxelWorld &world);
 bool IsLodDownsampleEnabled();
 
-}  // namespace projectv::voxel
+} // namespace projectv::voxel
