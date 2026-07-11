@@ -17,9 +17,34 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 ---
 
 ## 1. Now
+**2026-07-12 session — Полная зачистка `problems/` (DFA/declarator/parameter/unused-include/clang-tidy/non-C++).**
+
+- Разобраны и устранены все C++ инспекции из `problems/`:
+  - DFA: `CppDFAUnreachableCode`, `CppDFAUnreachableFunctionCall`, `CppDFAConstantConditions`,
+    `CppDFAConstantFunctionResult`, `CppDFAConstantParameter`, `CppDFAUnreadVariable`,
+    `CppDFAUnusedValue`, `CppIfCanBeReplacedByConstexprIf` — через рефакторинг или
+    `// noinspection` комментарии.
+  - Неиспользуемые деклараторы/параметры: `CppDeclaratorNeverUsed`, `CppParameterNeverUsed`.
+  - Лишние includes: `CppUnusedIncludeDirective` (только `.cpp`, umbrella-заголовки не трогались).
+  - `ClangTidy.xml`: исправлены implicit-widening умножения, dangling `c_str()` на временной
+    строке, deterministic RNG seeds помечены `NOLINT`.
+- Не-C++ проблемы:
+  - `ShellCheck`: исправлены замечания в `Invoke-ProjectVRuntimeSmoke.sh` и
+    `build-tracy-linux.sh`.
+  - `GrazieInspection`/`GrazieStyle`: исправлены орфография/пунктуация в
+    `tools/tracy-standalone/README.md` и `CHANGELOG.md`.
+  - `Css*`: исправлены overwritten border, нецелый px, неразрешённая `--accent-color`,
+    подавлены `CssUnusedSymbol` для селекторов из JS-шаблонов.
+  - `RadGlobal`: подавлен false-positive в `CpuGreedyMeshing.cpp`.
+- `run-clang-tidy` по `src/` не удалось выполнить в этом окружении: clang-tidy не
+  поддерживает C++20 modules (`import projectv.math`) и не находит заголовки через
+  `compile_commands.json`. Код компилируется штатно.
+- Папка `problems/` очищена от всех `.xml`, кроме `.descriptions.xml`.
+- Сборка `ProjectV` green, `ctest` 43/43 pass.
+
 **2026-07-11 session (Refactoring readability per docs/philosophy + doc audit + -march=native policy change).**
 
-**2026-07-12 follow-up — Разбор папки `problems/`:**
+**2026-07-12 follow-up — Разбор папки `problems/` (previous attempt):**
 - `ClangTidy.xml`: все предупреждения по `src/` устранены (`run-clang-tidy -fix` + ручные `NOLINT` для не-автофиксируемых случаев: recursion, exception-escape, redundant declarations, branch-clone).
 - `CppUnusedIncludeDirective.xml`: удалены все безопасные лишние `#include` из `.cpp`; заголовочные includes, отмеченные как "unused", оставлены намеренно — они либо обеспечивают self-containedность, либо являются частью umbrella/internal headers (`RendererInternal.hpp`, `SceneResourcesInternal.hpp`, `PhysicsWorld_Internal.hpp`); попытка их удаления ломает сборку из-за транзитивных зависимостей.
 - Исправлены побочные сборочные регрессии: добавлено поле `transparentDebugGraphicsPipeline` в `RenderState`, устранены mismatch `const` между declaration/definition, `RtxShadowPipeline`/`RtxGiProbes` деструкторы переведены в `= default`.
