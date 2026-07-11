@@ -46,7 +46,7 @@ int main()
 
 	{
 		const CameraState camera = MakeIdentityCamera();
-		const VkExtent2D extent{1280u, 720u};
+		constexpr VkExtent2D extent{1280u, 720u};
 		const GraphicsPushConstants pc =
 			BuildGraphicsPushConstants(camera, extent);
 		ExpectNear(
@@ -70,7 +70,7 @@ int main()
 
 	{
 		const CameraState camera = MakeIdentityCamera();
-		const VkExtent2D extent{1280u, 720u};
+		constexpr VkExtent2D extent{1280u, 720u};
 		const GraphicsPushConstants pc =
 			BuildGraphicsPushConstants(camera, extent);
 		const projectv::math::Vec4 &m0 = pc.viewProjection.c[0];
@@ -96,7 +96,7 @@ int main()
 		camera.position = projectv::math::Vec3{5.0f, -3.0f, 12.0f, 0.0f};
 		camera.yawRadians = 0.0f;
 		camera.pitchRadians = -0.3f;
-		const VkExtent2D extent{1920u, 1080u};
+		constexpr VkExtent2D extent{1920u, 1080u};
 		const GraphicsPushConstants pc =
 			BuildGraphicsPushConstants(camera, extent);
 		ExpectNear(pc.cameraPosition[0], 5.0f, kEpsilon, "translated: pos.x");
@@ -112,7 +112,7 @@ int main()
 
 	{
 		const CameraState camera = MakeIdentityCamera();
-		const VkExtent2D extent{1u, 1u};
+		constexpr VkExtent2D extent{1u, 1u};
 		const GraphicsPushConstants pc =
 			BuildGraphicsPushConstants(camera, extent);
 		Expect(std::isfinite(pc.viewProjection.c[0][0]),
@@ -123,7 +123,7 @@ int main()
 
 	{
 		const CameraState camera = MakeIdentityCamera();
-		const VkExtent2D extent{1920u, 0u};
+		constexpr VkExtent2D extent{1920u, 0u};
 		const GraphicsPushConstants pc =
 			BuildGraphicsPushConstants(camera, extent);
 		Expect(std::isfinite(pc.viewProjection.c[0][0]),

@@ -174,8 +174,8 @@ bool CreateFluidCaPipelines(VulkanContextState *context, RenderState *render)
 	render->fluidCaShaderModule = shaderModule;
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(shaderModule), VK_OBJECT_TYPE_SHADER_MODULE, "FluidCaShader");
 
-	const VkDescriptorSetLayoutCreateInfo layoutInfo = kFluidCaDescriptorSetLayoutInfo;
-	VkResult layoutResult = vkCreateDescriptorSetLayout(context->device, &layoutInfo, nullptr, &render->fluidCaDescriptorSetLayout);
+	constexpr VkDescriptorSetLayoutCreateInfo layoutInfo = kFluidCaDescriptorSetLayoutInfo;
+	const VkResult layoutResult = vkCreateDescriptorSetLayout(context->device, &layoutInfo, nullptr, &render->fluidCaDescriptorSetLayout);
 	if (layoutResult != VK_SUCCESS) {
 		runtime::LogVkFailure("CreateFluidCaPipelines.vkCreateDescriptorSetLayout", layoutResult);
 		DestroyFluidCaPipelines(context, render);
@@ -183,7 +183,7 @@ bool CreateFluidCaPipelines(VulkanContextState *context, RenderState *render)
 	}
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->fluidCaDescriptorSetLayout), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "FluidCaDescriptorSetLayout");
 
-	const VkPushConstantRange pushConstantRange{
+	constexpr VkPushConstantRange pushConstantRange{
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		.offset = 0u,
 		.size = sizeof(FluidCaPushConstants),
@@ -194,7 +194,7 @@ bool CreateFluidCaPipelines(VulkanContextState *context, RenderState *render)
 	pipelineLayoutInfo.pSetLayouts = &render->fluidCaDescriptorSetLayout;
 	pipelineLayoutInfo.pushConstantRangeCount = 1u;
 	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
-	VkResult layoutCreateResult = vkCreatePipelineLayout(context->device, &pipelineLayoutInfo, nullptr, &render->fluidCaPipelineLayout);
+	const VkResult layoutCreateResult = vkCreatePipelineLayout(context->device, &pipelineLayoutInfo, nullptr, &render->fluidCaPipelineLayout);
 	if (layoutCreateResult != VK_SUCCESS) {
 		runtime::LogVkFailure("CreateFluidCaPipelines.vkCreatePipelineLayout", layoutCreateResult);
 		DestroyFluidCaPipelines(context, render);
@@ -202,7 +202,7 @@ bool CreateFluidCaPipelines(VulkanContextState *context, RenderState *render)
 	}
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->fluidCaPipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "FluidCaPipelineLayout");
 
-	VkComputePipelineCreateInfo pipelineInfo{
+	const VkComputePipelineCreateInfo pipelineInfo {
 		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
 		.stage =
 			{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -211,7 +211,7 @@ bool CreateFluidCaPipelines(VulkanContextState *context, RenderState *render)
 			 .pName = "main"},
 		.layout = render->fluidCaPipelineLayout,
 	};
-	VkResult pipelineResult = vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->fluidCaPipeline);
+	const VkResult pipelineResult = vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->fluidCaPipeline);
 	if (pipelineResult != VK_SUCCESS) {
 		runtime::LogVkFailure("CreateFluidCaPipelines.vkCreateComputePipelines", pipelineResult);
 		DestroyFluidCaPipelines(context, render);
@@ -256,7 +256,7 @@ bool RefreshFluidCaResourceBindings(
 		.poolSizeCount = static_cast<uint32_t>(kFluidCaDescriptorPoolSizes.size()),
 		.pPoolSizes = kFluidCaDescriptorPoolSizes.data(),
 	};
-	VkResult poolResult = vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->fluidCaDescriptorPool);
+	const VkResult poolResult = vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->fluidCaDescriptorPool);
 	if (poolResult != VK_SUCCESS) {
 		runtime::LogVkFailure("RefreshFluidCaResourceBindings.vkCreateDescriptorPool", poolResult);
 		return false;
@@ -270,7 +270,7 @@ bool RefreshFluidCaResourceBindings(
 		allocInfo.descriptorPool = render->fluidCaDescriptorPool;
 		allocInfo.descriptorSetCount = 1u;
 		allocInfo.pSetLayouts = &render->fluidCaDescriptorSetLayout;
-		VkResult allocResult = vkAllocateDescriptorSets(context->device, &allocInfo, &frameResources.fluidCaDescriptorSet);
+		const VkResult allocResult = vkAllocateDescriptorSets(context->device, &allocInfo, &frameResources.fluidCaDescriptorSet);
 		if (allocResult != VK_SUCCESS) {
 			runtime::LogVkFailure("RefreshFluidCaResourceBindings.vkAllocateDescriptorSets", allocResult);
 			return false;

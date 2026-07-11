@@ -49,7 +49,7 @@ bool UpdateSceneResources(
 	const bool fluidOnlyChunkRebuilds = world->voxelWorld->editVersion == render->lastNanoVdbSyncedEditVersion;
 	if ((!render->completedChunkRebuildIndices.empty() && !fluidOnlyChunkRebuilds) ||
 		render->sceneNanoVdbVersion == 0u) {
-		const std::array<uint8_t, 256> materialLookup = [] {
+		constexpr std::array<uint8_t, 256> materialLookup = [] {
 			std::array<uint8_t, 256> lookup{};
 			for (uint32_t i = 0; i < 256; ++i) {
 				lookup[i] = static_cast<uint8_t>(i);
@@ -421,7 +421,7 @@ bool GrowNanoVdbBuffer(
 		mappedData = nullptr;
 		capacityBytes = 0u;
 	}
-	VmaAllocationCreateInfo allocationCreateInfo{};
+	const VmaAllocationCreateInfo allocationCreateInfo {};
 	VkBufferCreateInfo bufferCreateInfo{};
 	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferCreateInfo.size = newCapacityBytes;

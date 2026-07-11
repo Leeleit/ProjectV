@@ -59,8 +59,8 @@ bool BuildNanoVdbFlatten(
 		return false;
 	}
 
-	const uint32_t childrenPerNode = GetChildrenPerNode();
-	const uint64_t allChildrenMask = childrenPerNode == 64u
+	constexpr uint32_t childrenPerNode = GetChildrenPerNode();
+	constexpr uint64_t allChildrenMask = childrenPerNode == 64u
 		? ~uint64_t{0}
 		: uint64_t{1} << childrenPerNode - 1u;
 
@@ -132,7 +132,7 @@ bool BuildNanoVdbFlatten(
 
 			if (childIsLeaf) {
 				if (childMaterial != 0u) {
-					const uint64_t valueMask = childrenPerNode == 64u
+					constexpr uint64_t valueMask = childrenPerNode == 64u
 						? ~uint64_t{0}
 						: uint64_t{1} << childrenPerNode - 1u;
 
@@ -242,9 +242,9 @@ uint8_t ReadNanoVdbVoxelMaterial(
 	if (upper.firstLower == kNanoVdbInvalidIndex) {
 		return 0u;
 	}
-	const uint32_t childrenPerNode = GetChildrenPerNode();
-	const uint32_t bitsPerAxis = GetBitsPerAxis();
-	const uint32_t mask = (1u << bitsPerAxis) - 1u;
+	constexpr uint32_t childrenPerNode = GetChildrenPerNode();
+	constexpr uint32_t bitsPerAxis = GetBitsPerAxis();
+	constexpr uint32_t mask = (1u << bitsPerAxis) - 1u;
 	const uint32_t rootDepth = result.rootLevelDepth >= 2
 		? static_cast<uint32_t>(result.rootLevelDepth - 1)
 		: 0u;

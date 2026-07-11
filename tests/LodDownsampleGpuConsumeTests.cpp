@@ -125,7 +125,7 @@ void TestEncodeDecodeChunkLodMetadataRoundtrip(TestContext &context)
 
 void TestBuildLodPayloadWordsPacks4BytesPerWord(TestContext &context)
 {
-	const std::array<uint8_t, 8> bytes = {0x11u, 0x22u, 0x33u, 0x44u, 0xAAu, 0xBBu, 0xCCu, 0xDDu};
+	constexpr std::array<uint8_t, 8> bytes = {0x11u, 0x22u, 0x33u, 0x44u, 0xAAu, 0xBBu, 0xCCu, 0xDDu};
 	std::array<uint32_t, 2> words{};
 	projectv::render::BuildLodPayloadWordsFromDownsampled(
 		bytes.data(),
@@ -143,7 +143,7 @@ void TestBuildLodPayloadWordsPacks4BytesPerWord(TestContext &context)
 
 void TestBuildLodPayloadWordsZeroPadsShortInput(TestContext &context)
 {
-	const std::array<uint8_t, 5> bytes = {0x01u, 0x02u, 0x03u, 0x04u, 0x05u};
+	constexpr std::array<uint8_t, 5> bytes = {0x01u, 0x02u, 0x03u, 0x04u, 0x05u};
 	std::array<uint32_t, 2> words{};
 	projectv::render::BuildLodPayloadWordsFromDownsampled(
 		bytes.data(),

@@ -96,7 +96,7 @@ public:
 		const VulkanContextState &context,
 		VkAccelerationStructureKHR tlas)
 	{
-		FrameRenderData dummy{};
+		const FrameRenderData dummy {};
 		return RecordUpdatePass(
 			commandBuffer,
 			context,
@@ -165,7 +165,7 @@ inline bool RecordRtxGiProbeUpdatePass(
 	const VulkanContextState &context,
 	VkAccelerationStructureKHR tlas)
 {
-	FrameRenderData dummy{};
+	const FrameRenderData dummy {};
 	return RecordRtxGiProbeUpdatePass(
 		commandBuffer,
 		probes,

@@ -401,7 +401,7 @@ void TestChunkIndexEncoding(TestContext &ctx)
 {
 	TestWorld w = MakeWorld(4, 4, 4);
 	SetVoxel(w, 1, 1, 1, 3u);
-	const uint32_t testChunkIndex = 42u;
+	constexpr uint32_t testChunkIndex = 42u;
 	const auto input = w.MakeInput(testChunkIndex);
 	const auto mesh = GenerateCpuGreedyMesh(input);
 	for (const auto &f : mesh.opaqueFaces) {

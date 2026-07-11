@@ -158,7 +158,7 @@ void TestUpdateTlasRespectsCapacity()
 
 void TestDirtyChunkRebuildStructLayout()
 {
-	const projectv::render::DirtyChunkRebuild entry{};
+	constexpr projectv::render::DirtyChunkRebuild entry{};
 	PROJECTV_RTX_EXPECT(entry.chunkIndex == 0u, "DirtyChunkRebuild default chunkIndex must be 0");
 	PROJECTV_RTX_EXPECT(entry.aabb.minX == 0.0f && entry.aabb.maxX == 0.0f,
 		"DirtyChunkRebuild default AABB must be zero-init");

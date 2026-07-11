@@ -52,7 +52,7 @@ void TestEnsureAsyncComputeResourcesRejectsNullContext(TestContext &context)
 
 void TestIsAsyncComputeResourcesAllocatedDefaultsFalse(TestContext &context)
 {
-	const VulkanContextState empty{};
+	constexpr VulkanContextState empty{};
 	if (projectv::render::IsAsyncComputeResourcesAllocated(empty)) {
 		context.Fail(__LINE__, "default VulkanContextState must report IsAsyncComputeResourcesAllocated=false");
 	}

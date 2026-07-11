@@ -422,7 +422,7 @@ bool RefreshVoxelizeResourceBindings(
 		return false;
 	}
 
-	SceneFrameResources &frameResources = render->sceneFrameResources[frameIndex];
+	const SceneFrameResources &frameResources = render->sceneFrameResources[frameIndex];
 	if (frameResources.chunkDescriptorBuffer == VK_NULL_HANDLE ||
 		frameResources.chunkVoxelPayloadBuffer == VK_NULL_HANDLE) {
 		return false;

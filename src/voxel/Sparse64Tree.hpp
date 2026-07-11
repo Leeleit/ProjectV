@@ -372,7 +372,7 @@ private:
 		if (level <= 0 || level > maxDepth_) {
 			return 0;
 		}
-		int shift = (level - 1) * kSparse64BitsPerAxis;
+		const int shift = (level - 1) * kSparse64BitsPerAxis;
 		return coord >> shift & kSparse64NodeSide - 1;
 	}
 

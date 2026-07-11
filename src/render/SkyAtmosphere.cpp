@@ -596,7 +596,7 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT,
 	};
 
-	const VkPipelineColorBlendStateCreateInfo colorBlendState{
+	constexpr VkPipelineColorBlendStateCreateInfo colorBlendState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.attachmentCount = 1,
 		.pAttachments = &colorBlendAttachment,

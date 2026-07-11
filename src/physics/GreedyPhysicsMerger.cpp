@@ -73,7 +73,7 @@ uint32_t GreedyMergeSolidVoxelsInBounds(
 		return 0u;
 	}
 
-	const size_t strideX = 1;
+	constexpr size_t strideX = 1;
 	const size_t strideY = static_cast<size_t>(endX - startX);
 	const size_t strideZ = static_cast<size_t>(endY - startY) * strideY;
 	std::vector<uint8_t> consumed(

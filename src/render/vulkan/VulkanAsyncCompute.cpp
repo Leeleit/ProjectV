@@ -45,7 +45,7 @@ bool EnsureAsyncComputeResources(VulkanContextState *context)
 		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = context->dedicatedComputeQueueFamilyIndex,
 	};
-	VkResult poolResult = vkCreateCommandPool(context->device, &poolInfo, nullptr, &context->asyncComputeCommandPool);
+	const VkResult poolResult = vkCreateCommandPool(context->device, &poolInfo, nullptr, &context->asyncComputeCommandPool);
 	if (poolResult != VK_SUCCESS) {
 		runtime::LogVkFailure("EnsureAsyncComputeResources.vkCreateCommandPool", poolResult);
 		DestroyAsyncComputeResources(context);
@@ -60,7 +60,7 @@ bool EnsureAsyncComputeResources(VulkanContextState *context)
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 		.commandBufferCount = 1u,
 	};
-	VkResult allocResult = vkAllocateCommandBuffers(context->device, &allocInfo, &context->asyncComputeCommandBuffer);
+	const VkResult allocResult = vkAllocateCommandBuffers(context->device, &allocInfo, &context->asyncComputeCommandBuffer);
 	if (allocResult != VK_SUCCESS) {
 		runtime::LogVkFailure("EnsureAsyncComputeResources.vkAllocateCommandBuffers", allocResult);
 		DestroyAsyncComputeResources(context);
@@ -137,7 +137,7 @@ bool RecordAsyncComputePass(
 	beginInfo.pNext = nullptr;
 	beginInfo.flags = 0u;
 	beginInfo.pInheritanceInfo = nullptr;
-	VkResult beginResult = vkBeginCommandBuffer(asyncCommandBuffer, &beginInfo);
+	const VkResult beginResult = vkBeginCommandBuffer(asyncCommandBuffer, &beginInfo);
 	if (beginResult != VK_SUCCESS) {
 		runtime::LogVkFailure("RecordAsyncComputePass.vkBeginCommandBuffer", beginResult);
 		return false;
@@ -148,7 +148,7 @@ bool RecordAsyncComputePass(
 
 	if (render.fluidCaPipelineEnabled && state->simulation().fluidGpuTicksPending > 0u) {
 		PV_PROFILE_ZONE_N("AsyncPass.RecordFluidCa");
-		VoxelWorld *voxelWorld = state->world().voxelWorld.get();
+		const VoxelWorld *voxelWorld = state->world().voxelWorld.get();
 		if (voxelWorld != nullptr) {
 			const std::vector<uint32_t> activeChunkIds = BuildActiveChunkIdsForFluidCa(*voxelWorld);
 			if (frameResources.fluidCaActiveChunkIdMappedData != nullptr && !activeChunkIds.empty()) {
@@ -186,7 +186,7 @@ bool RecordAsyncComputePass(
 
 	if (render.worldGenPipelineEnabled && state->world().voxelWorld != nullptr) {
 		PV_PROFILE_ZONE_N("AsyncPass.RecordWorldGen");
-		VoxelWorld *voxelWorld = state->world().voxelWorld.get();
+		const VoxelWorld *voxelWorld = state->world().voxelWorld.get();
 		std::vector<uint32_t> activeWorldGenChunkIds;
 		const uint32_t worldGenChunkCount = BuildActiveChunkIdsForWorldGen(
 			*voxelWorld,
@@ -349,7 +349,7 @@ bool RecordHzbAsyncCullPass(
 	beginInfo.pNext = nullptr;
 	beginInfo.flags = 0u;
 	beginInfo.pInheritanceInfo = nullptr;
-	const VkResult beginResult = vkBeginCommandBuffer(asyncCommandBuffer, &beginInfo);
+	const const VkResult beginResult = vkBeginCommandBuffer(asyncCommandBuffer, &beginInfo);
 	if (beginResult != VK_SUCCESS) {
 		runtime::LogVkFailure("RecordHzbAsyncCullPass.vkBeginCommandBuffer", beginResult);
 		return false;

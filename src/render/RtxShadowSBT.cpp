@@ -95,7 +95,7 @@ bool RtxShadowSBT::Initialize(
 
 	vmaFlushAllocation(context.allocator, m_allocation, 0u, totalSize);
 
-	VkBufferDeviceAddressInfo addressInfo{ VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, m_buffer };
+	const VkBufferDeviceAddressInfo addressInfo { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, nullptr, m_buffer };
 	m_deviceAddress = vkGetBufferDeviceAddress(context.device, &addressInfo);
 	if (m_deviceAddress == 0u) {
 		runtime::LogVkFailure("RtxShadowSBT.vkGetBufferDeviceAddress", VK_ERROR_INITIALIZATION_FAILED);

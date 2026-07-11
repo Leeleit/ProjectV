@@ -107,7 +107,7 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 		.module = render->worldGenShaderModule,
 		.pName = "main",
 	};
-	VkComputePipelineCreateInfo pipelineInfo{
+	const VkComputePipelineCreateInfo pipelineInfo {
 		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
 		.stage = stage,
 		.layout = render->worldGenPipelineLayout,

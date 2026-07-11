@@ -19,7 +19,7 @@ using projectv::voxel::ShouldEmitVoxelFaceCPU;
 
 void TestFullMaterialMatrix(TestContext &ctx)
 {
-	const uint8_t kMaterials[] = {0u, 1u, 2u, 3u, 4u};
+	constexpr uint8_t kMaterials[] = {0u, 1u, 2u, 3u, 4u};
 	constexpr size_t kCount = sizeof(kMaterials) / sizeof(kMaterials[0]);
 
 	for (size_t mi = 0; mi < kCount; ++mi) {

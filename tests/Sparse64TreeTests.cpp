@@ -250,9 +250,9 @@ void TestLargerTree(TestContext &context)
 
 void TestByteExactParityVsFlat(TestContext &context)
 {
-	const int sideX = 8;
-	const int sideY = 8;
-	const int sideZ = 8;
+	constexpr int sideX = 8;
+	constexpr int sideY = 8;
+	constexpr int sideZ = 8;
 	std::vector<uint8_t> flat(static_cast<size_t>(sideX) * sideY * sideZ, 0);
 	projectv::voxel::Sparse64Tree tree(sideX, sideY, sideZ);
 
@@ -308,9 +308,9 @@ void TestByteExactParityVsFlat(TestContext &context)
 
 void TestFullSweepParity(TestContext &context)
 {
-	const int sideX = 4;
-	const int sideY = 4;
-	const int sideZ = 4;
+	constexpr int sideX = 4;
+	constexpr int sideY = 4;
+	constexpr int sideZ = 4;
 	std::vector<uint8_t> flat(static_cast<size_t>(sideX) * sideY * sideZ, 0);
 	projectv::voxel::Sparse64Tree tree(sideX, sideY, sideZ);
 
@@ -342,9 +342,9 @@ void TestFullSweepParity(TestContext &context)
 
 void TestOverwriteParity(TestContext &context)
 {
-	const int sideX = 8;
-	const int sideY = 8;
-	const int sideZ = 8;
+	constexpr int sideX = 8;
+	constexpr int sideY = 8;
+	constexpr int sideZ = 8;
 	std::vector<uint8_t> flat(static_cast<size_t>(sideX) * sideY * sideZ, 0);
 	projectv::voxel::Sparse64Tree tree(sideX, sideY, sideZ);
 

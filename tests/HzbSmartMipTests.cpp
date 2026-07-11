@@ -265,7 +265,7 @@ void WritePerChunkMipAndBlendWidthsToBuffer(
 		return;
 	}
 	auto *dest = static_cast<uint32_t *>(mappedData);
-	const uint32_t stride = 2u;
+	constexpr uint32_t stride = 2u;
 	for (uint32_t i = 0u; i < chunkCount; ++i) {
 		const uint32_t baseIndex = i * stride;
 		dest[baseIndex] = mipAndBlendWidths[baseIndex];
@@ -275,8 +275,8 @@ void WritePerChunkMipAndBlendWidthsToBuffer(
 
 void TestWritePerChunkMipAndBlendWidthsToBufferPackedLayout(SmartMipTestContext &test)
 {
-	const uint32_t chunkCount = 4u;
-	const uint32_t source[chunkCount * 2u] = {
+	constexpr uint32_t chunkCount = 4u;
+	constexpr uint32_t source[chunkCount * 2u] = {
 		0u, 0u,
 		2u, 3u,
 		5u, 8u,
@@ -295,7 +295,7 @@ void TestWritePerChunkMipAndBlendWidthsToBufferPackedLayout(SmartMipTestContext 
 
 void TestWritePerChunkMipAndBlendWidthsToBufferHandlesNull(SmartMipTestContext &test)
 {
-	const uint32_t source[2u] = {1u, 2u};
+	constexpr uint32_t source[2u] = {1u, 2u};
 	uint32_t buffer[2u] = {0xDEADBEEFu, 0xDEADBEEFu};
 	WritePerChunkMipAndBlendWidthsToBuffer(nullptr, source, 1u);
 	WritePerChunkMipAndBlendWidthsToBuffer(buffer, nullptr, 1u);

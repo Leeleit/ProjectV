@@ -182,7 +182,7 @@ bool InitializeAppEcs(AppState *state)
 		.kind(flecs::OnUpdate)
 		.each([](flecs::entity e, AudioPlaylistRefreshRequest &req) {
 			if (req.requested) {
-				if (AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>()) {
+				if (const AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>()) {
 					if (auto *audio = binding->state->audio().get()) {
 						audio->RefreshPlaylistAsync();
 					}
@@ -194,7 +194,7 @@ bool InitializeAppEcs(AppState *state)
 	ecs.world.system<FluidCATickState>("FluidCATickSystem")
 		.kind(flecs::OnUpdate)
 		.each([](flecs::entity e, FluidCATickState &tickState) {
-			AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
+			const AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
 			if (!binding || !binding->state) {
 				return;
 			}
@@ -227,7 +227,7 @@ bool InitializeAppEcs(AppState *state)
 	ecs.world.system<BenchmarkTickResult>("BenchmarkAutomationTickSystem")
 		.kind(flecs::OnUpdate)
 		.each([](flecs::entity e, BenchmarkTickResult &result) {
-			AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
+			const AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
 			if (!binding || !binding->state) {
 				result.quitAfterFrame = false;
 				return;
@@ -244,7 +244,7 @@ bool InitializeAppEcs(AppState *state)
 	ecs.world.system<LookDevCaptureTickResult>("LookDevCaptureTickSystem")
 		.kind(flecs::OnUpdate)
 		.each([](flecs::entity e, LookDevCaptureTickResult &result) {
-			AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
+			const AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
 			if (!binding || !binding->state) {
 				result.quitAfterFrame = false;
 				return;

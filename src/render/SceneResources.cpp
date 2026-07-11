@@ -324,7 +324,7 @@ bool CreateSceneResources(
 		render->sceneMemoryBytes += chunkCullingAllocationInfo.size;
 		std::memset(frameResources.chunkCullingMappedData, 0, sizeof(ChunkCullingParameters));
 
-		const VkDeviceSize chunkAabbStrideBytes = sizeof(PackedSceneChunkAabb);
+		constexpr VkDeviceSize chunkAabbStrideBytes = sizeof(PackedSceneChunkAabb);
 		const VkDeviceSize chunkAabbBufferBytes = chunkAabbStrideBytes *
 			world->voxelWorld->chunks.size();
 		if (chunkAabbBufferBytes > 0) {

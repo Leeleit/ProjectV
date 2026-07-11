@@ -411,7 +411,7 @@ bool CreateGraphicsPipeline(
 		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
 		"VoxelGraphicsPipelineLayout");
 
-	const VkFormat mainColorAttachmentFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+	constexpr VkFormat mainColorAttachmentFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 	const VkPipelineRenderingCreateInfo renderingInfo{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.pNext = nullptr,

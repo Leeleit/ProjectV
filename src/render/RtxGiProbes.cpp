@@ -243,7 +243,7 @@ bool RtxGiProbes::AllocateTextures(
 		return false;
 	}
 
-	const VkSamplerCreateInfo samplerInfo{
+	constexpr VkSamplerCreateInfo samplerInfo{
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
@@ -297,7 +297,7 @@ bool RtxGiProbes::AllocateTextures(
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
-	const VmaAllocationCreateInfo distanceAllocInfo{
+	constexpr VmaAllocationCreateInfo distanceAllocInfo{
 		.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
 		.usage = VMA_MEMORY_USAGE_GPU_ONLY,
 	};
@@ -340,7 +340,7 @@ bool RtxGiProbes::AllocateTextures(
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
 
-	const VkExtent3D probeDataExtent{1, 1, 1};
+	constexpr VkExtent3D probeDataExtent{1, 1, 1};
 	const VkImageCreateInfo probeDataImageInfo{
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.pNext = nullptr,
@@ -356,7 +356,7 @@ bool RtxGiProbes::AllocateTextures(
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 	};
-	const VmaAllocationCreateInfo probeDataAllocInfo{
+	constexpr VmaAllocationCreateInfo probeDataAllocInfo{
 		.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
 		.usage = VMA_MEMORY_USAGE_GPU_ONLY,
 	};
@@ -404,7 +404,7 @@ bool RtxGiProbes::AllocateTextures(
 
 bool RtxGiProbes::AllocateBuffer(const VulkanContextState &context)
 {
-	const VkBufferCreateInfo bufferInfo{
+	constexpr VkBufferCreateInfo bufferInfo{
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.pNext = nullptr,
 		.flags = 0,
@@ -414,7 +414,7 @@ bool RtxGiProbes::AllocateBuffer(const VulkanContextState &context)
 		.queueFamilyIndexCount = 0,
 		.pQueueFamilyIndices = nullptr,
 	};
-	const VmaAllocationCreateInfo allocInfo{
+	constexpr VmaAllocationCreateInfo allocInfo{
 		.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 		.usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
 	};
