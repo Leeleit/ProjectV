@@ -3,7 +3,6 @@
 // Stage 5.2 RTX foundation sub-tests (no Vulkan device required; pure CPU contracts).
 
 #include <cstdlib>
-#include <cstring>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -269,7 +268,7 @@ void TestRtxSunShadowRayHelperExistsInShader()
 	if (!fp.good()) {
 		return;
 	}
-	const std::string sourceText{ std::istreambuf_iterator(fp), std::istreambuf_iterator() };
+	const std::string sourceText{ std::istreambuf_iterator<char>(fp), std::istreambuf_iterator<char>() };
 	PROJECTV_RTX_EXPECT(
 		sourceText.find("rtxShadowMask") != std::string::npos,
 		"voxel.frag must reference rtxShadowMask (binding 18) for 5.2.E voxel-aware shadow consume");
@@ -524,7 +523,7 @@ void TestRtxShadowIntersectionShaderUsesVoxelDdaPattern()
 			"voxel_rtx_shadow.rint source not found");
 		return;
 	}
-	std::string sourceText{ std::istreambuf_iterator(source), std::istreambuf_iterator() };
+	std::string sourceText{ std::istreambuf_iterator<char>(source), std::istreambuf_iterator<char>() };
 	PROJECTV_RTX_EXPECT(
 		sourceText.find("gl_InstanceCustomIndexEXT") != std::string::npos,
 		"voxel_rtx_shadow.rint must read chunk index from gl_InstanceCustomIndexEXT");

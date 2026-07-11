@@ -1,5 +1,4 @@
 #include "voxel/CpuMeshGenerator.hpp"
-#include "voxel/VoxelWorld.hpp"
 
 #include <cstdio>
 #include <cstdlib>

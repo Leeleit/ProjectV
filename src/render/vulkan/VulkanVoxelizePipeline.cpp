@@ -156,6 +156,7 @@ bool CreateVoxelizeClipmapImage(
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctClipmapSampler), VK_OBJECT_TYPE_SAMPLER, "VctClipmapSampler");
 	return true;
 }
+} // namespace
 
 void DestroyVoxelizeClipmapImage(
 	VulkanContextState *context,

@@ -4,7 +4,6 @@
 #include "voxel/VoxelLodDownsample.hpp"
 
 #include <algorithm>
-#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <vector>

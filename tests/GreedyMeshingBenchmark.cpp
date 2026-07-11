@@ -2,7 +2,6 @@
 
 #include "benchmark/benchmark.h"
 
-#include <cstdint>
 #include <vector>
 
 namespace {

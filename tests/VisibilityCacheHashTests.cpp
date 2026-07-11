@@ -3,7 +3,6 @@ import projectv.math;
 #include "core/Types.hpp"
 #include "render/SceneResources.hpp"
 
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 

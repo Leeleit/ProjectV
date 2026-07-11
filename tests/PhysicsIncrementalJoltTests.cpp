@@ -2,7 +2,6 @@
 #include "voxel/VoxelWorld.hpp"
 
 #include <cstdio>
-#include <cstdlib>
 #include <string_view>
 
 namespace {

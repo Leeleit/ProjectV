@@ -1,7 +1,6 @@
 #include "render/vulkan/VulkanVoxelizePipeline.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
-#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <string_view>
