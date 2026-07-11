@@ -1188,9 +1188,15 @@ set_tests_properties(ProjectVCloudscapeTests PROPERTIES LABELS "unit")
 add_executable(ProjectVRayTracedShadowTests
         RayTracedShadowTests.cpp
         ${CMAKE_SOURCE_DIR}/src/render/RayTracedShadows.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RayTracedShadowsBlas.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RayTracedShadowsTlas.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RayTracedShadowsPass.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RayTracedShadowsMask.cpp
         ${CMAKE_SOURCE_DIR}/src/render/RtxShadowPipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/render/RtxShadowSBT.cpp
         ${CMAKE_SOURCE_DIR}/src/render/RtxGiProbes.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RtxGiProbesPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/RtxGiProbesUpdate.cpp
         ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp

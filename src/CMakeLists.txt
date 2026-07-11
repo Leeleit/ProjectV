@@ -118,17 +118,34 @@ target_sources(ProjectV PRIVATE
         debug/DebugOverlays.cpp
         platform/PlatformEvents.cpp
         render/Renderer.cpp
+        render/RendererOverlay.cpp
+        render/RendererScreenshot.cpp
+        render/RendererRecordCommands.cpp
+        render/RendererDrawFrame.cpp
         render/ScreenshotCapture.cpp
         render/SceneResources.cpp
+        render/SceneResourcesUtilities.cpp
+        render/SceneResourcesVisibility.cpp
+        render/SceneResourcesDestroy.cpp
+        render/SceneResourcesUpdate.cpp
         render/HizCulling.cpp
         render/LodDownsampleGpuConsume.cpp
         render/RayTracedShadows.cpp
+        render/RayTracedShadowsBlas.cpp
+        render/RayTracedShadowsTlas.cpp
+        render/RayTracedShadowsPass.cpp
+        render/RayTracedShadowsMask.cpp
         render/RtxShadowPipeline.cpp
         render/RtxShadowSBT.cpp
         render/RtxGiProbes.cpp
+        render/RtxGiProbesPipeline.cpp
+        render/RtxGiProbesUpdate.cpp
         render/vulkan/VulkanBootstrap.cpp
         render/vulkan/VulkanDebug.cpp
         render/vulkan/VulkanGraphicsPipeline.cpp
+        render/vulkan/VulkanGraphicsPipelineBindings.cpp
+        render/vulkan/VulkanGraphicsPipelineCreate.cpp
+        render/vulkan/VulkanGraphicsPipelineOverlay.cpp
         render/vulkan/HardwareRayTracingProbe.cpp
         render/vulkan/VulkanInit.cpp
         render/vulkan/VulkanResult.cpp

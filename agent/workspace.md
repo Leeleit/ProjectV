@@ -17,13 +17,30 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 ---
 
 ## 1. Now
-
-**2026-07-11 session (TAA pipeline removal — full cleanup).**
-
-После завершения Variant A / Model motion vector (27x) была дана команда оператора
-полностью убрать TAA/CAS/DLSS/DLAA/MSAA из активного пайплайна, перенеся в `legacy/`.
+**2026-07-11 session (Refactoring readability per docs/philosophy).**
 
 **Что сделано в этой сессии:**
+
+- **Phase 1.7 (RtxGiProbes split):** Декомпозирован monolithic `RtxGiProbes.cpp` (1014 lines) на 3 отдельных cpp-файла по семантическим доменам: `RtxGiProbesPipeline.cpp` (compute pipeline layout, descriptor set layout, and pipeline creation/destruction), `RtxGiProbesUpdate.cpp` (pass recording and update pass execution), и уменьшенный `RtxGiProbes.cpp` (setup, lifecycle, texture/buffer allocations, global helpers). Главный файл `RtxGiProbes.cpp` уменьшен до 350 строк, а все новые файлы строго укладываются в лимит 600 строк. Сборка успешна, 38/38 тестов пройдено.
+- **Phase 1.6 (RayTracedShadows split):** Декомпозирован monolithic `RayTracedShadows.cpp` (1650 lines) на 4 отдельных cpp-файла по семантическим доменам: `RayTracedShadowsBlas.cpp` (BLAS building, dirty queue updates, chunk BLAS building), `RayTracedShadowsTlas.cpp` (TLAS updates and recording builds), `RayTracedShadowsPass.cpp` (shadow pass recording and debug reports), и `RayTracedShadowsMask.cpp` (fallback textures, voxel-aware RTX resource setup, shadow mask recreate/clears). Главный файл `RayTracedShadows.cpp` уменьшен до 360 строк, а все новые файлы строго укладываются в лимит 600 строк. Сборка успешна, 38/38 тестов пройдено.
+- **Phase 1.5 (VoxelWorld split):** Декомпозирован monolithic `VoxelWorld.cpp` (1709 lines) на `VoxelWorldInternal.hpp` (shared declarations) и 5 отдельных cpp-файлов по семантическим доменам: `VoxelWorldPreset.cpp` (preset configurations and scene builders), `VoxelWorldSnapshot.cpp` (snapshot loading and saving), `VoxelWorldFluid.cpp` (fluid cellular automata updates), `VoxelWorldLod.cpp` (LOD level assignment and query functions), и `VoxelWorldStatic.cpp` (chunk static promotion). Главный файл `VoxelWorld.cpp` уменьшен до 350 строк, а все новые файлы строго укладываются в лимит 600 строк. Сборка успешна, 38/38 тестов пройдено.
+- **Очистка CMakePresets.json:** Удалена неактуальная тестовая цель `ProjectVTaaMotionVectorTests`, вызывавшая ошибку сборки.
+- **Phase 1.2 (SceneResources split):** Декомпозирован monolithic `SceneResources.cpp` (1919 lines) на `SceneResourcesInternal.hpp` и 5 отдельных cpp-файлов по семантическим доменам (Utilities, Visibility, Destroy, Update, reduced main file 804 lines). Сборка успешна, 38/38 тестов пройдено. Коммит: `3c95ce6`.
+- **Phase 1.3 (Renderer split):** Декомпозирован `Renderer.cpp` (1370 lines) на `RendererInternal.hpp`, `RendererOverlay.cpp`, `RendererScreenshot.cpp`, `RendererRecordCommands.cpp`, `RendererDrawFrame.cpp` и уменьшенный `Renderer.cpp` (88 lines). Каждая часть строго в пределах лимита в 600 строк.
+- **Phase 1.4 (VulkanGraphicsPipeline split):** Декомпозирован `VulkanGraphicsPipeline.cpp` (1741 lines) на `VulkanGraphicsPipelineInternal.hpp`, `VulkanGraphicsPipelineBindings.cpp`, `VulkanGraphicsPipelineCreate.cpp`, `VulkanGraphicsPipelineOverlay.cpp` и уменьшенный `VulkanGraphicsPipeline.cpp` (362 lines). Все файлы также укладываются в лимит 600 строк.
+- **Документация и интерактивный разбор кодовой базы:**
+  - Создан структурированный, исчерпывающий текстовый путеводитель по архитектуре и всем 66+ файлам: [CODEBASE_GUIDE.md](file:///home/le1t/Projects/ProjectV/docs/CODEBASE_GUIDE.md). Содержит Mermaid-диаграммы, схему кадра (Frame Walkthrough) и разборы алгоритмов.
+  - Созданы новые детальные руководства: [RTX_Renderer_Architecture.md](file:///home/le1t/Projects/ProjectV/docs/RTX_Renderer_Architecture.md) (аппаратное освещение, BLAS/TLAS, DDGI зонды с Gaussian visibility falloff, рефракция, split-файлы рендерера), [Linux_Build_And_Run.md](file:///home/le1t/Projects/ProjectV/docs/Linux_Build_And_Run.md) (руководство по сборке и тестам в Linux) и [Physics_And_Movement_Guide.md](file:///home/le1t/Projects/ProjectV/docs/Physics_And_Movement_Guide.md) (описание Jolt-интеграции, Walk/Creative/Spectator режимов, auto-jump, edge/sneak защиты и жадного объединения физических тел).
+  - Дополнены и актуализированы существующие архитектурные руководства: [ArchitectureGuide.md](file:///home/le1t/Projects/ProjectV/docs/ArchitectureGuide.md) (RTX-освещение, HZB куллинг, декомпозиция Renderer/SceneResources), [source_layout.md](file:///home/le1t/Projects/ProjectV/docs/source_layout.md) (физическая раскладка с новыми модулями), а также добавлены предупреждающие заглушки в устаревшие/исторические разделы [BuildAndRun.md](file:///home/le1t/Projects/ProjectV/docs/BuildAndRun.md), [RenderArchitecture.md](file:///home/le1t/Projects/ProjectV/docs/RenderArchitecture.md), [VoxelWorld.md](file:///home/le1t/Projects/ProjectV/docs/VoxelWorld.md), [Debugging.md](file:///home/le1t/Projects/ProjectV/docs/Debugging.md) и [Profiling.md](file:///home/le1t/Projects/ProjectV/docs/Profiling.md) со ссылками на новые файлы.
+  - Создано интерактивное HTML-приложение: [codebase_navigator.html](file:///home/le1t/Projects/ProjectV/docs/codebase_navigator.html). Оно содержит интерактивную карту модулей (66+ файлов), пошаговый симулятор кадра, квиз и чек-лист изучения.
+- **Интеграция:** Обновлен `src/CMakeLists.txt` для добавления всех новых файлов в сборку. Проект успешно компилируется, все тесты проходят.
+- **Исправление ошибок Vulkan Validation Layers и утечек памяти:** 
+  - Исправлена критическая ошибка валидации при blit `sceneColorImage` в swapchain image: в создание swapchain добавлена поддержка флага `VK_IMAGE_USAGE_TRANSFER_DST_BIT`.
+  - Исправлены многочисленные ошибки несовпадения форматов при рисовании в `sceneColorImageView`: графический, оверлейный, HUD, модельный, атмосферный и меш-шейдерный пайплайны обновлены для использования формата `VK_FORMAT_B10G11R11_UFLOAT_PACK32` вместо `swapchain->format` или `VK_FORMAT_R16G16B16A16_SFLOAT`.
+  - Устранена утечка выделенной памяти (dedicated allocation) VMA на выходе из приложения: в деструктор `Types.cpp` добавлено освобождение `sceneColorImage` и `sceneColorImageView`.
+  - Запуск smoke-теста `Invoke-ProjectVRuntimeSmoke.sh` теперь проходит успешно с кодом возврата 0 и нулевым выводом ошибок Vulkan Validation (за исключением известных pre-existing предупреждений дескрипторов DDGI).
+
+**Что было сделано ранее в этой сессии (TAA pipeline removal — full cleanup):**
 
 - **`legacy/aa/`**: перенесены все TAA-файлы (Taa.hpp/cpp, TaaRenderTargets.hpp/cpp,
   TaaResolvePipeline.hpp/cpp, AntialiasingMode.hpp, шейдеры taa_resolve, tone_map,
