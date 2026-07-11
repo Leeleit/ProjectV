@@ -32,11 +32,11 @@ void TestFullMaterialMatrix(TestContext &ctx)
 			if (mat == 0u) {
 				expected = false;
 			} else if (mat >= 3u) {
-				expected = (nbr == 0u || nbr == 1u);
+				expected = nbr == 0u || nbr == 1u;
 			} else if (mat == 2u) {
 				expected = true;
 			} else {
-				expected = (nbr == 0u);
+				expected = nbr == 0u;
 			}
 
 			if (result != expected) {

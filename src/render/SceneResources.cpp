@@ -532,11 +532,11 @@ bool CreateSceneResources(
 		}
 
 		for (uint32_t pingPong = 0u; pingPong < 2u; ++pingPong) {
-			VkBuffer &targetBuffer = (pingPong == 0u) ? frameResources.fluidCaSourceBuffer
+			VkBuffer &targetBuffer = pingPong == 0u ? frameResources.fluidCaSourceBuffer
 													   : frameResources.fluidCaDestinationBuffer;
-			VmaAllocation &targetAllocation = (pingPong == 0u) ? frameResources.fluidCaSourceAllocation
+			VmaAllocation &targetAllocation = pingPong == 0u ? frameResources.fluidCaSourceAllocation
 																 : frameResources.fluidCaDestinationAllocation;
-			void *&targetMappedData = (pingPong == 0u) ? frameResources.fluidCaSourceMappedData
+			void *&targetMappedData = pingPong == 0u ? frameResources.fluidCaSourceMappedData
 														: frameResources.fluidCaDestinationMappedData;
 			VmaAllocationInfo pingPongAllocationInfo{};
 			if (!CreateBuffer(

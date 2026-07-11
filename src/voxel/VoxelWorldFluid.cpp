@@ -36,7 +36,7 @@ std::vector<uint32_t> BuildActiveChunkIdsForFluidCa(const VoxelWorld &world)
 		if (chunk.nonAirVoxelCount == 0u) {
 			continue;
 		}
-		if (chunk.isStatic && (chunk.ticksSinceLastEdit < 30u)) {
+		if (chunk.isStatic && chunk.ticksSinceLastEdit < 30u) {
 			continue;
 		}
 		active.push_back(static_cast<uint32_t>(chunkIndex));
@@ -92,12 +92,12 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
 	if (readMaxZ > world.maxExclusive.z)
 		readMaxZ = world.maxExclusive.z;
 
-	const int simMinX = (readMinX < world.min.x) ? world.min.x : readMinX;
-	const int simMinY = (readMinY < world.min.y) ? world.min.y : readMinY;
-	const int simMinZ = (readMinZ < world.min.z) ? world.min.z : readMinZ;
-	const int simMaxX = (readMaxX > world.maxExclusive.x) ? world.maxExclusive.x : readMaxX;
-	const int simMaxY = (readMaxY > world.maxExclusive.y) ? world.maxExclusive.y : readMaxY;
-	const int simMaxZ = (readMaxZ > world.maxExclusive.z) ? world.maxExclusive.z : readMaxZ;
+	const int simMinX = readMinX < world.min.x ? world.min.x : readMinX;
+	const int simMinY = readMinY < world.min.y ? world.min.y : readMinY;
+	const int simMinZ = readMinZ < world.min.z ? world.min.z : readMinZ;
+	const int simMaxX = readMaxX > world.maxExclusive.x ? world.maxExclusive.x : readMaxX;
+	const int simMaxY = readMaxY > world.maxExclusive.y ? world.maxExclusive.y : readMaxY;
+	const int simMaxZ = readMaxZ > world.maxExclusive.z ? world.maxExclusive.z : readMaxZ;
 
 	profiling::PlotValue("Fluid CA Cells Read", static_cast<int64_t>(readMaxX - readMinX) * (readMaxY - readMinY) * (readMaxZ - readMinZ));
 

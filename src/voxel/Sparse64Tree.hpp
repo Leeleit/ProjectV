@@ -129,7 +129,7 @@ public:
 		}
 		deduplicationEnabled_ = enabled;
 		for (std::size_t i = 0; i < nodes_.size(); ++i) {
-			nodes_[i].refCount = (nodes_[i].refCount > 0) ? 1 : 0;
+			nodes_[i].refCount = nodes_[i].refCount > 0 ? 1 : 0;
 		}
 		if (!enabled) {
 			dedupIndex_.clear();
@@ -168,7 +168,7 @@ public:
 			const int subY = ExtractSubCoord(y, level);
 			const int subZ = ExtractSubCoord(z, level);
 			const int childIndex = ComputeSparse64ChildSlotIndex(subX, subY, subZ);
-			if (((node.fillMask >> childIndex) & 1ull) == 0ull) {
+			if ((node.fillMask >> childIndex & 1ull) == 0ull) {
 				return 0;
 			}
 			slot = node.slots[childIndex];
@@ -283,9 +283,9 @@ private:
 	static uint64_t MixSplitMix64(uint64_t seed, uint64_t value) noexcept
 	{
 		uint64_t z = seed + value;
-		z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
-		z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
-		return z ^ (z >> 31);
+		z = (z ^ z >> 30) * 0xbf58476d1ce4e5b9ull;
+		z = (z ^ z >> 27) * 0x94d049bb133111ebull;
+		return z ^ z >> 31;
 	}
 
 	[[nodiscard]] uint64_t ComputeNodeStructuralHash(const Node &node) const noexcept
@@ -373,7 +373,7 @@ private:
 			return 0;
 		}
 		int shift = (level - 1) * kSparse64BitsPerAxis;
-		return (coord >> shift) & (kSparse64NodeSide - 1);
+		return coord >> shift & kSparse64NodeSide - 1;
 	}
 
 	[[nodiscard]] size_t CountNonAirRecursive(uint32_t slot, int level) const noexcept // NOLINT(misc-no-recursion): recursive tree traversal is intentional
@@ -400,7 +400,7 @@ private:
 		}
 		size_t count = 0;
 		for (int i = 0; i < kSparse64ChildrenPerNode; ++i) {
-			if (((node.fillMask >> i) & 1ull) != 0ull) {
+			if ((node.fillMask >> i & 1ull) != 0ull) {
 				count += CountNonAirRecursive(node.slots[i], level - 1);
 			}
 		}
@@ -553,7 +553,7 @@ public:
 		const uint32_t existingSlot = nodes_[nodeIndex].slots[childIndex];
 		const uint32_t updatedSlot = SetCellRecursive(existingSlot, x, y, z, material, level - 1);
 		nodes_[nodeIndex].slots[childIndex] = updatedSlot;
-		nodes_[nodeIndex].fillMask |= (1ull << childIndex);
+		nodes_[nodeIndex].fillMask |= 1ull << childIndex;
 
 		uint8_t collapseMaterial = 0;
 		if (CanCollapseToHomogeneous(nodes_[nodeIndex], collapseMaterial)) {

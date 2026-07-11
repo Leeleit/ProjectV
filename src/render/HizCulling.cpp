@@ -1033,7 +1033,7 @@ uint32_t ComputePerChunkMipAndBlendWidthsFromAabbs(
 				static_cast<float>(projectedYTexels),
 				maxMipLevel);
 			outMipAndBlendWidths[i * 2u] = mip;
-			outMipAndBlendWidths[i * 2u + 1u] = (mip == 0u)
+			outMipAndBlendWidths[i * 2u + 1u] = mip == 0u
 													? 0u
 													: ComputeBlendWidthForChunkMip(
 														  projectedXTexels,

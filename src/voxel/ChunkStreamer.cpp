@@ -103,21 +103,21 @@ std::expected<ChunkData, ChunkStreamError> ReadChunkBinaryFile(
 		return std::unexpected(ChunkStreamError::FileReadFailed);
 	}
 	const uint32_t magic = static_cast<uint32_t>(header[0]) |
-		(static_cast<uint32_t>(header[1]) << 8) |
-		(static_cast<uint32_t>(header[2]) << 16) |
-		(static_cast<uint32_t>(header[3]) << 24);
+		static_cast<uint32_t>(header[1]) << 8 |
+		static_cast<uint32_t>(header[2]) << 16 |
+		static_cast<uint32_t>(header[3]) << 24;
 	if (magic != kChunkFileHeaderMagic) {
 		return std::unexpected(ChunkStreamError::FileReadFailed);
 	}
 
 	const uint64_t voxelByteCount = static_cast<uint64_t>(header[8]) |
-		(static_cast<uint64_t>(header[9]) << 8) |
-		(static_cast<uint64_t>(header[10]) << 16) |
-		(static_cast<uint64_t>(header[11]) << 24) |
-		(static_cast<uint64_t>(header[12]) << 32) |
-		(static_cast<uint64_t>(header[13]) << 40) |
-		(static_cast<uint64_t>(header[14]) << 48) |
-		(static_cast<uint64_t>(header[15]) << 56);
+		static_cast<uint64_t>(header[9]) << 8 |
+		static_cast<uint64_t>(header[10]) << 16 |
+		static_cast<uint64_t>(header[11]) << 24 |
+		static_cast<uint64_t>(header[12]) << 32 |
+		static_cast<uint64_t>(header[13]) << 40 |
+		static_cast<uint64_t>(header[14]) << 48 |
+		static_cast<uint64_t>(header[15]) << 56;
 	if (voxelByteCount > static_cast<uint64_t>(16u) * 1024u * 1024u) {
 		return std::unexpected(ChunkStreamError::FileReadFailed);
 	}
@@ -155,22 +155,22 @@ bool WriteChunkBinaryFile(
 
 	std::array<uint8_t, kChunkFileHeaderBytes> header{};
 	header[0] = static_cast<uint8_t>(kChunkFileHeaderMagic & 0xFFu);
-	header[1] = static_cast<uint8_t>((kChunkFileHeaderMagic >> 8) & 0xFFu);
-	header[2] = static_cast<uint8_t>((kChunkFileHeaderMagic >> 16) & 0xFFu);
-	header[3] = static_cast<uint8_t>((kChunkFileHeaderMagic >> 24) & 0xFFu);
+	header[1] = static_cast<uint8_t>(kChunkFileHeaderMagic >> 8 & 0xFFu);
+	header[2] = static_cast<uint8_t>(kChunkFileHeaderMagic >> 16 & 0xFFu);
+	header[3] = static_cast<uint8_t>(kChunkFileHeaderMagic >> 24 & 0xFFu);
 	header[4] = static_cast<uint8_t>(kChunkFileFormatVersion & 0xFFu);
-	header[5] = static_cast<uint8_t>((kChunkFileFormatVersion >> 8) & 0xFFu);
+	header[5] = static_cast<uint8_t>(kChunkFileFormatVersion >> 8 & 0xFFu);
 	header[6] = 0u;
 	header[7] = 0u;
 	const uint64_t voxelByteCount = voxelBytes.size();
 	header[8] = static_cast<uint8_t>(voxelByteCount & 0xFFu);
-	header[9] = static_cast<uint8_t>((voxelByteCount >> 8) & 0xFFu);
-	header[10] = static_cast<uint8_t>((voxelByteCount >> 16) & 0xFFu);
-	header[11] = static_cast<uint8_t>((voxelByteCount >> 24) & 0xFFu);
-	header[12] = static_cast<uint8_t>((voxelByteCount >> 32) & 0xFFu);
-	header[13] = static_cast<uint8_t>((voxelByteCount >> 40) & 0xFFu);
-	header[14] = static_cast<uint8_t>((voxelByteCount >> 48) & 0xFFu);
-	header[15] = static_cast<uint8_t>((voxelByteCount >> 56) & 0xFFu);
+	header[9] = static_cast<uint8_t>(voxelByteCount >> 8 & 0xFFu);
+	header[10] = static_cast<uint8_t>(voxelByteCount >> 16 & 0xFFu);
+	header[11] = static_cast<uint8_t>(voxelByteCount >> 24 & 0xFFu);
+	header[12] = static_cast<uint8_t>(voxelByteCount >> 32 & 0xFFu);
+	header[13] = static_cast<uint8_t>(voxelByteCount >> 40 & 0xFFu);
+	header[14] = static_cast<uint8_t>(voxelByteCount >> 48 & 0xFFu);
+	header[15] = static_cast<uint8_t>(voxelByteCount >> 56 & 0xFFu);
 
 	file.write(reinterpret_cast<const char *>(header.data()), header.size());
 	if (!voxelBytes.empty()) {
@@ -355,9 +355,9 @@ uint32_t PreloadChunksAroundCamera(
 	const int maxY = cameraChunkY + static_cast<int>(radiusChunks);
 	const int minZ = cameraChunkZ - static_cast<int>(radiusChunks);
 	const int maxZ = cameraChunkZ + static_cast<int>(radiusChunks);
-	const int gridWidth = (world.width > 0) ? static_cast<int>((world.width + chunkSize - 1u) / chunkSize) : 0;
-	const int gridHeight = (world.height > 0) ? static_cast<int>((world.height + chunkSize - 1u) / chunkSize) : 0;
-	const int gridDepth = (world.depth > 0) ? static_cast<int>((world.depth + chunkSize - 1u) / chunkSize) : 0;
+	const int gridWidth = world.width > 0 ? static_cast<int>((world.width + chunkSize - 1u) / chunkSize) : 0;
+	const int gridHeight = world.height > 0 ? static_cast<int>((world.height + chunkSize - 1u) / chunkSize) : 0;
+	const int gridDepth = world.depth > 0 ? static_cast<int>((world.depth + chunkSize - 1u) / chunkSize) : 0;
 	uint32_t enqueued = 0u;
 	for (int gz = minZ; gz <= maxZ; ++gz) {
 		if (gridDepth > 0 && (gz < 0 || gz >= gridDepth)) {

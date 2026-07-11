@@ -72,7 +72,7 @@ template <typename GetOrigin, typename GetHalfExtent>
 			   std::abs(planeNormal.z) * halfExtent.z;
 	};
 	const auto passesPlane = [&](const projectv::math::Vec3 &planeNormal, const float planeOffset = 0.0f) {
-		return (projectv::math::dot(toOrigin, planeNormal) - planeOffset) + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
+		return projectv::math::dot(toOrigin, planeNormal) - planeOffset + projectedRadiusOntoPlane(planeNormal) >= 0.0f;
 	};
 
 	if (!passesPlane(cameraForward, nearPlane)) [[unlikely]] {

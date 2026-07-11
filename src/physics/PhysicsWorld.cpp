@@ -345,9 +345,9 @@ bool SyncPhysicsWorld(PhysicsState *physics, const VoxelWorld *world)
 		return true;
 	}
 
-	const bool worldPointerChanged = (physics->syncedWorld != world);
+	const bool worldPointerChanged = physics->syncedWorld != world;
 	physics->syncedWorld = world;
-	physics->syncedWorldEditVersion = (world != nullptr ? world->editVersion : 0);
+	physics->syncedWorldEditVersion = world != nullptr ? world->editVersion : 0;
 
 	if (!world) {
 		DestroyStaticWorldBody(*physics);

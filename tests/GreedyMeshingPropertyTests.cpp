@@ -93,9 +93,9 @@ struct QuadCoverageVerifier {
 	void CheckNoGapsNoOverlaps(TestContext &ctx, const std::vector<CpuGreedyFace> &faces) const
 	{
 		for (uint32_t fi = 0u; fi < 6u; ++fi) {
-			const uint32_t extentN = (input.lodLevel == 0u) ? input.chunk.extent[kFaceAxisN[fi]] : input.lodExtent;
-			const uint32_t extentU = (input.lodLevel == 0u) ? input.chunk.extent[kFaceAxisU[fi]] : input.lodExtent;
-			const uint32_t extentV = (input.lodLevel == 0u) ? input.chunk.extent[kFaceAxisV[fi]] : input.lodExtent;
+			const uint32_t extentN = input.lodLevel == 0u ? input.chunk.extent[kFaceAxisN[fi]] : input.lodExtent;
+			const uint32_t extentU = input.lodLevel == 0u ? input.chunk.extent[kFaceAxisU[fi]] : input.lodExtent;
+			const uint32_t extentV = input.lodLevel == 0u ? input.chunk.extent[kFaceAxisV[fi]] : input.lodExtent;
 
 			CoverageMap cov;
 			cov.Init(extentN, extentU, extentV);

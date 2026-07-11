@@ -89,7 +89,7 @@ std::unique_ptr<VoxelWorld> MakeFlatBenchSizedWorld()
 	for (int z = -halfFloor; z < halfFloor; ++z) {
 		for (int x = -halfFloor; x < halfFloor; ++x) {
 			SetVoxelMaterial(*world, {x, config.floorY, z},
-				((x + z) & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray,
+				(x + z & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray,
 				nullptr);
 		}
 	}
@@ -147,7 +147,7 @@ std::unique_ptr<VoxelWorld> MakeSmallFlatWorld()
 	for (int z = -halfFloor; z < halfFloor; ++z) {
 		for (int x = -halfFloor; x < halfFloor; ++x) {
 			SetVoxelMaterial(*world, {x, config.floorY, z},
-				((x + z) & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray,
+				(x + z & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray,
 				nullptr);
 		}
 	}

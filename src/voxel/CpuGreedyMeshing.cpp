@@ -29,32 +29,32 @@ bool IsSameMeshingGroupCPU(const uint8_t materialA, const uint8_t materialB)
 
 uint32_t PackLocalVoxelFaceCPU(const uint32_t x, const uint32_t y, const uint32_t z, const uint32_t faceIndex)
 {
-	return (x & 0xFFu) | ((y & 0xFFu) << 8u) | ((z & 0xFFu) << 16u) | ((faceIndex & 0xFFu) << 24u);
+	return x & 0xFFu | (y & 0xFFu) << 8u | (z & 0xFFu) << 16u | (faceIndex & 0xFFu) << 24u;
 }
 
 uint32_t PackQuadExtentsCPU(const uint32_t width, const uint32_t height)
 {
-	return (width & 0xFFu) | ((height & 0xFFu) << 8u);
+	return width & 0xFFu | (height & 0xFFu) << 8u;
 }
 
 uint32_t PackChunkIndexMaterialCPU(const uint32_t chunkIndex, const uint32_t materialIndex)
 {
-	return (chunkIndex & 0x00FFFFFFu) | ((materialIndex & 0xFFu) << 24u);
+	return chunkIndex & 0x00FFFFFFu | (materialIndex & 0xFFu) << 24u;
 }
 
 UnpackedLocalVoxelFace UnpackLocalVoxelFaceCPU(const uint32_t packed)
 {
-	return {packed & 0xFFu, (packed >> 8u) & 0xFFu, (packed >> 16u) & 0xFFu, (packed >> 24u) & 0xFFu};
+	return {packed & 0xFFu, packed >> 8u & 0xFFu, packed >> 16u & 0xFFu, packed >> 24u & 0xFFu};
 }
 
 UnpackedQuadExtents UnpackQuadExtentsCPU(const uint32_t packed)
 {
-	return {packed & 0xFFu, (packed >> 8u) & 0xFFu};
+	return {packed & 0xFFu, packed >> 8u & 0xFFu};
 }
 
 UnpackedChunkIndexMaterial UnpackChunkIndexMaterialCPU(const uint32_t packed)
 {
-	return {packed & 0x00FFFFFFu, (packed >> 24u) & 0xFFu};
+	return {packed & 0x00FFFFFFu, packed >> 24u & 0xFFu};
 }
 
 uint8_t ReadVoxelMaterialCPU(const CpuGreedyInput &input, const int32_t worldX, const int32_t worldY, const int32_t worldZ)
@@ -113,11 +113,11 @@ void EmitFace(const uint8_t materialIndex, const uint32_t faceIndex, const uint3
 void GreedyFacePassCPU(const uint32_t faceIndex, const uint32_t axisN, const uint32_t axisU, const uint32_t axisV,
 					   const int32_t signN, const CpuGreedyInput &input, CpuGreedyMeshResult &result)
 {
-	const uint32_t extentN = (input.lodLevel == 0u) ? input.chunk.extent[axisN] : input.lodExtent;
-	const uint32_t extentU = (input.lodLevel == 0u) ? input.chunk.extent[axisU] : input.lodExtent;
-	const uint32_t extentV = (input.lodLevel == 0u) ? input.chunk.extent[axisV] : input.lodExtent;
+	const uint32_t extentN = input.lodLevel == 0u ? input.chunk.extent[axisN] : input.lodExtent;
+	const uint32_t extentU = input.lodLevel == 0u ? input.chunk.extent[axisU] : input.lodExtent;
+	const uint32_t extentV = input.lodLevel == 0u ? input.chunk.extent[axisV] : input.lodExtent;
 
-	const bool useGreedy = (extentU <= kMaxChunkExtentForGreedyCpu) && (extentV <= kMaxChunkExtentForGreedyCpu);
+	const bool useGreedy = extentU <= kMaxChunkExtentForGreedyCpu && extentV <= kMaxChunkExtentForGreedyCpu;
 
 	for (uint32_t pN = 0u; pN < extentN; ++pN) {
 		if (useGreedy) {
@@ -125,7 +125,7 @@ void GreedyFacePassCPU(const uint32_t faceIndex, const uint32_t axisN, const uin
 
 			for (uint32_t pV = 0u; pV < extentV; ++pV) {
 				for (uint32_t pU = 0u; pU < extentU; ++pU) {
-					if (((visited[pV] >> pU) & 1ULL) != 0ULL) {
+					if ((visited[pV] >> pU & 1ULL) != 0ULL) {
 						continue;
 					}
 
@@ -154,7 +154,7 @@ void GreedyFacePassCPU(const uint32_t faceIndex, const uint32_t axisN, const uin
 
 					uint32_t W = 0u;
 					while (pU + W < extentU) {
-						if (((visited[pV] >> (pU + W)) & 1ULL) != 0ULL) {
+						if ((visited[pV] >> (pU + W) & 1ULL) != 0ULL) {
 							break;
 						}
 						uint32_t testCoord[3] = {};
@@ -183,7 +183,7 @@ void GreedyFacePassCPU(const uint32_t faceIndex, const uint32_t axisN, const uin
 					while (pV + H < extentV) {
 						bool rowValid = true;
 						for (uint32_t wi = 0u; wi < W; ++wi) {
-							if (((visited[pV + H] >> (pU + wi)) & 1ULL) != 0ULL) {
+							if ((visited[pV + H] >> (pU + wi) & 1ULL) != 0ULL) {
 								rowValid = false;
 								break;
 							}

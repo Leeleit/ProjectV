@@ -53,7 +53,7 @@ constexpr std::array kCloudscapeDescriptorPoolSizes{
 
 float Hash11(float p)
 {
-	p = (p * 0.1031f);
+	p = p * 0.1031f;
 	p = p - std::floor(p);
 	p = p * (p + 33.33f);
 	p = p * (p + p);

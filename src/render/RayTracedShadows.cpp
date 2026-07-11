@@ -128,8 +128,8 @@ bool RayTracedShadows::AllocateBuffers(
 	}
 
 	const VkDeviceSize alignedScratchBytes =
-		(minScratchAlignment > 0 ? ((kRtxScratchBufferBytes + minScratchAlignment - 1) / minScratchAlignment) * minScratchAlignment
-								 : kRtxScratchBufferBytes);
+		minScratchAlignment > 0 ? (kRtxScratchBufferBytes + minScratchAlignment - 1) / minScratchAlignment * minScratchAlignment
+								: kRtxScratchBufferBytes;
 
 	VkBufferCreateInfo scratchInfo{};
 	scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;

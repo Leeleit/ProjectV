@@ -27,7 +27,7 @@ bool DecodeSlot(
 	if ((flagBits & kSparse64LeafFlag) != 0u) {
 		outIsLeaf = true;
 		const uint8_t materialIndex = static_cast<uint8_t>(slot & kSparse64MaterialMask);
-		outMaterial = (materialLookup != nullptr) ? materialLookup[materialIndex] : materialIndex;
+		outMaterial = materialLookup != nullptr ? materialLookup[materialIndex] : materialIndex;
 		outNodeIndex = kNanoVdbInvalidIndex;
 		return true;
 	}
@@ -60,9 +60,9 @@ bool BuildNanoVdbFlatten(
 	}
 
 	const uint32_t childrenPerNode = GetChildrenPerNode();
-	const uint64_t allChildrenMask = (childrenPerNode == 64u)
+	const uint64_t allChildrenMask = childrenPerNode == 64u
 		? ~uint64_t{0}
-		: ((uint64_t{1} << childrenPerNode) - 1u);
+		: uint64_t{1} << childrenPerNode - 1u;
 
 	outResult.uppers.reserve(1u);
 	outResult.lowers.resize(childrenPerNode);
@@ -90,9 +90,9 @@ bool BuildNanoVdbFlatten(
 			const uint32_t totalVoxels = static_cast<uint32_t>(tree.SideX()) *
 				static_cast<uint32_t>(tree.SideY()) *
 				static_cast<uint32_t>(tree.SideZ());
-			const uint64_t valueMask = (totalVoxels >= 64u)
+			const uint64_t valueMask = totalVoxels >= 64u
 				? ~uint64_t{0}
-				: ((uint64_t{1} << totalVoxels) - 1u);
+				: uint64_t{1} << totalVoxels - 1u;
 
 			NanoVdbLower lower{};
 			lower.childMask = valueMask;
@@ -119,7 +119,7 @@ bool BuildNanoVdbFlatten(
 		uint32_t leafBase = 0u;
 
 		for (uint32_t childSlotIndex = 0; childSlotIndex < childrenPerNode; ++childSlotIndex) {
-			if (((rootChildMask >> childSlotIndex) & 1ull) == 0ull) {
+			if ((rootChildMask >> childSlotIndex & 1ull) == 0ull) {
 				continue;
 			}
 			const uint32_t childSlot = rootNode.slots[childSlotIndex];
@@ -132,9 +132,9 @@ bool BuildNanoVdbFlatten(
 
 			if (childIsLeaf) {
 				if (childMaterial != 0u) {
-					const uint64_t valueMask = (childrenPerNode == 64u)
+					const uint64_t valueMask = childrenPerNode == 64u
 						? ~uint64_t{0}
-						: ((uint64_t{1} << childrenPerNode) - 1u);
+						: uint64_t{1} << childrenPerNode - 1u;
 
 					NanoVdbLower lower{};
 					lower.childMask = valueMask;
@@ -152,7 +152,7 @@ bool BuildNanoVdbFlatten(
 					outResult.lowers[childSlotIndex] = lower;
 					outResult.leaves.push_back(leaf);
 					++leafBase;
-					upper.childMask |= (uint32_t{1} << childSlotIndex);
+					upper.childMask |= uint32_t{1} << childSlotIndex;
 				}
 			} else {
 				const Sparse64Tree::Node &childNode = tree.NodeAt(childNodeIndex);
@@ -164,7 +164,7 @@ bool BuildNanoVdbFlatten(
 				for (uint32_t leafChildSlotIndex = 0;
 					leafChildSlotIndex < childrenPerNode;
 					++leafChildSlotIndex) {
-					if (((childChildMask >> leafChildSlotIndex) & 1ull) == 0ull) {
+					if ((childChildMask >> leafChildSlotIndex & 1ull) == 0ull) {
 						continue;
 					}
 					const uint32_t leafChildSlot = childNode.slots[leafChildSlotIndex];
@@ -209,7 +209,7 @@ bool BuildNanoVdbFlatten(
 
 					outResult.lowers[childSlotIndex] = lower;
 					leafBase += childCountLocal;
-					upper.childMask |= (uint32_t{1} << childSlotIndex);
+					upper.childMask |= uint32_t{1} << childSlotIndex;
 				}
 			}
 		}
@@ -245,19 +245,19 @@ uint8_t ReadNanoVdbVoxelMaterial(
 	const uint32_t childrenPerNode = GetChildrenPerNode();
 	const uint32_t bitsPerAxis = GetBitsPerAxis();
 	const uint32_t mask = (1u << bitsPerAxis) - 1u;
-	const uint32_t rootDepth = (result.rootLevelDepth >= 2)
+	const uint32_t rootDepth = result.rootLevelDepth >= 2
 		? static_cast<uint32_t>(result.rootLevelDepth - 1)
 		: 0u;
 	const uint32_t upperShift = bitsPerAxis * rootDepth;
-	const uint32_t upperChildX = (localX >> upperShift) & mask;
-	const uint32_t upperChildY = (localY >> upperShift) & mask;
-	const uint32_t upperChildZ = (localZ >> upperShift) & mask;
+	const uint32_t upperChildX = localX >> upperShift & mask;
+	const uint32_t upperChildY = localY >> upperShift & mask;
+	const uint32_t upperChildZ = localZ >> upperShift & mask;
 	const uint32_t upperChildIndex = upperChildX +
 		(mask + 1u) * (upperChildY + (mask + 1u) * upperChildZ);
 	if (upperChildIndex >= childrenPerNode) {
 		return 0u;
 	}
-	if (((upper.childMask >> upperChildIndex) & 1u) == 0u) {
+	if ((upper.childMask >> upperChildIndex & 1u) == 0u) {
 		return 0u;
 	}
 	const uint32_t lowerIndex = upper.firstLower + upperChildIndex;
@@ -276,10 +276,10 @@ uint8_t ReadNanoVdbVoxelMaterial(
 	if (lowerChildIndex >= childrenPerNode) {
 		return 0u;
 	}
-	if (((lower.childMask >> lowerChildIndex) & 1ull) == 0ull) {
+	if ((lower.childMask >> lowerChildIndex & 1ull) == 0ull) {
 		return 0u;
 	}
-	const uint64_t lowerBitsBelow = lower.childMask & ((uint64_t{1} << lowerChildIndex) - 1ull);
+	const uint64_t lowerBitsBelow = lower.childMask & (uint64_t{1} << lowerChildIndex) - 1ull;  // noinspection CppRedundantParentheses
 	const uint32_t leafOffset = static_cast<uint32_t>(__builtin_popcountll(lowerBitsBelow));
 	const uint32_t leafIndex = lower.firstLeaf + leafOffset;
 	if (leafIndex >= result.leaves.size()) {

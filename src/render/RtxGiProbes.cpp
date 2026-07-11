@@ -91,9 +91,9 @@ bool RtxGiProbes::Initialize(
 	m_config.originX = originX;
 	m_config.originY = originY;
 	m_config.originZ = originZ;
-	m_config.spacingX = (safeHalfExtent * 2.0f) / static_cast<float>(safeProbesPerAxis);
-	m_config.spacingY = (safeHalfExtent * 2.0f) / static_cast<float>(safeProbesPerAxis);
-	m_config.spacingZ = (safeHalfExtent * 2.0f) / static_cast<float>(safeProbesPerAxis);
+	m_config.spacingX = safeHalfExtent * 2.0f / static_cast<float>(safeProbesPerAxis);
+	m_config.spacingY = safeHalfExtent * 2.0f / static_cast<float>(safeProbesPerAxis);
+	m_config.spacingZ = safeHalfExtent * 2.0f / static_cast<float>(safeProbesPerAxis);
 	m_config.maxRayDistance = safeMaxRay;
 
 	if (!AllocateTextures(context, safeProbesPerAxis, safeOctahedralSize)) {
@@ -171,9 +171,9 @@ void RtxGiProbes::SetVolumeOrigin(
 void RtxGiProbes::SetVolumeHalfExtent(const float halfExtentMeters) noexcept
 {
 	const float safeHalfExtent = std::max(halfExtentMeters, 1.0f);
-	m_config.spacingX = (safeHalfExtent * 2.0f) / static_cast<float>(m_config.probeCountAxisX);
-	m_config.spacingY = (safeHalfExtent * 2.0f) / static_cast<float>(m_config.probeCountAxisY);
-	m_config.spacingZ = (safeHalfExtent * 2.0f) / static_cast<float>(m_config.probeCountAxisZ);
+	m_config.spacingX = safeHalfExtent * 2.0f / static_cast<float>(m_config.probeCountAxisX);
+	m_config.spacingY = safeHalfExtent * 2.0f / static_cast<float>(m_config.probeCountAxisY);
+	m_config.spacingZ = safeHalfExtent * 2.0f / static_cast<float>(m_config.probeCountAxisZ);
 	if (m_config.volumeDescMappedData != nullptr) {
 		auto *desc = static_cast<VolumeDescGpu *>(m_config.volumeDescMappedData);
 		desc->halfExtentMeters = safeHalfExtent;

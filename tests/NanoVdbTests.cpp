@@ -56,7 +56,7 @@ void TestSingleVoxelFlatten()
 	for (uint32_t z = 0; z < 8u; ++z) {
 		for (uint32_t y = 0; y < 8u; ++y) {
 			for (uint32_t x = 0; x < 8u; ++x) {
-				const uint8_t expected = (x == 2u && y == 3u && z == 4u) ? 1u : 0u;
+				const uint8_t expected = x == 2u && y == 3u && z == 4u ? 1u : 0u;
 				const uint8_t actual = projectv::voxel::nanovdb::ReadNanoVdbVoxelMaterial(
 					result,
 					0u,
@@ -167,5 +167,5 @@ int main()
 	std::fprintf(stderr, "NanoVdb tests: %d assertions, %d failures\n",
 		g_assertionCount,
 		g_failureCount);
-	return (g_failureCount == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+	return g_failureCount == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

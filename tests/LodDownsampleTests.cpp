@@ -61,7 +61,7 @@ VoxelWorld BuildUniformWorld(const uint8_t material)
 	chunk.maxExclusive = {8, 8, 8};
 	chunk.rebuildQueued = true;
 	chunk.isStatic = false;
-	chunk.nonAirVoxelCount = (material == 0u) ? 0u : 8u * 8u * 8u;
+	chunk.nonAirVoxelCount = material == 0u ? 0u : 8u * 8u * 8u;
 	chunk.lodLevel = 0;
 	world.chunks.push_back(chunk);
 

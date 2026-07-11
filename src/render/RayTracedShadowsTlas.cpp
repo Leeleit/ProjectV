@@ -34,7 +34,7 @@ void RayTracedShadows::UpdateTlas(
 	std::memset(
 		instances + clamped,
 		0,
-		(m_config.tlasInstanceCapacityBytes - clamped * sizeof(VkAccelerationStructureInstanceKHR)));
+		m_config.tlasInstanceCapacityBytes - clamped * sizeof(VkAccelerationStructureInstanceKHR));
 	m_config.tlasInstanceCount = static_cast<uint32_t>(clamped);
 	m_config.tlasRebuildCount += 1u;
 

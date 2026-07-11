@@ -46,7 +46,7 @@ uint32_t LodPayloadWordOffsetForChunk(const uint32_t chunkIndex)
 uint32_t EncodeChunkLodMetadata(const uint8_t lodLevel, const uint8_t outExtent)
 {
 	return static_cast<uint32_t>(lodLevel) |
-		(static_cast<uint32_t>(outExtent) << 8u);
+		static_cast<uint32_t>(outExtent) << 8u;
 }
 
 void DecodeChunkLodMetadata(
@@ -55,7 +55,7 @@ void DecodeChunkLodMetadata(
 	uint8_t &outExtent)
 {
 	outLodLevel = static_cast<uint8_t>(metadata & 0xFFu);
-	outExtent = static_cast<uint8_t>((metadata >> 8u) & 0xFFu);
+	outExtent = static_cast<uint8_t>(metadata >> 8u & 0xFFu);
 }
 
 void BuildLodPayloadWordsFromDownsampled(
@@ -72,7 +72,7 @@ void BuildLodPayloadWordsFromDownsampled(
 		uint32_t packed = 0u;
 		for (uint32_t b = 0u; b < 4u; ++b) {
 			const uint32_t byteIndex = baseByte + b;
-			const uint8_t byte = (byteIndex < byteCount) ? downsampledBytes[byteIndex] : 0u;
+			const uint8_t byte = byteIndex < byteCount ? downsampledBytes[byteIndex] : 0u;
 			packed |= static_cast<uint32_t>(byte) << (b * 8u);
 		}
 		outWords[w] = packed;
@@ -124,8 +124,8 @@ bool RefreshLodDownsampledBuffers(
 
 		if (frameResources.chunkLodLevelsMappedData != nullptr) {
 			for (uint32_t i = 0u; i < chunkCount; ++i) {
-				const uint8_t lod = (i < world.chunks.size()) ? world.chunks[i].lodLevel : 0u;
-				const uint8_t outExtent = (lod == 0u)
+				const uint8_t lod = i < world.chunks.size() ? world.chunks[i].lodLevel : 0u;
+				const uint8_t outExtent = lod == 0u
 					? 0u
 					: static_cast<uint8_t>(projectv::voxel::LodDownsampledExtentForLod(lod, static_cast<uint8_t>(chunkSize)));
 				static_cast<uint32_t *>(frameResources.chunkLodLevelsMappedData)[i] =

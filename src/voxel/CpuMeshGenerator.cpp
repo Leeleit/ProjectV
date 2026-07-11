@@ -16,7 +16,7 @@ bool ShouldEmitFaceAtXPlus(const uint8_t *const voxels, const int x, const int y
 	if (x + 1 >= widthX) {
 		return true;
 	}
-	const uint8_t neighbor = voxels[(x + 1) + widthX * (y + heightY * z)];
+	const uint8_t neighbor = voxels[x + 1 + widthX * (y + heightY * z)];
 	return current != neighbor;
 }
 

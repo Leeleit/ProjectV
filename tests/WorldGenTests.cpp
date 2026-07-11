@@ -80,7 +80,7 @@ void TestWorldGenDispatchSkipOnZeroActiveChunks(WorldGenTestContext &test)
 {
 	projectv::render::WorldGenPushConstants push{};
 	push.chunkCountAndFlags = {0u, 0u, 0u, 0u};
-	const bool shouldSkip = (push.chunkCountAndFlags[0] == 0u);
+	const bool shouldSkip = push.chunkCountAndFlags[0] == 0u;
 	if (!shouldSkip) {
 		test.Fail(__LINE__, "Frame loop must skip RecordWorldGenDispatch when activeChunkCount is 0");
 	}

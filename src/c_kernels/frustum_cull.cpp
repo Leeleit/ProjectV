@@ -81,8 +81,8 @@ void projectv_cull_frustum_scalar(
 	const std::size_t count) noexcept
 {
 #ifndef NDEBUG
-	assert((reinterpret_cast<uintptr_t>(aabbs) % alignof(ProjectvCAabb)) == 0);
-	assert((reinterpret_cast<uintptr_t>(&parameters) % alignof(ProjectvCFrustumCullParameters)) == 0);
+	assert(reinterpret_cast<uintptr_t>(aabbs) % alignof(ProjectvCAabb) == 0);
+	assert(reinterpret_cast<uintptr_t>(&parameters) % alignof(ProjectvCFrustumCullParameters) == 0);
 #endif
 
 	ProjectvCPlane3 planes[5];

@@ -320,7 +320,7 @@ bool RefreshGraphicsResourceBindings(
 		}
 
 		const VkImageView shadowMaskView =
-			(render->rayTracedShadows != nullptr && render->rayTracedShadows->IsVoxelAwareRtxActive())
+			render->rayTracedShadows != nullptr && render->rayTracedShadows->IsVoxelAwareRtxActive()
 				? render->rayTracedShadows->GetShadowMaskImageView()
 				: render->rtxShadowMaskFallbackView;
 		if (shadowMaskView != VK_NULL_HANDLE) {

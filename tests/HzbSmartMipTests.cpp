@@ -230,7 +230,7 @@ uint32_t ComputeBlendWidthForChunkMipLocal(
 		return 0u;
 	}
 	const uint32_t texelsAtMip = std::max<uint32_t>(maxExtent >> std::min<uint32_t>(mipLevel, 16u), 1u);
-	const uint32_t frac = maxExtent & ((1u << std::min<uint32_t>(mipLevel, 16u)) - 1u);
+	const uint32_t frac = maxExtent & (1u << std::min<uint32_t>(mipLevel, 16u)) - 1u;  // noinspection CppRedundantParentheses
 	return std::min<uint32_t>(texelsAtMip / 4u + frac / 8u, maxBlendWidth);
 }
 

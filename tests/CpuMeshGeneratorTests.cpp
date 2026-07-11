@@ -98,9 +98,9 @@ void TestZeroDimensionsReturnEmpty(TestContext &context)
 	for (int i = 0; i < 3; ++i) {
 		projectv::voxel::CpuMeshInput input{};
 		input.voxels = voxels.data();
-		input.widthX = (i == 0) ? 0 : 1;
-		input.heightY = (i == 1) ? 0 : 1;
-		input.depthZ = (i == 2) ? 0 : 1;
+		input.widthX = i == 0 ? 0 : 1;
+		input.heightY = i == 1 ? 0 : 1;
+		input.depthZ = i == 2 ? 0 : 1;
 		const auto faces = projectv::voxel::GenerateCpuChunkMeshXPositive(input);
 		ExpectTrue(context, faces.empty(), __LINE__, "zero dimension -> empty result");
 	}

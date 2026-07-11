@@ -84,9 +84,9 @@ uint32_t GreedyMergeSolidVoxelsInBounds(
 
 	const auto at = [&](const int x, const int y, const int z) -> uint8_t & {
 		return consumed[
-			(static_cast<size_t>(z - startZ) * strideZ) +
-			(static_cast<size_t>(y - startY) * strideY) +
-			(static_cast<size_t>(x - startX) * strideX)];
+			static_cast<size_t>(z - startZ) * strideZ +
+			static_cast<size_t>(y - startY) * strideY +
+			static_cast<size_t>(x - startX) * strideX];
 	};
 
 	for (int z = startZ; z < endZ; ++z) {

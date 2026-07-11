@@ -286,7 +286,7 @@ bool CreateMultiScatteringLut(VulkanContextState *context, RenderState *render)
 
 			glm::vec3 multiScatter(0.0f);
 			for (int octave = 0; octave < 2; ++octave) {
-				const float weight = (octave == 0) ? 0.5f : 0.3f;
+				const float weight = octave == 0 ? 0.5f : 0.3f;
 				multiScatter += glm::vec3(weight) * glm::vec3(density * density * 0.06f);
 			}
 			multiScatter *= glm::vec3(0.7f, 0.85f, 1.0f);

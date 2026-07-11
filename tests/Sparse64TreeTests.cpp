@@ -317,7 +317,7 @@ void TestFullSweepParity(TestContext &context)
 	for (int z = 0; z < sideZ; ++z) {
 		for (int y = 0; y < sideY; ++y) {
 			for (int x = 0; x < sideX; ++x) {
-				const uint8_t m = static_cast<uint8_t>(((x * 3 + y * 5 + z * 7) % 4) + 1);
+				const uint8_t m = static_cast<uint8_t>((x * 3 + y * 5 + z * 7) % 4 + 1);  // noinspection CppRedundantParentheses
 				const size_t idx = static_cast<size_t>(x) + static_cast<size_t>(sideX) * (y + static_cast<size_t>(sideY) * z);
 				flat[idx] = m;
 				tree.SetCell(x, y, z, m);
