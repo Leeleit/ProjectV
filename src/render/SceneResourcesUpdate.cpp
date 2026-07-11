@@ -309,8 +309,8 @@ bool UploadSceneFrameResources(
 }
 
 bool RefreshChunkAabbBuffer(
-	std::span<const VoxelChunk> chunks,
-	std::span<const PackedSceneChunkDescriptor> descriptors,
+	std::span<const VoxelChunk>const  chunks,
+	std::span<const PackedSceneChunkDescriptor>const  descriptors,
 	SceneFrameResources &frameResources)
 {
 	(void)descriptors;
@@ -399,7 +399,7 @@ uint64_t ComputeGrownNanoVdbCapacity(const uint64_t currentCapacityBytes, const 
 bool GrowNanoVdbBuffer(
 	VulkanContextState *context,
 	RenderState &render,
-	uint32_t currentFrameIndex,
+	const uint32_t currentFrameIndex,
 	VkBuffer &buffer,
 	VmaAllocation &allocation,
 	void *&mappedData,

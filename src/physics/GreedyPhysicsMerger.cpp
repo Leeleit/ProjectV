@@ -51,8 +51,8 @@ namespace {
 
 uint32_t GreedyMergeSolidVoxelsInBounds(
 	const VoxelWorld &world,
-	Int3 boundsMin,
-	Int3 boundsMaxExclusive,
+	const Int3 boundsMin,
+	const Int3 boundsMaxExclusive,
 	std::vector<MergedVoxelBox> &outBoxes)
 {
 	outBoxes.clear();

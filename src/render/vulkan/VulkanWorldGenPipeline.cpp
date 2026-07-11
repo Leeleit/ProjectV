@@ -244,11 +244,11 @@ uint32_t BuildActiveChunkIdsForWorldGen(
 }
 
 bool RecordWorldGenDispatch(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RenderState &render,
 	SceneFrameResources &frameResources,
 	const WorldGenPushConstants &pushConstants,
-	uint32_t activeChunkCount)
+	const uint32_t activeChunkCount)
 {
 	if (commandBuffer == VK_NULL_HANDLE) {
 		return false;

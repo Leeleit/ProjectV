@@ -17,7 +17,7 @@ constexpr const char *kRtxShadowIntersectionShaderFilename = "voxel_rtx_shadow.r
 constexpr const char *kRtxShadowClosestHitShaderFilename = "voxel_rtx_shadow.rchit.spv";
 constexpr const char *kRtxShadowMissShaderFilename = "voxel_rtx_shadow.rmiss.spv";
 
-VkShaderModule CreateShaderModule(VkDevice device, const std::vector<char> &code, const char *debugName)
+VkShaderModule CreateShaderModule(const VkDevice device, const std::vector<char> &code, const char *debugName)
 {
 	VkShaderModuleCreateInfo moduleInfo{};
 	moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -35,7 +35,7 @@ VkShaderModule CreateShaderModule(VkDevice device, const std::vector<char> &code
 }
 
 bool LoadShaderModule(
-	VkDevice device,
+	const VkDevice device,
 	const char *filename,
 	VkShaderModule *outModule,
 	const char *debugName)
@@ -52,7 +52,7 @@ bool LoadShaderModule(
 	return *outModule != VK_NULL_HANDLE;
 }
 
-void DestroyShaderModule(VkDevice device, VkShaderModule &module) noexcept
+void DestroyShaderModule(const VkDevice device, VkShaderModule &module) noexcept
 {
 	if (module != VK_NULL_HANDLE) {
 		vkDestroyShaderModule(device, module, nullptr);

@@ -120,12 +120,12 @@ bool CreateSkyLutResources(VulkanContextState *context, RenderState *render)
 	return true;
 }
 
-float CosThetaClamped(float cosTheta)
+float CosThetaClamped(const float cosTheta)
 {
 	return std::max(cosTheta, -1.0f);
 }
 
-float SchlickPhaseFunction(float cosTheta, float g)
+float SchlickPhaseFunction(const float cosTheta, const float g)
 {
 	const float k = 1.55f + g * (-50.0f + g * (230.0f + g * (-490.0f + g * 425.0f)));
 	const float numerator = 1.0f + k * cosTheta;
@@ -133,7 +133,7 @@ float SchlickPhaseFunction(float cosTheta, float g)
 	return numerator / denominator;
 }
 
-float RayleighDensity(float altitude)
+float RayleighDensity(const float altitude)
 {
 	return std::exp(-altitude / 8500.0f);
 }
@@ -643,13 +643,13 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 }
 
 bool RecordSkyAtmospherePass(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RenderState &render,
 	const SkyAtmospherePushConstants &pushConstants,
-	VkImageView sceneColorView,
-	VkImageView depthView,
-	VkExtent2D extent,
-	uint32_t frameIndex)
+	const VkImageView sceneColorView,
+	const VkImageView depthView,
+	const VkExtent2D extent,
+	const uint32_t frameIndex)
 {
 	PV_PROFILE_ZONE_N("RecordSkyAtmospherePass");
 	if (commandBuffer == VK_NULL_HANDLE) {

@@ -8,7 +8,7 @@ namespace {
 
 struct TestContext {
 	int failures = 0;
-	void Fail(int line, std::string_view msg)
+	void Fail(const int line, const std::string_view msg)
 	{
 		std::fprintf(stderr, "FAIL line %d: %.*s\n", line, static_cast<int>(msg.size()), msg.data());
 		++failures;

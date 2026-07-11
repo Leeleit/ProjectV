@@ -478,7 +478,7 @@ bool RefreshVoxelizeResourceBindings(
 }
 
 bool RecordVoxelizeDispatch(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RenderState &render,
 	SceneFrameResources &frameResources,
 	const VoxelizePushConstants &pushConstants,
@@ -523,7 +523,7 @@ bool RecordVoxelizeDispatch(
 }
 
 bool BuildVctClipmapMipChain(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RenderState &render)
 {
 	PV_PROFILE_ZONE_N("BuildVctClipmapMipChain");

@@ -94,7 +94,7 @@ void DestroyAsyncComputeResources(VulkanContextState *context)
 }
 
 bool RecordAsyncComputePass(
-	VkCommandBuffer asyncCommandBuffer,
+	const VkCommandBuffer asyncCommandBuffer,
 	VulkanContextState &context,
 	RenderState &render,
 	AppState *state,
@@ -244,7 +244,7 @@ bool RecordAsyncComputePass(
 
 bool SubmitToComputeQueue(
 	VulkanContextState *context,
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	uint64_t *outTimelineValue)
 {
 	PV_PROFILE_ZONE_N("SubmitToComputeQueue");
@@ -305,7 +305,7 @@ bool SubmitToComputeQueue(
 }
 
 bool RecordHzbAsyncCullPass(
-	VkCommandBuffer asyncCommandBuffer,
+	const VkCommandBuffer asyncCommandBuffer,
 	VulkanContextState &context,
 	RenderState &render,
 	const float (&inverseViewProjection)[16],
@@ -403,7 +403,7 @@ bool RecordHzbAsyncCullPass(
 
 bool SubmitHzbAsyncCullToComputeQueue(
 	VulkanContextState *context,
-	VkCommandBuffer asyncCommandBuffer,
+	const VkCommandBuffer asyncCommandBuffer,
 	uint64_t *outTimelineValue)
 {
 	PV_PROFILE_ZONE_N("SubmitHzbAsyncCullToComputeQueue");

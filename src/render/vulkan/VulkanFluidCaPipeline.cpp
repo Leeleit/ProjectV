@@ -510,7 +510,7 @@ bool RecordFluidCaDispatch(
 bool SubmitFluidCaToComputeQueue(
 	VulkanContextState *context,
 	RenderState &render,
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	uint64_t *outTimelineValue)
 {
 	PV_PROFILE_ZONE_N("SubmitFluidCaToComputeQueue");
@@ -570,7 +570,7 @@ bool SubmitFluidCaToComputeQueue(
 bool ReadFluidCaFrameStats(
 	VulkanContextState *context,
 	const RenderState &render,
-	uint32_t frameIndex,
+	const uint32_t frameIndex,
 	FluidCaGpuFrameStats *outStats)
 {
 	PV_PROFILE_ZONE_N("ReadFluidCaFrameStats");

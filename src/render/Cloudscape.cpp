@@ -60,7 +60,7 @@ float Hash11(float p)
 	return glm::fract(p);
 }
 
-float ValueNoise2D(float x, float y)
+float ValueNoise2D(const float x, const float y)
 {
 	const float xi = std::floor(x);
 	const float yi = std::floor(y);
@@ -75,7 +75,7 @@ float ValueNoise2D(float x, float y)
 	return std::lerp(std::lerp(a, b, u), std::lerp(c, d, u), v);
 }
 
-float Fbm2D(float x, float y, int octaves)
+float Fbm2D(const float x, const float y, const int octaves)
 {
 	float result = 0.0f;
 	float amplitude = 0.5f;
@@ -484,13 +484,13 @@ bool CreateCloudscapeResources(VulkanContextState *context, RenderState *render)
 }
 
 bool RecordCloudscapeRaymarchPass(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RenderState &render,
 	const CloudscapePushConstants &pushConstants,
-	VkImageView sceneColorView,
-	VkImageView depthView,
-	VkExtent2D extent,
-	uint32_t frameIndex)
+	const VkImageView sceneColorView,
+	const VkImageView depthView,
+	const VkExtent2D extent,
+	const uint32_t frameIndex)
 {
 	PV_PROFILE_ZONE_N("RecordCloudscapeRaymarchPass");
 	if (commandBuffer == VK_NULL_HANDLE) {

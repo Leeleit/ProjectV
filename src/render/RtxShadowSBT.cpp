@@ -11,10 +11,10 @@ namespace projectv::render {
 
 bool RtxShadowSBT::Initialize(
 	const VulkanContextState &context,
-	VkPipeline rayTracingPipeline,
-	uint32_t rayGenGroupIndex,
-	uint32_t missGroupIndex,
-	uint32_t hitGroupIndex)
+	const VkPipeline rayTracingPipeline,
+	const uint32_t rayGenGroupIndex,
+	const uint32_t missGroupIndex,
+	const uint32_t hitGroupIndex)
 {
 	if (m_buffer != VK_NULL_HANDLE) {
 		return true;
@@ -82,7 +82,7 @@ bool RtxShadowSBT::Initialize(
 		return false;
 	}
 
-	auto writeHandle = [&](uint8_t *base, VkDeviceSize regionStart, uint32_t groupIndex, uint32_t stride) {
+	auto writeHandle = [&](uint8_t *base, const VkDeviceSize regionStart, const uint32_t groupIndex, const uint32_t stride) {
 		uint8_t *dst = base + regionStart;
 		const uint8_t *src = handles.data() + static_cast<size_t>(groupIndex) * handleSize;
 		std::memcpy(dst, src, handleSize);

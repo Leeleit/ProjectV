@@ -105,7 +105,7 @@ namespace {
 std::array<float, 4> MakeFrustumPlane(
 	const math::Vec3 &normal,
 	const math::Vec3 &cameraPos,
-	float offset)
+	const float offset)
 {
 	const float w = -projectv::math::dot(cameraPos, normal) - offset;
 	return {normal.x, normal.y, normal.z, w};
@@ -114,7 +114,7 @@ std::array<float, 4> MakeFrustumPlane(
 
 MeshCullPushConstants BuildMeshCullPushConstants(
 	const ChunkCullingParameters &parameters,
-	uint32_t chunkDescriptorCount)
+	const uint32_t chunkDescriptorCount)
 {
 	MeshCullPushConstants result{};
 	result.dispatchParams = {chunkDescriptorCount, 0u, 0u, 0u};
@@ -676,7 +676,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 }
 
 bool RecordMeshShaderPreCull(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	VulkanContextState *context,
 	RenderState &render,
 	SceneFrameResources &frameResources,
@@ -763,11 +763,11 @@ bool RecordMeshShaderPreCull(
 }
 
 bool RecordMeshShaderDraw(
-	VkCommandBuffer commandBuffer,
+	const VkCommandBuffer commandBuffer,
 	RenderState &render,
 	SceneFrameResources &frameResources,
 	const MeshDrawPushConstants &drawPushConstants,
-	uint32_t chunkCount)
+	const uint32_t chunkCount)
 {
 	if (!render.meshShaderEnabled) {
 		return false;

@@ -20,7 +20,7 @@ struct TestContext {
 	}
 };
 
-void ExpectEqualI(TestContext &context, int expected, int actual, int line, std::string_view expr)
+void ExpectEqualI(TestContext &context, const int expected, const int actual, const int line, const std::string_view expr)
 {
 	if (expected != actual) {
 		char buffer[256]{};
@@ -29,7 +29,7 @@ void ExpectEqualI(TestContext &context, int expected, int actual, int line, std:
 	}
 }
 
-void ExpectTrue(TestContext &context, bool condition, int line, std::string_view expr)
+void ExpectTrue(TestContext &context, const bool condition, const int line, const std::string_view expr)
 {
 	if (!condition) {
 		context.Fail(line, expr);
