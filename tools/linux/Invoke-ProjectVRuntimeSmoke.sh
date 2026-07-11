@@ -90,7 +90,7 @@ exe_path="$(cd "$(dirname "${exe_path}")" && pwd)/$(basename "${exe_path}")"
 
 if [[ ! -x "${exe_path}" ]]; then
     printf 'smoke: ProjectV executable not found or not executable: %s\n' "${exe_path}" >&2
-    printf 'smoke: build first with `cmake --build %s --target ProjectV --parallel 8`\n' "${build_dir}" >&2
+    printf "smoke: build first with \`cmake --build %s --target ProjectV --parallel 8\`\n" "${build_dir}" >&2
     exit 2
 fi
 
@@ -208,6 +208,7 @@ set -e
 
 # Verify capture files
 printf 'smoke: verifying capture files in %s\n' "${capture_dir}"
+# shellcheck disable=SC2012: directory listing is for human verification only
 ls -la "${capture_dir}" | head -20
 
 bmp_count=$(find "${capture_dir}" -maxdepth 1 -name 'ProjectV-*.bmp' | wc -l)

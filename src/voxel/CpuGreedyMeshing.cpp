@@ -271,6 +271,7 @@ CpuGreedyMeshResult GenerateCpuGreedyMesh(const CpuGreedyInput &input)
 	return result;
 }
 
+// noinspection RadGlobal: culling fields are resolved correctly by the compiler
 bool IsChunkVisibleCPU(const CpuGreedyChunkDesc &chunk, const CpuChunkCullingParams &culling)
 {
 	if (chunk.nonAirCount == 0u) {

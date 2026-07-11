@@ -21,6 +21,7 @@ where ProjectV's FetchContent target doesn't exist.
 
 ## Why a separate scope?
 
+<!-- noinspection MarkdownIncorrectTableFormatting: tables are valid but contain long inline-code cells -->
 | Concern | ProjectV scope | Tracy-only scope |
 |---------|----------------|------------------|
 | `add_subdirectory(external/tracy/profiler)` | would call `project(tracy-profiler)` again → CMake error | n/a (it's the top-level project) |
@@ -57,11 +58,11 @@ where ProjectV's FetchContent target doesn't exist.
 
 ## Why not a CMake preset?
 
-CMake presets v1..v10 (`cmake --help-manual cmake-presets` lists
+CMake presets v1 to v10 (`cmake --help-manual cmake-presets` lists
 the full schema) **do not** allow `sourceDir` to be set inside a
 configure preset — `${sourceDir}` is a read-only macro resolving
 to the directory containing `CMakePresets.json`. The only way to
-build a sub-project (like `external/tracy/profiler`) is via the
+build a subproject (like `external/tracy/profiler`) is via the
 `cmake -S <path>` command-line flag, which the wrapper scripts
 in this directory provide.
 
@@ -69,8 +70,9 @@ in this directory provide.
 
 The wrapper scripts pass the same cache variables as the
 `windows-clang-debug-tracy-profiler` preset to keep Tracy UI
-behaviour consistent across the two scopes:
+behavior consistent across the two scopes:
 
+<!-- noinspection MarkdownIncorrectTableFormatting: tables are valid but contain long inline-code cells -->
 | Variable | Value | Why |
 |----------|-------|-----|
 | `PROJECTV_BUILD_TRACY_PROFILER` | `ON` | Required by Tracy profiler UI's own `CMakeLists.txt` |
