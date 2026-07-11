@@ -345,7 +345,6 @@ void MirrorRenderLightingToDebugStats(
 	stats.localPointLightSourceRadius = render.currentSceneLighting.localPointLightParams[1];
 	stats.localPointLightShadowStrength = render.currentSceneLighting.localPointLightParams[2];
 	stats.localPointLightShadowBias = render.currentSceneLighting.localPointLightParams[3];
-	stats.shadowMapResolution = 2048u;
 	stats.transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
 }
 

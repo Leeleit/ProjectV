@@ -245,6 +245,132 @@ void TestBoundsClamp(TestContext &context)
 	}
 }
 
+void TestAllGlassMergesToSingleBox(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	for (int z = 0; z < 8; ++z) {
+		for (int y = 0; y < 8; ++y) {
+			for (int x = 0; x < 8; ++x) {
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Glass, nullptr);
+			}
+		}
+	}
+	std::vector<projectv::physics::MergedVoxelBox> boxes;
+	projectv::physics::GreedyMergeSolidVoxelsInBounds(
+		world, Int3{0, 0, 0}, Int3{8, 8, 8}, boxes);
+	if (boxes.size() != 1u) {
+		context.Fail(__LINE__, "All-Glass world must merge to single box (Glass is solid for physics)");
+	}
+}
+
+void TestMixedSolidMaterialsMergeTogether(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	for (int y = 0; y < 8; ++y) {
+		for (int x = 0; x < 4; ++x) {
+			SetVoxelMaterial(world, {x, y, 0}, VoxelMaterial::FloorWhite, nullptr);
+		}
+		for (int x = 4; x < 8; ++x) {
+			SetVoxelMaterial(world, {x, y, 0}, VoxelMaterial::FloorGray, nullptr);
+		}
+	}
+	std::vector<projectv::physics::MergedVoxelBox> boxes;
+	projectv::physics::GreedyMergeSolidVoxelsInBounds(
+		world, Int3{0, 0, 0}, Int3{8, 8, 8}, boxes);
+	if (boxes.size() != 1u) {
+		context.Fail(__LINE__, "Mixed FloorWhite+FloorGray slab must merge to 1 box (physics ignores material type)");
+		std::fprintf(stderr, "  got %zu boxes\n", boxes.size());
+	}
+}
+
+void TestDisjointRegionsProduceMultipleBoxes(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
+	SetVoxelMaterial(world, {7, 7, 7}, VoxelMaterial::FloorWhite, nullptr);
+	std::vector<projectv::physics::MergedVoxelBox> boxes;
+	projectv::physics::GreedyMergeSolidVoxelsInBounds(
+		world, Int3{0, 0, 0}, Int3{8, 8, 8}, boxes);
+	if (boxes.size() != 2u) {
+		context.Fail(__LINE__, "Two disjoint voxels must produce 2 boxes");
+	}
+}
+
+void TestThinColumnMerges(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	for (int y = 0; y < 8; ++y) {
+		SetVoxelMaterial(world, {0, y, 0}, VoxelMaterial::FloorWhite, nullptr);
+	}
+	std::vector<projectv::physics::MergedVoxelBox> boxes;
+	projectv::physics::GreedyMergeSolidVoxelsInBounds(
+		world, Int3{0, 0, 0}, Int3{8, 8, 8}, boxes);
+	if (boxes.size() != 1u) {
+		context.Fail(__LINE__, "Thin Y-column must merge to 1 box");
+	}
+	if (!boxes.empty()) {
+		const auto &b = boxes[0];
+		if (b.minY != 0 || b.maxY != 8 || b.minX != 0 || b.maxX != 1 || b.minZ != 0 || b.maxZ != 1) {
+			context.Fail(__LINE__, "Column box extents must be (0,0,0)-(1,8,1)");
+		}
+	}
+}
+
+void TestInteriorHoleProducesCorrectBoxes(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	for (int z = 0; z < 8; ++z) {
+		for (int y = 0; y < 8; ++y) {
+			for (int x = 0; x < 8; ++x) {
+				if (x > 0 && x < 7 && y > 0 && y < 7 && z > 0 && z < 7) {
+					continue;
+				}
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::FloorWhite, nullptr);
+			}
+		}
+	}
+	std::vector<projectv::physics::MergedVoxelBox> boxes;
+	projectv::physics::GreedyMergeSolidVoxelsInBounds(
+		world, Int3{0, 0, 0}, Int3{8, 8, 8}, boxes);
+	const uint32_t solidCount = CountSolidVoxels(world);
+	const uint64_t mergedVolume = SumMergedBoxVolumes(boxes);
+	if (mergedVolume != solidCount) {
+		std::fprintf(stderr, "Test failure at line %d: shell volume %llu != solid count %u\n",
+					 __LINE__, static_cast<unsigned long long>(mergedVolume), solidCount);
+		++context.failures;
+	}
+}
+
+void TestZeroSizeBoundsReturnZero(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::FloorWhite, nullptr);
+	std::vector<projectv::physics::MergedVoxelBox> boxes;
+	const uint32_t count = projectv::physics::GreedyMergeSolidVoxelsInBounds(
+		world, Int3{4, 4, 4}, Int3{4, 4, 4}, boxes);
+	if (count != 0u || !boxes.empty()) {
+		context.Fail(__LINE__, "Zero-size bounds (min == max) must return 0");
+	}
+}
+
+void TestInvertedBoundsReturnZero(TestContext &context)
+{
+	VoxelWorld world = MakeTestWorld(8, 8, 8);
+	for (int z = 0; z < 8; ++z) {
+		for (int y = 0; y < 8; ++y) {
+			for (int x = 0; x < 8; ++x) {
+				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::FloorWhite, nullptr);
+			}
+		}
+	}
+	std::vector<projectv::physics::MergedVoxelBox> boxes;
+	const uint32_t count = projectv::physics::GreedyMergeSolidVoxelsInBounds(
+		world, Int3{6, 6, 6}, Int3{2, 2, 2}, boxes);
+	if (count != 0u || !boxes.empty()) {
+		context.Fail(__LINE__, "Inverted bounds (max < min) must return 0");
+	}
+}
+
 }  // namespace
 
 int main()
@@ -257,6 +383,13 @@ int main()
 	TestMixedHalfChunkHasReduction(context);
 	TestFluidAndAirAreIgnored(context);
 	TestBoundsClamp(context);
+	TestAllGlassMergesToSingleBox(context);
+	TestMixedSolidMaterialsMergeTogether(context);
+	TestDisjointRegionsProduceMultipleBoxes(context);
+	TestThinColumnMerges(context);
+	TestInteriorHoleProducesCorrectBoxes(context);
+	TestZeroSizeBoundsReturnZero(context);
+	TestInvertedBoundsReturnZero(context);
 
 	if (context.failures > 0) {
 		std::fprintf(stderr, "ProjectVPhysicsGreedyMergerTests: %d failure(s)\n", context.failures);

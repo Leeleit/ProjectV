@@ -1262,3 +1262,89 @@ projectv_test_add_modules(ProjectVRayTracedShadowTests)
 
 projectv_test_add_modules(ProjectVCloudscapeTests)
 
+add_executable(ProjectVShouldEmitVoxelFaceTests
+        ShouldEmitVoxelFaceTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/CpuGreedyMeshing.cpp
+)
+
+target_include_directories(ProjectVShouldEmitVoxelFaceTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVShouldEmitVoxelFaceTests PRIVATE projectv_build_options)
+
+add_test(NAME ProjectVShouldEmitVoxelFaceTests COMMAND ProjectVShouldEmitVoxelFaceTests)
+set_tests_properties(ProjectVShouldEmitVoxelFaceTests PROPERTIES LABELS "unit")
+
+add_executable(ProjectVPackedFaceEncodingTests
+        PackedFaceEncodingTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/CpuGreedyMeshing.cpp
+)
+
+target_include_directories(ProjectVPackedFaceEncodingTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVPackedFaceEncodingTests PRIVATE projectv_build_options)
+
+add_test(NAME ProjectVPackedFaceEncodingTests COMMAND ProjectVPackedFaceEncodingTests)
+set_tests_properties(ProjectVPackedFaceEncodingTests PROPERTIES LABELS "unit")
+
+add_executable(ProjectVCpuGreedyMeshingTests
+        CpuGreedyMeshingTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/CpuGreedyMeshing.cpp
+)
+
+target_include_directories(ProjectVCpuGreedyMeshingTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVCpuGreedyMeshingTests PRIVATE projectv_build_options)
+
+add_test(NAME ProjectVCpuGreedyMeshingTests COMMAND ProjectVCpuGreedyMeshingTests)
+set_tests_properties(ProjectVCpuGreedyMeshingTests PROPERTIES LABELS "unit")
+
+add_executable(ProjectVGreedyMeshingPropertyTests
+        GreedyMeshingPropertyTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/CpuGreedyMeshing.cpp
+)
+
+target_include_directories(ProjectVGreedyMeshingPropertyTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVGreedyMeshingPropertyTests PRIVATE projectv_build_options)
+
+add_test(NAME ProjectVGreedyMeshingPropertyTests COMMAND ProjectVGreedyMeshingPropertyTests)
+set_tests_properties(ProjectVGreedyMeshingPropertyTests PROPERTIES LABELS "unit")
+
+add_executable(ProjectVChunkVisibilityTests
+        ChunkVisibilityTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/CpuGreedyMeshing.cpp
+)
+
+target_include_directories(ProjectVChunkVisibilityTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVChunkVisibilityTests PRIVATE projectv_build_options)
+
+add_test(NAME ProjectVChunkVisibilityTests COMMAND ProjectVChunkVisibilityTests)
+set_tests_properties(ProjectVChunkVisibilityTests PROPERTIES LABELS "unit")
+
+if (PROJECTV_ENABLE_BENCHMARKS)
+    add_executable(ProjectVGreedyMeshingBenchmark
+            GreedyMeshingBenchmark.cpp
+            ${CMAKE_SOURCE_DIR}/src/voxel/CpuGreedyMeshing.cpp
+    )
+
+    target_include_directories(ProjectVGreedyMeshingBenchmark PRIVATE
+            ${CMAKE_SOURCE_DIR}/src
+    )
+
+    target_link_libraries(ProjectVGreedyMeshingBenchmark PRIVATE
+            projectv_build_options
+            benchmark::benchmark
+    )
+endif ()
+

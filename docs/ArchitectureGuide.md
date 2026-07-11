@@ -75,9 +75,28 @@
 - camera update;
 - simulation tick;
 - interaction;
-- frame preparation.
+- frame preparation;
+- benchmark + lookdev capture automation.
 
 Здесь нет “толстого gameplay framework”. Это сознательная orchestration layer.
+
+### `asset/`
+
+`asset/` загружает и управляет 3D-моделями:
+
+- загрузка glTF через fastgltf;
+- декомпрессия Draco;
+- бэйкинг meshoptimizer (vertex cache + fetch optimization);
+- загрузка манифестов моделей из JSON;
+- GPU upload + model pass.
+
+### `audio/`
+
+`audio/` — минимальный аудиодвижок на miniaudio:
+
+- музыкальный плейлист с async scan через `std::jthread`;
+- play/pause/stop/next/prev/volume;
+- информация о текущем треке в HUD.
 
 ### `voxel/`
 
@@ -119,11 +138,39 @@ Interaction при этом остаётся на CPU `VoxelRaycast`. Physics н
 
 Render слой делится на две части:
 
-- `render/` — scene resources и orchestration draw path. В рамках повышения читаемости монолитные файлы декомпозированы: `Renderer.cpp` разделен на доменные файлы `RendererDrawFrame.cpp` (синхронизация кадра, HZB, презентация), `RendererRecordCommands.cpp` (запись команд отрисовки) и `RendererOverlay.cpp`/`RendererScreenshot.cpp`. Аналогично `SceneResources.cpp` разделен на `SceneResourcesUpdate.cpp` (заливка CPU->GPU), `SceneResourcesVisibility.cpp` (CPU куллинг) и `SceneResourcesDestroy.cpp` (deferred NanoVDB очистка). Аппаратные тени декомпозированы на `RayTracedShadows.cpp`, `RayTracedShadowsBlas.cpp`, `RayTracedShadowsTlas.cpp`, `RayTracedShadowsPass.cpp` и `RayTracedShadowsMask.cpp`. Сетка зондов DDGI декомпозирована на `RtxGiProbes.cpp`, `RtxGiProbesPipeline.cpp` и `RtxGiProbesUpdate.cpp`.
-- `render/vulkan/` — bootstrap, swapchain, pipelines и Vulkan-specific plumbing, включая асинхронную вычислительную очередь `VulkanAsyncCompute.cpp` и пайплайны клеточных автоматов жидкости `VulkanFluidCaPipeline.cpp`.
+- `render/` — scene resources и orchestration draw path. В рамках повышения читаемости монолитные файлы
+  декомпозированы (лимит 600 строк на файл):
+    - **Renderer** разделен на: `RendererDrawFrame.cpp` (синхронизация кадра, HZB, презентация),
+      `RendererRecordCommands.cpp` (запись команд отрисовки), `RendererOverlay.cpp` (дебаг-оверлеи),
+      `RendererScreenshot.cpp` (захват кадра).
+    - **SceneResources** разделен на: `SceneResourcesUpdate.cpp` (заливка CPU→GPU), `SceneResourcesVisibility.cpp` (CPU
+      куллинг), `SceneResourcesDestroy.cpp` (deferred NanoVDB очистка), `SceneResourcesUtilities.cpp` (VMA хелперы).
+    - **RTX Shadows** разделены на: `RayTracedShadowsBlas.cpp` (сборка BLAS), `RayTracedShadowsTlas.cpp` (сборка TLAS),
+      `RayTracedShadowsPass.cpp` (запись прохода), `RayTracedShadowsMask.cpp` (маска + fallback).
+    - **DDGI** разделена на: `RtxGiProbesPipeline.cpp` (compute pipeline), `RtxGiProbesUpdate.cpp` (запись прохода).
+- `render/vulkan/` — bootstrap (`VulkanBootstrap.cpp`), swapchain, pipelines и Vulkan-specific plumbing:
+    - **VulkanGraphicsPipeline** разделен на: `VulkanGraphicsPipelineCreate.cpp` (создание конвейеров),
+      `VulkanGraphicsPipelineBindings.cpp` (привязка дескрипторов), `VulkanGraphicsPipelineOverlay.cpp` (пайплайны
+      оверлеев).
+    - Асинхронная вычислительная очередь `VulkanAsyncCompute.cpp` с timeline semaphores.
+    - Пайплайны: `VulkanFluidCaPipeline.cpp` (жидкость), `VulkanVoxelMeshingPipeline.cpp` (greedy mesher),
+      `VulkanMeshShaderPipeline.cpp` (mesh shaders), `VulkanVoxelizePipeline.cpp` (вокселизация),
+      `VulkanWorldGenPipeline.cpp` (генерация мира).
 
 Compute meshing, graphics passes, overlay и HUD собираются здесь, но данные приходят из `VoxelWorld` через
 `SceneResources`.
+
+### `c_kernels/`
+
+`c_kernels/` — CPU-оптимизированные ядра (AVX2) для производительных операций:
+
+- `frustum_cull.cpp` — AVX2-оптимизированный frustum culling для CPU-side pre-culling моделей.
+
+### `bench/`
+
+`bench/` — микро-бенчмарки:
+
+- `FrustumCullBenchmark.cpp` — измерение производительности frustum culling kernels.
 
 ### `debug/`
 
@@ -156,13 +203,30 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
    - загружает актуальные scene buffers в per-frame mapped buffers;
    - строит HUD vertices, selection state и debug overlay boxes.
 5. `DrawFrame`:
-   - acquire image;
-   - при необходимости recreates swapchain;
-   - для RTX: строит BLAS/TLAS в семействе файлов `RayTracedShadows.cpp` (Blas, Tlas), рассчитывает маску `rtxShadowMask` солнца (Pass, Mask) и обновляет DDGI зонды в `RtxGiProbes.cpp` (Pipeline, Update);
-   - dispatch compute greedy meshing (`voxel_mesh.comp`) и HZB куллинг чанков на GPU;
-   - рисует opaque/transparent passes через indirect draw (`vkCmdDrawIndirectCountKHR` на основе видимости из HZB);
-   - рисует debug overlay boxes, crosshair и HUD;
-   - present.
+    - **Drain** deferred NanoVDB destroys (VMA cleanup).
+    - **Acquire** `vkAcquireNextImageKHR(UINT64_MAX)`.
+    - **Wait+reset** fences + cmd buffer.
+    - **Pre-graphics:**
+        - Mesh shader pre-cull (compute dispatch).
+        - RTX: collect dirty BLAS chunks → `BuildDirtyBlases` (one-shot cmd + fence) → `UpdateTlas` (instance write) →
+          `RecordVoxelAwareRtxShadowPass` (пишет `rtxShadowMask`).
+        - DDGI: `RecordRtxGiProbeUpdatePass` (обновление зондов, round-robin по 1 зонду/кадр).
+    - **Graphics:**
+        - Voxel meshing compute dispatch (`voxel_mesh.comp`), если есть dirty чанки.
+        - TLAS build + barrier `AS_BUILD→FRAGMENT`.
+        - Image transitions → `COLOR_ATTACHMENT`.
+        - Sky atmosphere pre-pass (если включено).
+        - Opaque voxel pass: `vkCmdDrawIndirect` или `vkCmdDrawIndirectCountKHR` (HZB) или `vkCmdDrawMeshTasksEXT` (mesh
+          shader).
+        - Model pass: `vkCmdDrawIndexed` per visible instance.
+        - Transparent voxel pass: `vkCmdDrawIndirect`.
+        - Debug overlay + HUD.
+        - Cloudscape ray-march (если включено).
+    - **Blit** из `sceneColorTarget` в swapchain image.
+    - **HZB chain:** `BuildHizMipChain` (depth → mip chain) + HZB cull dispatch.
+    - **Inline compute** (если async path inactive): Fluid CA dispatch × N + WorldGen.
+    - **Submit:** `vkQueueSubmit2` (wait = imageAvailableSemaphore + compute timeline).
+    - **Present:** `vkQueuePresentKHR` + screenshot capture.
 
 ## Control modes
 

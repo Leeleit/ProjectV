@@ -401,14 +401,18 @@ const char *LightingDebugViewToString(const LightingDebugView debugView)
 		return "AOCC";
 	case LightingDebugView::Fog:
 		return "FOG";
-	case LightingDebugView::VctDiffuse:
-		return "VCT_DIFF";
-	case LightingDebugView::VctSpecular:
-		return "VCT_SPEC";
+	case LightingDebugView::DiffuseGI:
+		return "GI_DIF";
+	case LightingDebugView::SpecularGI:
+		return "GI_SPC";
+	case LightingDebugView::RtxSpecular:
+		return "RTX_SPC";
 	case LightingDebugView::VolumetricFog:
 		return "VOL_FOG";
 	case LightingDebugView::VolumetricTransmittance:
 		return "VOL_TRN";
+	case LightingDebugView::GreedyMeshing:
+		return "MESH";
 	case LightingDebugView::Final:
 	default:
 		return "FINAL";
@@ -446,14 +450,18 @@ LightingDebugView GetNextLightingDebugView(const LightingDebugView debugView)
 	case LightingDebugView::Occlusion:
 		return LightingDebugView::Fog;
 	case LightingDebugView::Fog:
-		return LightingDebugView::VctDiffuse;
-	case LightingDebugView::VctDiffuse:
-		return LightingDebugView::VctSpecular;
-	case LightingDebugView::VctSpecular:
+		return LightingDebugView::DiffuseGI;
+	case LightingDebugView::DiffuseGI:
+		return LightingDebugView::SpecularGI;
+	case LightingDebugView::SpecularGI:
+		return LightingDebugView::RtxSpecular;
+	case LightingDebugView::RtxSpecular:
 		return LightingDebugView::VolumetricFog;
 	case LightingDebugView::VolumetricFog:
 		return LightingDebugView::VolumetricTransmittance;
 	case LightingDebugView::VolumetricTransmittance:
+		return LightingDebugView::GreedyMeshing;
+	case LightingDebugView::GreedyMeshing:
 	default:
 		return LightingDebugView::Final;
 	}

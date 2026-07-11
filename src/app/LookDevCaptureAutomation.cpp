@@ -181,12 +181,22 @@ bool TryParseDebugViewToken(
 		*outView = LightingDebugView::Fog;
 		return true;
 	}
-	if (normalized == "vctdiff" || normalized == "vctdiffuse" || normalized == "vct_d") {
-		*outView = LightingDebugView::VctDiffuse;
+	if (normalized == "vctdiff" || normalized == "vctdiffuse" || normalized == "vct_d" ||
+		normalized == "gidif" || normalized == "diffusegi" || normalized == "gi_d") {
+		*outView = LightingDebugView::DiffuseGI;
 		return true;
 	}
-	if (normalized == "vctspec" || normalized == "vctspecular" || normalized == "vct_s") {
-		*outView = LightingDebugView::VctSpecular;
+	if (normalized == "vctspec" || normalized == "vctspecular" || normalized == "vct_s" ||
+		normalized == "gispc" || normalized == "speculargi" || normalized == "gi_s") {
+		*outView = LightingDebugView::SpecularGI;
+		return true;
+	}
+	if (normalized == "rtxspec" || normalized == "rtxspecular" || normalized == "rtx_s") {
+		*outView = LightingDebugView::RtxSpecular;
+		return true;
+	}
+	if (normalized == "mesh" || normalized == "greedymeshing" || normalized == "mesh_dbg") {
+		*outView = LightingDebugView::GreedyMeshing;
 		return true;
 	}
 	if (normalized == "volfog" || normalized == "volumetricfog" || normalized == "vol_f") {

@@ -285,6 +285,259 @@ sequenceDiagram
 *   Вода и стекло игнорируются при пересечении теней (они не отбрасывают жестких теней).
 *   Фрагментный шейдер просто читает полученную текстуру `rtxShadowMask` по экранным координатам.
 
+### 4.4 DDA Voxel Traversal (фрагментный шейдер)
+
+3D Digital Differential Analyzer — алгоритм прохода луча по воксельной сетке в `voxel.frag`. Используется в 4 местах:
+
+- **Sun contact shadows** (max 12 шагов): короткий луч к солнцу для локальной тени.
+- **Ambient occlusion** (max 4 шага): 3 луча (normal + 2 tangents).
+- **Local point light shadows** (max 12 шагов): луч к источнику света.
+- **RTX fallback**: когда аппаратная трассировка недоступна, DDA заменяет ray query.
+
+**Setup:**
+
+```glsl
+currentVoxel = floor(rayOrigin + rayDirection * offset)
+stepDirection = sign(rayDirection)
+tDelta = abs(1.0 / rayDirection)
+tMax = computeStepTMax(rayOrigin, currentVoxel, stepDirection, rayDirection)
+```
+
+**Body (макрос `DDA_BODY`):**
+Параметризован max steps, occluder predicate, return expression — единый макрос для всех 4 consumers, без дублирования.
+
+**RTX path (`TraceVoxelIntersection` c `#ifdef VOXEL_RTX_ENABLED`):**
+
+- `rayQueryEXT` против TLAS → DDA traversal внутри AABB чанка → commit через `rayQueryGenerateIntersectionEXT()`.
+- Захват DDA-авторитетного hit material (избегает FP-rounding проблем с `floor`-based material lookup).
+- Advance `tMin` для лучей, стартующих внутри non-air вокселя (вода/стекло).
+- `1e-4` offset на границах чанков (fix session 26x).
+
+**Hit normal:** вычисляется из dominant-axis направления луча, НЕ из position offset (fix session 26x — position offset
+давал random face из-за FP micro-fluctuation).
+
+### 4.5 GPU Fluid CA (клеточный автомат жидкости)
+
+`src/shaders/fluid_ca.comp` (110 строк) — GPU compute ping-pong симуляция.
+
+**Workgroup:** `local_size_x=8, local_size_y=8, local_size_z=4` (256 threads).
+
+**Алгоритм:**
+
+1. Загрузка `ChunkFluidCell` (material + age) из `sourceCells[]`.
+2. Если material == Fluid:
+    - Проверка клетки ниже (z-1). Если air или fluid → `atomicOr` захват destination клетки.
+    - Если захвачено → return (fluid упал вниз).
+    - Иначе — cell остаётся на месте.
+3. Non-fluid клетки проходят без изменений.
+
+**Pipeline:** `VulkanFluidCaPipeline` + `SubmitFluidCaToComputeQueue` (async compute).
+**Tick rate:** 5 Hz (`fluidTickRateHz`), multi-tick per frame без лимита.
+
+**CPU reference** (`VoxelWorldFluid.cpp`): 3-phase (read snapshot → sim z,y,x ascending → commit),
+строго детерминирован (никаких FP в simulation). Сохранён для regression tests.
+
+### 4.6 HZB Occlusion Culling
+
+`src/shaders/hzb_cull.comp` (149 строк) — иерархический Z-буфер для отсечения невидимых чанков.
+
+**Алгоритм `AabbVisibleAgainstMip`:**
+
+1. Проекция 8 углов AABB в NDC через `inverseViewProjection`.
+2. NDC min/max → UV bounds → clamp [0,1].
+3. **Per-chunk MIP level:** CPU-side (`ComputePerChunkMipAndBlendWidthsFromAabbs`) по projected screen size.
+4. **Smart blend width:** расширение UV bounds на `blendWidthTexels` — предотвращает false occlusion
+   на depth discontinuities.
+5. Сэмпл Hi-Z текстуры: min depth over footprint на выбранном MIP уровне.
+6. **Visibility:** `if (mipDepth >= maxDepth)` → occluded.
+
+**Visibility mask:** 64-bit per chunk (1 = visible). `visibleCount` через `atomicAdd`.
+
+**Hi-Z construction:** `BuildHizMipChain()` — последовательность `vkCmdBlitImage` downsamples
+(полный → ½ → ¼ → 1×1).
+
+**Async path:** `RecordHzbAsyncCullPass` — отдельный от main async compute (Fluid CA + WorldGen).
+Default = sync (inline) path.
+
+### 4.7 Lighting Pipeline (multi-layer PBR)
+
+`voxel.frag` + `lighting.glsl` — 12-слойный forward shading конвейер:
+
+| Слой                  | Алгоритм                                                       | Источник                        |
+|-----------------------|----------------------------------------------------------------|---------------------------------|
+| **Direct Sun**        | PBR BRDF (GGX + Smith + Fresnel-Schlick)                       | `lighting.glsl`                 |
+| **Sun Shadows**       | RTX shadow mask (`rtxShadowMask` binding 18) или VCT DDA       | 2-pass trace (primary + shadow) |
+| **Local Point Light** | DDA shadow (max 12 steps)                                      | 1 point light                   |
+| **Ambient Occlusion** | 3-direction DDA (max 4 steps) или RTX ray query                | normal + 2 tangents             |
+| **Ambient**           | Hemispherical sky/ground blend                                 | `sceneLighting` SSBO            |
+| **Diffuse GI**        | DDGI probe interpolation (6-probe trilinear) или VCT 6-cone    | `probe_update.comp`             |
+| **Specular GI**       | RTX multi-bounce (2-3 bounces, roughness ≤ 0.3) или VCT 1-cone | `TraceRtxMultiBounceSpecular`   |
+| **Refraction**        | RTX ray query с IOR (glass=1.5, fluid=1.33)                    | background lookup               |
+| **Volumetric Fog**    | Wronski 2014 froxel ray-march                                  | `volumetric_fog.comp`           |
+| **Fog**               | Distance-based exponential                                     | constants                       |
+| **Tone Mapping**      | ACES Approx (default) / Reinhard / Linear                      | `lighting.glsl`                 |
+| **Color Grading**     | White point, contrast, saturation, lift                        | luma-saturation S-curve         |
+
+**ToneMapOperator enum:** `Linear=0, Reinhard=1, AcesApprox=2`. **LightingDebugView (13 values):**
+`Final → Ambient → Direct → Local → Shadow → Contact → Occlusion → Fog → Taa → VctDiffuse →
+VctSpecular → VolumetricFog → VolumetricTransmittance`.
+
+### 4.8 Mesh Shaders (Pattern C, feature-flagged)
+
+`PROJECTV_MESH_SHADER_PIPELINE=ON` (default OFF per `VulkanMeshShaderPipeline.hpp:28`).
+
+Двухэтапный dispatch:
+
+1. **`voxel_mesh_pre.comp`** (compute pre-cull): `atomicAdd(visibleCount)` — frustum culling,
+   запись списка видимых чанков.
+2. **`voxel_mesh.mesh`** (mesh shader): per-chunk vertex generation через task payload.
+   Использует те же `PackedFace` данные от greedy mesher.
+
+### 4.9 Async Compute & Timeline Semaphores
+
+`src/render/vulkan/VulkanAsyncCompute.cpp` — persistent `asyncComputeCommandBuffer`.
+
+**Signal/wait pairing — per-pass dedicated timeline semaphore:**
+
+- **`renderTimelineSemaphore`**: `RecordAsyncComputePass` ждёт его же (skip first frame if value=0).
+  `SubmitToComputeQueue` signalит `asyncComputeLastTimelineValue`.
+  Graphics `vkQueueSubmit2` ждёт `asyncComputeLastTimelineValue` → graphics не стартует раньше compute.
+- **`hzbBuildTimelineSemaphore`**: `RecordHzbAsyncCullPass / SubmitHzbAsyncCullToComputeQueue` —
+  отдельная пара. Signalит `hzbBuildLastTimelineValue+1` после graphics submit.
+
+**Persistent cmd buffer:** `vkResetCommandBuffer` once at allocation + skip wait on first frame.
+
+### 4.10 SSBO Byte-Exact Invariant
+
+**Критический архитектурный контракт:** Каждая структура, передаваемая на GPU как SSBO,
+имеет `static_assert` на:
+
+- exact размер (sizeof)
+- standard layout + trivially copyable
+- field offsets (через `offsetof`)
+
+Зеркально отражена в 5+ GLSL шейдерах с идентичным `layout(std430)`.
+
+**Ключевые структуры (с количеством static_assert):**
+
+| Структура                     | Размер | static_assert |
+|-------------------------------|--------|---------------|
+| `VoxelSceneLighting`          | 240 B  | 14            |
+| `VoxelMaterialVisual`         | 64 B   | 4             |
+| `PackedSceneVoxelFace`        | 16 B   | 5             |
+| `PackedSceneChunkDescriptor`  | 64 B   | 4             |
+| `PackedSceneChunkAabb`        | 32 B   | 2             |
+| `SceneChunkVoxelPayloadRange` | 16 B   | 3             |
+| `GraphicsPushConstants`       | 192 B  | 4             |
+| `ResolvePushConstants`        | 144 B  | 4             |
+| `DebugOverlayPushConstants`   | 112 B  | 4             |
+| `DebugHudVertex`              | 32 B   | 2             |
+| `ChunkCullingParameters`      | 64 B   | 4             |
+
+**Shader mirrors:** `voxel.frag:32-52`, `taa_resolve.frag:10-28`, `voxel_mesh.comp:57-75`,
+`model.frag`, `probe_update.comp:32-52`.
+
+Любое изменение в `VoxelSceneLighting` требует mirror update во всех шейдерах —
+compile-time catches (static_assert + GLSL compile error).
+
+### 4.11 ECS Bridge (Flecs)
+
+`src/ecs/EcsWorld.ixx` (C++20 module) — bridging layer между game logic и DOD core.
+
+**Архитектура:**
+
+- `EcsState` — opaque pointer wrapping `flecs::world`.
+- Core rendering/physics оперируют flat C structs (VoxelWorld, PhysicsState).
+- ECS — прослойка для entity-ориентированного доступа к состоянию.
+
+**Accessor pattern:**
+
+```cpp
+GetPrimaryCameraState(ecs) → CameraState   // tagged camera entity
+GetDebugState(ecs)         → DebugState     // debug singleton entity
+GetWorldState(ecs)         → WorldState     // world singleton entity
+SyncEcsWorldState(ecs)     → copy ECS → flat structs
+```
+
+**ECS Systems** (ticked from `EcsWorld.cpp`):
+
+- `TickFluidCASystem` — GPU/CPU fluid step
+- `TickAudioRefreshPlaylistSystem` — audio playlist updates
+- `TickBenchmarkAutomationSystem` — benchmark automation
+- `TickLookDevCaptureSystem` — look-dev capture automation
+
+Voxel chunks — также ECS entities с зеркальным summary в `WorldState`.
+
+### 4.12 C++20 Modules
+
+5 primary `.ixx` файлов, собранных через CMake `FILE_SET CXX_MODULES`:
+
+| Модуль               | Файл                           | Экспорт                         |
+|----------------------|--------------------------------|---------------------------------|
+| `projectv.math`      | `src/core/Math.ixx` ~120 ст    | Vec2/3/4, Mat4, quaternion ops  |
+| `projectv.string_id` | `src/core/StringId.ixx` ~80 ст | `StringID` (O(1) сравнение)     |
+| `projectv.probe`     | `src/core/Probe.ixx` ~50 ст    | Tracy runtime probe macros      |
+| `projectv.types`     | `src/core/Types.ixx` ~26 ст    | `AppState`, `RenderState`, etc. |
+| `projectv.ecs`       | `src/ecs/EcsWorld.ixx` ~34 ст  | `EcsState`, accessors           |
+
+**Module gate** (`CMakeLists.txt:40-52`):
+
+- `CMAKE_CXX_STDLIB libc++` + `add_compile_options(-stdlib=libc++)` — non-MSVC && non-WIN32.
+- `CMAKE_CXX_MODULE_STD ON` — только когда libc++ доступен (libstdc++ не ship'ит std.cppm).
+- 3-branch `projectv_build_options`: `if (MSVC)` / `elseif (WIN32)` / `else ()`.
+- Module `FILE_SET` пропускается на WIN32 + Clang (clang-cl не поддерживает C++20 modules).
+
+**`import std;` — probe-only:** `tests/StdModuleProbe.cpp` тестирует precompiled `std.pcm`;
+в mainline **не** используется (libc++ 22 std.cppm конфликтует с fmt headers).
+
+### 4.13 Полный порядок кадра (DrawFrame)
+
+`Renderer::DrawFrame` (`src/render/RendererDrawFrame.cpp`) — строго упорядоченная последовательность:
+
+1. **Drain** `DrainDeferredNanoVdbDestroysForFrame` (VMA cleanup).
+2. **Acquire** `vkAcquireNextImageKHR(UINT64_MAX)` → `imageIndex`.
+3. **Wait+reset** `vkWaitForFences` + `vkResetFences` + `vkResetCommandBuffer` + `vkBeginCommandBuffer`.
+4. **Pre-graphics:**
+    - Mesh shader pre-cull (compute dispatch) — если `meshShaderEnabled`.
+    - RTX: collect dirty + initial BLAS chunks → `SetBlasDirtyQueue` → `BuildDirtyBlases`
+      (one-shot cmd + fence) → `UpdateTlas` (instance write) → `RecordVoxelAwareRtxShadowPass`
+      (writes `rtxShadowMask`).
+    - DDGI: `RecordRtxGiProbeUpdatePass` (если `rtxGiProbes->IsEnabled() && tlas != null`).
+5. **Graphics:** `RecordGraphicsCommands`:
+    - Voxel meshing compute dispatch (если `dirtyChunkCount > 0`).
+    - RTX TLAS Build + barrier `AS_BUILD→FRAGMENT`.
+    - Image transitions → `COLOR_ATTACHMENT`.
+    - Dynamic rendering: scene color attachment + depth.
+    - Sky atmosphere pre-pass (если `IsSkyAtmosphereEnabled`).
+    - Opaque voxel pass: `vkCmdDrawIndirect` / `vkCmdDrawIndirectCountKHR` (HZB) /
+      `vkCmdDrawMeshTasksEXT` (mesh shader).
+    - Model pass: `vkCmdDrawIndexed` per visible instance.
+    - Transparent voxel pass: `vkCmdDrawIndirect`.
+    - Debug overlay + HUD.
+    - Cloudscape ray-march (если `IsCloudscapeEnabled`).
+6. **Blit:** `vkCmdBlitImage` из `sceneColorTarget` в swapchain image.
+7. **HZB chain:** `BuildHizMipChain` (depth → mip chain) + sync/async HZB cull dispatch.
+8. **Inline compute** (если async compute path inactive): Fluid CA dispatch × N + WorldGen dispatch.
+9. **Submit:** `vkEndCommandBuffer` + (если async path) `RecordAsyncComputePass` +
+   `SubmitToComputeQueue` (signalит `renderTimelineSemaphore`).
+10. **vkQueueSubmit2:** wait = imageAvailableSemaphore + (compute) renderTimeline;
+    signal = submitSemaphore + (HZB) hzbBuildTimeline.
+11. **Present:** `vkQueuePresentKHR` + `SaveRequestedScreenshot` (fenced BMP + sidecar).
+12. **Lifecycle:** `RecreateSwapchain` если OUT_OF_DATE/SUBOPTIMAL/resized.
+
+### 4.14 TAA (историческая справка)
+
+TAA (Karis 2014) полностью удалён из mainline (июнь-июль 2026) и перенесён в `legacy/aa/`.
+
+**Что было:** Halton (2,3) jitter, YCoCg color space clamp, neighbourhood radius 1/3/5/7,
+CAS sharpen, motion vectors (`R16G16`), 4 SPIR-V variants (`taa_on`, `rtx`, `rtx_taa_on`).
+
+**Причина удаления:** фундаментальные лимиты single-sample TAA — остаточная тряска при `jitterScale > 0`,
+color-space mismatch (linear HDR current frame + LDR history). Заменён на прямой рендеринг
+в `sceneColorTarget` (B10G11R11_UFLOAT_PACK32) → blit → swapchain.
+
+**План:** DLSS/DLAA через NVIDIA Streamline (Phase 4).
+
 ---
 
 ## 5. Как изучать этот код самостоятельно?
@@ -298,3 +551,8 @@ sequenceDiagram
 5.  **Изучите проходы кадра:** Откройте `RendererDrawFrame.cpp` и `RendererRecordCommands.cpp`.
 6.  **Трассировка лучей:** Изучите `RayTracedShadows.cpp` и шейдер `voxel_rtx_shadow.rgen`.
 7.  **Освещение:** Прочтите `RtxGiProbes.cpp` и `probe_update.comp`.
+8. **SSBO контракты:** Изучите `Types.hpp` и `VoxelMaterials.hpp` для понимания byte-exact invariant.
+9. **ECS bridge:** Прочтите `EcsWorld.cpp` для понимания связи Flecs с DOD core.
+10. **Асинхронность:** Изучите `VulkanAsyncCompute.cpp` и timeline semaphore pairing.
+11. **C++20 модули:** Просмотрите `Math.ixx`, `StringId.ixx`, `Probe.ixx`, `Types.ixx`, `EcsWorld.ixx`.
+12. **Полный порядок кадра:** Повторно откройте `RendererDrawFrame.cpp` — 12-step pipeline.

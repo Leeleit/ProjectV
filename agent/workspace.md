@@ -17,10 +17,11 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 ---
 
 ## 1. Now
-**2026-07-11 session (Refactoring readability per docs/philosophy).**
+**2026-07-11 session (Refactoring readability per docs/philosophy + doc audit + -march=native policy change).**
 
 **Что сделано в этой сессии:**
 
+- **Debug modes rebranding + GreedyMeshing view:** Полный ребрендинг `LightingDebugView` enum (12→14 values), исправлен критический shader/enum desync (branches в `voxel.frag` были offset на 1 начиная с Occlusion, половина views показывала не тот компонент). Новые views: `GreedyMeshing(13)` — рисует красные borders + крестики per merged greedy quad через normalized [0,1] UV varying (`outQuadUV`/`inQuadUV`, location 4), добавлен в `voxel.vert` + `voxel_mesh.mesh` + `voxel.frag`. `RtxSpecular(10)` — ранее unreachable branch теперь доступен. `VctDiffuse`→`DiffuseGI`, `VctSpecular`→`SpecularGI` (точные имена после DDGI миграции). Dead code removal: `DebugState::showCascadeSplitPlanes`, `DebugStats::sunShadow*` (4 поля), `shadowMapResolution`, ghost HUD helper lines (O/U/I/L), vestigial `camera`/`render` params в `BuildDebugOverlayBoxes`. Build green (449/449), 43/43 tests pass.
 - **Phase 1.7 (RtxGiProbes split):** Декомпозирован monolithic `RtxGiProbes.cpp` (1014 lines) на 3 отдельных cpp-файла по семантическим доменам: `RtxGiProbesPipeline.cpp` (compute pipeline layout, descriptor set layout, and pipeline creation/destruction), `RtxGiProbesUpdate.cpp` (pass recording and update pass execution), и уменьшенный `RtxGiProbes.cpp` (setup, lifecycle, texture/buffer allocations, global helpers). Главный файл `RtxGiProbes.cpp` уменьшен до 350 строк, а все новые файлы строго укладываются в лимит 600 строк. Сборка успешна, 38/38 тестов пройдено.
 - **Phase 1.6 (RayTracedShadows split):** Декомпозирован monolithic `RayTracedShadows.cpp` (1650 lines) на 4 отдельных cpp-файла по семантическим доменам: `RayTracedShadowsBlas.cpp` (BLAS building, dirty queue updates, chunk BLAS building), `RayTracedShadowsTlas.cpp` (TLAS updates and recording builds), `RayTracedShadowsPass.cpp` (shadow pass recording and debug reports), и `RayTracedShadowsMask.cpp` (fallback textures, voxel-aware RTX resource setup, shadow mask recreate/clears). Главный файл `RayTracedShadows.cpp` уменьшен до 360 строк, а все новые файлы строго укладываются в лимит 600 строк. Сборка успешна, 38/38 тестов пройдено.
 - **Phase 1.5 (VoxelWorld split):** Декомпозирован monolithic `VoxelWorld.cpp` (1709 lines) на `VoxelWorldInternal.hpp` (shared declarations) и 5 отдельных cpp-файлов по семантическим доменам: `VoxelWorldPreset.cpp` (preset configurations and scene builders), `VoxelWorldSnapshot.cpp` (snapshot loading and saving), `VoxelWorldFluid.cpp` (fluid cellular automata updates), `VoxelWorldLod.cpp` (LOD level assignment and query functions), и `VoxelWorldStatic.cpp` (chunk static promotion). Главный файл `VoxelWorld.cpp` уменьшен до 350 строк, а все новые файлы строго укладываются в лимит 600 строк. Сборка успешна, 38/38 тестов пройдено.
@@ -28,6 +29,18 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 - **Phase 1.2 (SceneResources split):** Декомпозирован monolithic `SceneResources.cpp` (1919 lines) на `SceneResourcesInternal.hpp` и 5 отдельных cpp-файлов по семантическим доменам (Utilities, Visibility, Destroy, Update, reduced main file 804 lines). Сборка успешна, 38/38 тестов пройдено. Коммит: `3c95ce6`.
 - **Phase 1.3 (Renderer split):** Декомпозирован `Renderer.cpp` (1370 lines) на `RendererInternal.hpp`, `RendererOverlay.cpp`, `RendererScreenshot.cpp`, `RendererRecordCommands.cpp`, `RendererDrawFrame.cpp` и уменьшенный `Renderer.cpp` (88 lines). Каждая часть строго в пределах лимита в 600 строк.
 - **Phase 1.4 (VulkanGraphicsPipeline split):** Декомпозирован `VulkanGraphicsPipeline.cpp` (1741 lines) на `VulkanGraphicsPipelineInternal.hpp`, `VulkanGraphicsPipelineBindings.cpp`, `VulkanGraphicsPipelineCreate.cpp`, `VulkanGraphicsPipelineOverlay.cpp` и уменьшенный `VulkanGraphicsPipeline.cpp` (362 lines). Все файлы также укладываются в лимит 600 строк.
+- **Документация — аудит на полноту и дополнение (this session):**
+  - Проанализированы все файлы `docs/` на предмет расхождений между детальным обзором проекта и текущей документацией. Выявлены и устранены пробелы в:
+    - `docs/CODEBASE_GUIDE.md` (300→545 строк): добавлены 11 секций — DDA traversal, Fluid CA, HZB, 12-слойная lighting pipeline, mesh shaders, async compute + timeline semaphores, SSBO byte-exact invariant, ECS bridge, C++20 modules, полный DrawFrame pipeline, TAA history.
+    - `docs/source_layout.md`: добавлены `asset/`, `audio/`, `bench/`, `c_kernels/`; расширены списки render/файлов и шейдеров.
+    - `docs/ArchitectureGuide.md`: добавлены подсистемы asset, audio, c_kernels, bench; детализирована декомпозиция.
+    - `docs/RTX_Renderer_Architecture.md` (108→180 строк): BLAS caching, procedural intersection, self-shadow fix, ray budget, frame integration, RtxShadowPipeline+SBT, TAA→DLSS план.
+  - Все обновления подтверждены `rg`-сверкой с кодом.
+- **Снят запрет на `-march=native` (this session):**
+  - Убран из списка запрещённых флагов в `agent/knowledge.md` (contract 4).
+  - Добавлен как опциональный CMake-флаг `PROJECTV_ENABLE_NATIVE_ARCH` (default OFF) в `CMakeLists.txt`.
+  - Причина: пользователь работает на одной машине; остальные собирают из исходников.
+  - PGO остаётся запрещён (отдельный 3-step workflow).
 - **Документация и интерактивный разбор кодовой базы:**
   - Создан структурированный, исчерпывающий текстовый путеводитель по архитектуре и всем 66+ файлам: [CODEBASE_GUIDE.md](file:///home/le1t/Projects/ProjectV/docs/CODEBASE_GUIDE.md). Содержит Mermaid-диаграммы, схему кадра (Frame Walkthrough) и разборы алгоритмов.
   - Созданы новые детальные руководства: [RTX_Renderer_Architecture.md](file:///home/le1t/Projects/ProjectV/docs/RTX_Renderer_Architecture.md) (аппаратное освещение, BLAS/TLAS, DDGI зонды с Gaussian visibility falloff, рефракция, split-файлы рендерера), [Linux_Build_And_Run.md](file:///home/le1t/Projects/ProjectV/docs/Linux_Build_And_Run.md) (руководство по сборке и тестам в Linux) и [Physics_And_Movement_Guide.md](file:///home/le1t/Projects/ProjectV/docs/Physics_And_Movement_Guide.md) (описание Jolt-интеграции, Walk/Creative/Spectator режимов, auto-jump, edge/sneak защиты и жадного объединения физических тел).
@@ -308,14 +321,15 @@ Key per-session snapshots (from `workspace.md` archive):
 4. **CSM fully removed** — нет fallback если RTX не работает. Любая RTX regression
    = complete shadow outage. Mitigation: aggressive ctest coverage на
    `ProjectVRayTracedShadowTests` (29 sub-tests per session 22x).
-5. **Stale HUD fields** — `DebugStats::sunShadow*` (strength, depthBias,
-   normalBias, filterRadius) никогда не записываются current code; только
-   `currentSceneLighting` записывается. Display-строки могут показывать 0.0
-   permanently. Future cleanup: remove display-строки or repurpose fields.
-6. **Dead hotkeys** — `O`/`U`/`I` (CycleShadowTuningTarget / Decrease-Value /
-   Increase-Value) и `L` (ToggleCascadeSplitPlanes) не имеют producer после CSM
-   removal. Keys остаются в `InputActions` enum, флаг `showCascadeSplitPlanes`
-   сохраняется в `DebugState`. Cleanup candidate.
+  5. **Stale HUD fields** — `DebugStats::sunShadow*` (strength, depthBias,
+    normalBias, filterRadius) + `shadowMapResolution` полностью удалены (CSM-era
+    leftovers, never written by current RTX path). Dead `showCascadeSplitPlanes`
+    DebugState field also removed. Ghost HUD helper lines for `O/U/I` (shadow tuning)
+    and `L` (cascade planes) removed.
+  6. **Dead hotkeys** — `O`/`U`/`I` (CycleShadowTuningTarget / Decrease-Value /
+    Increase-Value) и `L` (ToggleCascadeSplitPlanes) полностью удалены из кода:
+    enum values, DebugState fields, HUD helper lines. Inputs уже отсутствуют в
+    InputAction enum/bindings.
 7. **Many pre-reset invariants** (release flags, Tracy UI split, sccache setup,
    build-preset target list) — re-validated against current code, но отдельные
    cmake-флаги были перемещены с preset-level на CMake-level (release compile

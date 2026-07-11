@@ -858,10 +858,12 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Local)) == "LOCL");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Contact)) == "CTSH");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::Occlusion)) == "AOCC");
-	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VctDiffuse)) == "VCT_DIFF");
-	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VctSpecular)) == "VCT_SPEC");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::DiffuseGI)) == "GI_DIF");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::SpecularGI)) == "GI_SPC");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::RtxSpecular)) == "RTX_SPC");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VolumetricFog)) == "VOL_FOG");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VolumetricTransmittance)) == "VOL_TRN");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::GreedyMeshing)) == "MESH");
 	EXPECT_TRUE(
 		context,
 		GetNextLightingDebugView(LightingDebugView::Direct) == LightingDebugView::Local);
@@ -879,19 +881,25 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 		GetNextLightingDebugView(LightingDebugView::Occlusion) == LightingDebugView::Fog);
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::Fog) == LightingDebugView::VctDiffuse);
+		GetNextLightingDebugView(LightingDebugView::Fog) == LightingDebugView::DiffuseGI);
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::VctDiffuse) == LightingDebugView::VctSpecular);
+		GetNextLightingDebugView(LightingDebugView::DiffuseGI) == LightingDebugView::SpecularGI);
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::VctSpecular) == LightingDebugView::VolumetricFog);
+		GetNextLightingDebugView(LightingDebugView::SpecularGI) == LightingDebugView::RtxSpecular);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::RtxSpecular) == LightingDebugView::VolumetricFog);
 	EXPECT_TRUE(
 		context,
 		GetNextLightingDebugView(LightingDebugView::VolumetricFog) == LightingDebugView::VolumetricTransmittance);
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::VolumetricTransmittance) == LightingDebugView::Final);
+		GetNextLightingDebugView(LightingDebugView::VolumetricTransmittance) == LightingDebugView::GreedyMeshing);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::GreedyMeshing) == LightingDebugView::Final);
 }
 
 void TestShadowTuningTargetCycleAndLabels(TestContext &context)

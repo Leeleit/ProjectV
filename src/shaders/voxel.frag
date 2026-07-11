@@ -274,6 +274,7 @@ layout(location = 0) in vec3 inNormal;
 layout(location = 1) in vec3 inWorldPosition;
 layout(location = 2) flat in uint inMaterialIndex;
 layout(location = 3) in float inAmbientVisibility;
+layout(location = 4) in vec2 inQuadUV;
 
 layout(location = 0) out vec4 outColor;
 #define OUT_COLOR outColor
@@ -1123,7 +1124,11 @@ void main() {
     const float directDiffuseStrength = clamp(material.shading.w, 0.0, 1.0);
     const float nDotV = max(dot(normal, viewDirection), 0.0);
     const float wrappedDiffuse = clamp((dot(normal, sunDirection) + diffuseWrap) / (1.0 + diffuseWrap), 0.0, 1.0);
-    const vec3 albedo = material.baseColor.rgb;
+    vec3 albedo = material.baseColor.rgb;
+    if (inMaterialIndex == 3u || inMaterialIndex == 4u) {
+        const ivec3 voxelCoord = ivec3(floor(inWorldPosition - inNormal * 0.5));
+        albedo = ((voxelCoord.x + voxelCoord.z) & 1) == 0 ? vec3(0.96, 0.96, 0.94) : vec3(0.56, 0.60, 0.66);
+    }
     const float ambientOcclusion = mix(0.35, 1.0, ao);
     const float geometryAmbientVisibility = clamp(inAmbientVisibility, 0.0, 1.0);
     float localAmbientOcclusionVisibility = 1.0;
@@ -1318,25 +1323,31 @@ void main() {
         OUT_COLOR = vec4(shadowCovered ? mix(vec3(0.65, 0.85, 1.0) * 0.28, vec3(0.65, 0.85, 1.0), sunVisibility) : vec3(1.0, 0.15, 0.10), 1.0);
         return;
     } else if (lightingDebugView == 6u) {
-        color = vec3(sunContactVisibility);
-    } else if (lightingDebugView == 7u) {
         color = vec3(localAmbientOcclusionVisibility);
-    } else if (lightingDebugView == 8u) {
+    } else if (lightingDebugView == 7u) {
         color = vec3(fog);
-    } else if (lightingDebugView == 10u) {
+    } else if (lightingDebugView == 8u) {
         color = vctDiffuse;
-    } else if (lightingDebugView == 11u) {
+    } else if (lightingDebugView == 9u) {
         color = vctSpecular;
-    } else if (lightingDebugView == 12u) {
-        color = volumetricFogAccum;
-    } else if (lightingDebugView == 13u) {
-        color = vec3(volumetricFogTransmittance);
-    } else if (lightingDebugView == 14u) {
-#ifdef VOXEL_RTX_ENABLED
+    } else if (lightingDebugView == 10u) {
         color = rtxSmoothSpecular;
-#else
-        color = vec3(0.0);
-#endif
+    } else if (lightingDebugView == 11u) {
+        color = volumetricFogAccum;
+    } else if (lightingDebugView == 12u) {
+        color = vec3(volumetricFogTransmittance);
+    } else if (lightingDebugView == 13u) {
+        const float meshThickness = 0.04;
+        const bool meshBorder = inQuadUV.x < meshThickness || inQuadUV.x > (1.0 - meshThickness)
+                              || inQuadUV.y < meshThickness || inQuadUV.y > (1.0 - meshThickness);
+        const bool meshCross1 = abs(inQuadUV.x - inQuadUV.y) < meshThickness;
+        const bool meshCross2 = abs(inQuadUV.x - (1.0 - inQuadUV.y)) < meshThickness;
+        if (meshBorder || meshCross1 || meshCross2) {
+            OUT_COLOR = vec4(1.0, 0.25, 0.25, 1.0);
+        } else {
+            OUT_COLOR = vec4(material.baseColor.rgb * 0.25, 1.0);
+        }
+        return;
     }
 
     if (lightingDebugView != 7u) {

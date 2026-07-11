@@ -210,6 +210,13 @@ bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIn
     return neighborMaterialIndex == 0u;
 }
 
+bool IsSameMeshingGroup(const uint materialA, const uint materialB) {
+    if (materialA == materialB) { return true; }
+    const bool aIsFloor = materialA == 3u || materialA == 4u;
+    const bool bIsFloor = materialB == 3u || materialB == 4u;
+    return aIsFloor && bIsFloor;
+}
+
 bool IsAmbientOccluder(const uint materialIndex) {
     if (materialIndex == 0u || materialIndex == 1u) {
         return false;
@@ -402,7 +409,7 @@ void GreedyFacePass(
                         testCoord[axisU] = pU + W;
                         const uint testMaterial = DecodeVoxelMaterialForLod(
                             chunkIndex, chunkDescriptor, testCoord, chunkLodLevel, outExtent);
-                        if (testMaterial != cellMaterial) {
+                        if (!IsSameMeshingGroup(testMaterial, cellMaterial)) {
                             break;
                         }
                         ivec3 testNeighbor = worldVoxelPosition;
@@ -431,7 +438,7 @@ void GreedyFacePass(
                             testCoord[axisV] = pV + H;
                             const uint testMaterial = DecodeVoxelMaterialForLod(
                                 chunkIndex, chunkDescriptor, testCoord, chunkLodLevel, outExtent);
-                            if (testMaterial != cellMaterial) {
+                            if (!IsSameMeshingGroup(testMaterial, cellMaterial)) {
                                 rowValid = false;
                                 break;
                             }

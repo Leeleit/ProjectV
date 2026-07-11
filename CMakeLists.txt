@@ -31,6 +31,7 @@ option(
 )
 option(PROJECTV_BUILD_TRACY_PROFILER "Build bundled Tracy profiler UI" OFF)
 option(PROJECTV_ENABLE_BENCHMARKS "Build Google Benchmark perf-test harness" OFF)
+option(PROJECTV_ENABLE_NATIVE_ARCH "Enable -march=native (non-portable, single-machine builds)" OFF)
 option(PROJECTV_HW_RAY_TRACING "Enable hardware ray tracing probes (RTX path, feature-flagged)" OFF)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -68,6 +69,9 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
             -flto=thin
             -Wl,--gc-sections
     )
+    if (PROJECTV_ENABLE_NATIVE_ARCH)
+        add_compile_options(-march=native)
+    endif ()
 endif ()
 
 set(SDL_STATIC ON CACHE BOOL "Static linking for SDL" FORCE)

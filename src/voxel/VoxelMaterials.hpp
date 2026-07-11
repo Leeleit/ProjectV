@@ -29,10 +29,12 @@ enum class LightingDebugView : uint8_t {
 	Contact = 5,
 	Occlusion = 6,
 	Fog = 7,
-	VctDiffuse = 9,
-	VctSpecular = 10,
+	DiffuseGI = 8,
+	SpecularGI = 9,
+	RtxSpecular = 10,
 	VolumetricFog = 11,
 	VolumetricTransmittance = 12,
+	GreedyMeshing = 13,
 };
 
 struct VoxelLightingDebugControls {

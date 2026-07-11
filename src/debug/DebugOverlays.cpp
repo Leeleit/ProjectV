@@ -2,7 +2,6 @@ import projectv.math;
 
 #include "debug/DebugOverlays.hpp"
 
-#include "app/Camera.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
@@ -128,9 +127,7 @@ void BuildDebugOverlayBoxes(
 	const VoxelWorld *world,
 	const InteractionState &interaction,
 	const DebugState &debug,
-	std::vector<DebugOverlayBox> *outBoxes,
-	const CameraState &camera,
-	const RenderState &render)
+	std::vector<DebugOverlayBox> *outBoxes)
 {
 	if (!outBoxes) {
 		return;

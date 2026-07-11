@@ -116,9 +116,11 @@ sync или при риске device-lost/hang.
 **Категорически запрещено** в Release:
 - `-ffast-math` — ломает детерминизм Fluid CA (CPU path в `VoxelWorld::UpdateFluidCA`,
   `z,y,x`-ascending ordering) и TAA YCoCg clamp (`taa_resolve.frag`).
-- `-march=native` — release binary должен быть переносим между CPU.
 - `-fno-omit-frame-pointer` — нет пользы без backtrace symbols в production.
 - PGO / AutoFDO — отдельный 3-step workflow, не часть release-пресета.
+
+**Опционально** (вкл. вручную через `-DPROJECTV_ENABLE_NATIVE_ARCH=ON`):
+- `-march=native` — разрешён, т.к. пользователь работает на одной машине; остальные собирают из исходников.
 
 **Per-define toggles в Release:** `PROJECTV_ENABLE_TRACY=OFF`,
 `PROJECTV_ENABLE_RENDERDOC_MARKERS=OFF`, `PROJECTV_ENABLE_BENCHMARKS=OFF`.
@@ -126,7 +128,7 @@ sync или при риске device-lost/hang.
 **Linker:** `CMAKE_LINKER_TYPE=LLD` (Linux: `/usr/bin/ld.lld` 22.1.6; Windows: clang-cl LLD).
 
 **Почему:** без conservative policy release binary получает undeclared UB в hot path
-(детерминизм simulation страдает) и непереносим между CPU.
+(детерминизм simulation страдает).
 
 ## 5. C++ module conventions
 
@@ -193,6 +195,12 @@ GPU representation нужна для fast shader-side consume без per-voxel b
 - 6-axis pass: `X+/X-/Y+/Y-/Z+/Z-`.
 - Per-axis greedy merge up to `kMaxChunkExtentForGreedy=64u` (4096-bit per-axis visited
   bitmask = 3KB local memory); fallback to per-voxel 1×1 quads для oversize.
+- **Floor material group merging:** `IsSameMeshingGroup(a, b)` allows FloorWhite(3) ↔
+  FloorGray(4) to merge into one quad (identical surface properties, differ only in
+  baseColor). Merged quad stores first-encountered material; `voxel.frag` computes the
+  checkerboard albedo procedurally from world position: `ivec3(floor(worldPos - normal*0.5))`
+  then `(voxelCoord.x + voxelCoord.z) & 1`. Mirrors `GreedyPhysicsMerger` which already
+  ignores material type for collision shapes.
 - Writes `PackedFace` (16 B, см. §16) в `packedFaces[]`, packs `(width, height)` в
   `packedExtents`. Записывает 2 indirect-draw SSBO (opaque + transparent).
 - Inline camera-frustum cull (`IsChunkVisible`).
@@ -283,9 +291,12 @@ medium | shading` — 4×vec4 layout. SSBO at set=0, binding=2. 4 `static_assert
 
 **ToneMapOperator enum:** `Linear=0, Reinhard=1, AcesApprox=2` (default).
 **ExposureMeteringMode enum:** `Manual=0, SceneKey=1` (default).
-**LightingDebugView enum (13 values):** `Final → Ambient → Direct → Local → Shadow →
-Contact → Occlusion → Fog → Taa → VctDiffuse → VctSpecular → VolumetricFog →
-VolumetricTransmittance → Final`. Default `Final`.
+**LightingDebugView enum (14 values):** `Final → Ambient → Direct → Local → Shadow →
+Contact → Occlusion → Fog → DiffuseGI → SpecularGI → RtxSpecular → VolumetricFog →
+VolumetricTransmittance → GreedyMeshing → Final`. Default `Final`. Stored in
+`sceneLighting.postProcess.w` (SSBO binding 3). Shader branch IDs match enum values 1:1.
+`GreedyMeshing(13)` draws red borders + crosses per merged greedy quad via normalized
+[0,1] UV (`inQuadUV`, location 4 varying from `voxel.vert`).
 
 **~Strikethrough~ (per §5.2.D removal):** ~~first sun shadow path = 4-layer CSM~~
 полностью удалён. Текущий path = RTX shadows (§14). Voxel.frag `ComputeSunShadowSample`
@@ -866,14 +877,13 @@ in helper text. Custom rendering via `DebugHudVertex` NDC quads.
 9. World stats (chunk count, voxel count by material).
 
 **Debug overlays** (`src/debug/DebugOverlays.cpp`): `BuildDebugOverlayBoxes(world,
-interaction, debug, outBoxes, camera, render)` produces world-axis-aligned
+interaction, debug, outBoxes)` produces world-axis-aligned
 `Int3 min/maxExclusive` boxes.
 
 **Overlay types:**
 - Chunk bounds (если `debug->showChunkBounds`).
 - Dirty chunk overlay (если `debug->showDirtyChunkOverlay`).
 - Placement preview box.
-- ~~Cascade split planes~~ (CSM removed, dead flag preserved).
 - Cursor hit normal shaft (если `debug->showCursorHitNormal`).
 
 **Toggles:**
@@ -882,7 +892,6 @@ interaction, debug, outBoxes, camera, render)` produces world-axis-aligned
 - `F9` ToggleChunkBounds.
 - `F10` ToggleDirtyChunkOverlay.
 - `Z` ToggleCursorHitNormal.
-- `L` ToggleCascadeSplitPlanes (dead, см. §23).
 
 **Per-pass CPU timing** (`RenderPassTimings`, `Types.hpp:652-662`): 6 measured +
 1 derived (`otherMs`) + 1 count. `ScopedPassTimer` в `Renderer.cpp:27-46` для

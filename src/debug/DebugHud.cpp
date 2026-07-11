@@ -662,19 +662,6 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
-		"SHDW %u STR %.2f FLT %.2f",
-		stats.shadowMapResolution,
-		stats.sunShadowStrength,
-		stats.sunShadowFilterRadius);
-	PV_APPEND_HUD_LINE(
-		outLines,
-		lineCount,
-		"BIAS %.4f NRM %.4f",
-		stats.sunShadowDepthBias,
-		stats.sunShadowNormalBias);
-	PV_APPEND_HUD_LINE(
-		outLines,
-		lineCount,
 		"CTSH STR %.2f DST %.2f",
 		stats.sunContactShadowStrength,
 		stats.sunContactShadowDistance);
@@ -930,9 +917,7 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "SPD  CTL+ FAST  ALT- SLOW");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "B VIEW  N TMAP");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "H EXP-  K EXPUP  V RESET");
-		PV_APPEND_HUD_LINE(outLines, lineCount, "O SHDW  U DEC  I INC");
-		PV_APPEND_HUD_LINE(outLines, lineCount, "L CASC  Z HITNRM");
-		PV_APPEND_HUD_LINE(outLines, lineCount, "C SHOT");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "Z HITNRM  C SHOT");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "R REC  Y PLAY");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "X ANCH  M PICK");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "TAB MOUSE  P PAUSE");

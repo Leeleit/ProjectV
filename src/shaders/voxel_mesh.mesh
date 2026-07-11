@@ -33,6 +33,7 @@ layout(location = 0) out vec3 outNormal[];
 layout(location = 1) out vec3 outWorldPosition[];
 layout(location = 2) flat out uint outMaterialIndex[];
 layout(location = 3) out float outAmbientVisibility[];
+layout(location = 4) out vec2 outQuadUV[];
 
 layout(push_constant) uniform PushConstants {
     mat4 viewProjection;
@@ -96,6 +97,13 @@ bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIn
         return true;
     }
     return neighborMaterialIndex == 0u;
+}
+
+bool IsSameMeshingGroup(const uint materialA, const uint materialB) {
+    if (materialA == materialB) { return true; }
+    const bool aIsFloor = materialA == 3u || materialA == 4u;
+    const bool bIsFloor = materialB == 3u || materialB == 4u;
+    return aIsFloor && bIsFloor;
 }
 
 vec3 DecodeFaceNormal(const uint faceIndex) {
@@ -166,6 +174,7 @@ void EmitQuad(
         return;
     }
     const vec3 normal = DecodeFaceNormal(faceIndex);
+    const vec2 cornerUV[4] = vec2[4](vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0), vec2(0.0, 1.0));
     for (uint i = 0u; i < 4u; ++i) {
         const uvec3 scaledOffset = ApplyGreedyScale(faceIndex, GetFaceCornerOffset(faceIndex, i), quadExtents);
         const vec3 worldPos = chunkOrigin + vec3(localVoxelCoord + scaledOffset);
@@ -174,6 +183,7 @@ void EmitQuad(
         outWorldPosition[vertexCount + i] = worldPos;
         outMaterialIndex[vertexCount + i] = materialIndex;
         outAmbientVisibility[vertexCount + i] = 1.0;
+        outQuadUV[vertexCount + i] = cornerUV[i];
     }
     gl_PrimitiveTriangleIndicesEXT[primitiveCount] = uvec3(vertexCount, vertexCount + 1u, vertexCount + 2u);
     gl_PrimitiveTriangleIndicesEXT[primitiveCount + 1u] = uvec3(vertexCount, vertexCount + 2u, vertexCount + 3u);
@@ -237,7 +247,7 @@ void GreedyFacePass(
                         uvec3 testCoord = localVoxelCoord;
                         testCoord[axisU] = pU + W;
                         const uint testMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, testCoord);
-                        if (testMaterial != cellMaterial) {
+                        if (!IsSameMeshingGroup(testMaterial, cellMaterial)) {
                             break;
                         }
                         ivec3 testNeighbor = worldVoxelPosition;
@@ -265,7 +275,7 @@ void GreedyFacePass(
                             testCoord[axisU] = pU + wi;
                             testCoord[axisV] = pV + H;
                             const uint testMaterial = DecodeChunkVoxelMaterial(chunkDescriptor, testCoord);
-                            if (testMaterial != cellMaterial) {
+                            if (!IsSameMeshingGroup(testMaterial, cellMaterial)) {
                                 rowValid = false;
                                 break;
                             }

@@ -233,9 +233,7 @@ bool PrepareFrameRenderData(
 		world->voxelWorld.get(),
 		*interaction,
 		*debug,
-		&frame->renderData.debugOverlayBoxes,
-		*camera,
-		*render);
+		&frame->renderData.debugOverlayBoxes);
 	frame->renderData.graphicsPushConstants = {};
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(

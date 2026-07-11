@@ -125,32 +125,41 @@ void TestVctLightingContractSize(TestContext &context)
 	// pinned to the old cascade-augmented layout.
 }
 
-void TestVctDebugViewStringMapping(TestContext &context)
+void TestDebugViewStringMapping(TestContext &context)
 {
-	if (std::string_view(LightingDebugViewToString(LightingDebugView::VctDiffuse)) != "VCT_DIFF") {
-		context.Fail(__LINE__, "VctDiffuse string must be VCT_DIFF");
+	if (std::string_view(LightingDebugViewToString(LightingDebugView::DiffuseGI)) != "GI_DIF") {
+		context.Fail(__LINE__, "DiffuseGI string must be GI_DIF");
 	}
-	if (std::string_view(LightingDebugViewToString(LightingDebugView::VctSpecular)) != "VCT_SPEC") {
-		context.Fail(__LINE__, "VctSpecular string must be VCT_SPEC");
+	if (std::string_view(LightingDebugViewToString(LightingDebugView::SpecularGI)) != "GI_SPC") {
+		context.Fail(__LINE__, "SpecularGI string must be GI_SPC");
+	}
+	if (std::string_view(LightingDebugViewToString(LightingDebugView::RtxSpecular)) != "RTX_SPC") {
+		context.Fail(__LINE__, "RtxSpecular string must be RTX_SPC");
 	}
 }
 
-void TestVctDebugViewCycle(TestContext &context)
+void TestDebugViewCycle(TestContext &context)
 {
-	if (GetNextLightingDebugView(LightingDebugView::Fog) != LightingDebugView::VctDiffuse) {
-		context.Fail(__LINE__, "Fog -> VctDiffuse cycle break");
+	if (GetNextLightingDebugView(LightingDebugView::Fog) != LightingDebugView::DiffuseGI) {
+		context.Fail(__LINE__, "Fog -> DiffuseGI cycle break");
 	}
-	if (GetNextLightingDebugView(LightingDebugView::VctDiffuse) != LightingDebugView::VctSpecular) {
-		context.Fail(__LINE__, "VctDiffuse -> VctSpecular cycle break");
+	if (GetNextLightingDebugView(LightingDebugView::DiffuseGI) != LightingDebugView::SpecularGI) {
+		context.Fail(__LINE__, "DiffuseGI -> SpecularGI cycle break");
 	}
-	if (GetNextLightingDebugView(LightingDebugView::VctSpecular) != LightingDebugView::VolumetricFog) {
-		context.Fail(__LINE__, "VctSpecular -> VolumetricFog cycle break");
+	if (GetNextLightingDebugView(LightingDebugView::SpecularGI) != LightingDebugView::RtxSpecular) {
+		context.Fail(__LINE__, "SpecularGI -> RtxSpecular cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::RtxSpecular) != LightingDebugView::VolumetricFog) {
+		context.Fail(__LINE__, "RtxSpecular -> VolumetricFog cycle break");
 	}
 	if (GetNextLightingDebugView(LightingDebugView::VolumetricFog) != LightingDebugView::VolumetricTransmittance) {
 		context.Fail(__LINE__, "VolumetricFog -> VolumetricTransmittance cycle break");
 	}
-	if (GetNextLightingDebugView(LightingDebugView::VolumetricTransmittance) != LightingDebugView::Final) {
-		context.Fail(__LINE__, "VolumetricTransmittance -> Final cycle break");
+	if (GetNextLightingDebugView(LightingDebugView::VolumetricTransmittance) != LightingDebugView::GreedyMeshing) {
+		context.Fail(__LINE__, "VolumetricTransmittance -> GreedyMeshing cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::GreedyMeshing) != LightingDebugView::Final) {
+		context.Fail(__LINE__, "GreedyMeshing -> Final cycle break");
 	}
 }
 
@@ -171,8 +180,8 @@ int main()
 	TestBuildVctClipmapMipChainRejectsNullCommandBuffer(context);
 	TestBuildVctClipmapMipChainRejectsEmptyClipmap(context);
 	TestVctLightingContractSize(context);
-	TestVctDebugViewStringMapping(context);
-	TestVctDebugViewCycle(context);
+	TestDebugViewStringMapping(context);
+	TestDebugViewCycle(context);
 
 	if (context.failures > 0) {
 		std::fprintf(stderr, "ProjectVVoxelizePipelineTests: %d failure(s)\n", context.failures);

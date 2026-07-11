@@ -270,11 +270,6 @@ struct DebugStats {
 
 	projectv::math::Vec3 sunDirection{};
 	float sunIntensity = 0.0f;
-	float sunShadowStrength = 0.0f;
-	float sunShadowDepthBias = 0.0f;
-	float sunShadowNormalBias = 0.0f;
-	float sunShadowFilterRadius = 0.0f;
-	uint32_t shadowMapResolution = 0;
 	TransparentShadowPolicy transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
 	float sunContactShadowStrength = 0.0f;
 	float sunContactShadowDistance = 0.0f;
@@ -683,7 +678,6 @@ struct DebugState {
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
 
-	bool showCascadeSplitPlanes = false;
 	bool showCursorHitNormal = false;
 };
 

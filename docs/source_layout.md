@@ -31,10 +31,15 @@
 ```text
 src/
   app/
+  asset/
+  audio/
+  bench/
+  c_kernels/
   core/
   debug/
   ecs/
   physics/
+    walk/
   platform/
   render/
     vulkan/
@@ -52,16 +57,62 @@ src/
 
 Ключевые файлы:
 
-- `app/main.cpp`
-- `app/AppUpdate.cpp`
-- `app/AppUpdateHelpers.cpp`
-- `app/Camera.cpp`
-- `app/InputActions.cpp`
-- `app/InputReplay.cpp`
-- `app/FramePreparation.cpp`
-- `app/ModelGravigun.cpp`
-- `app/BenchmarkAutomation.cpp`
-- `app/LookDevCaptureAutomation.cpp`
+- `app/main.cpp` — точка входа (SDL_AppInit / Event / Iterate / Quit)
+- `app/AppUpdate.cpp` — per-frame update logic
+- `app/AppUpdateHelpers.cpp` — хелперы для камеры и сброса состояний
+- `app/Camera.cpp` — управление камерой (view/projection/jitter)
+- `app/FramePreparation.cpp` — подготовка данных кадра (HUD, selection, HZB params)
+- `app/InputActions.cpp` — маппинг клавиш на InputAction
+- `app/InputReplay.cpp` — запись/воспроизведение ввода
+- `app/ModelGravigun.cpp` — гравитационная пушка
+- `app/BenchmarkAutomation.cpp` — автоматизация бенчмарков
+- `app/LookDevCaptureAutomation.cpp` — автоматический захват скриншотов
+
+### `src/asset/`
+
+- загрузка glTF через fastgltf;
+- декомпрессия Draco;
+- бэйкинг meshoptimizer (vertex cache + fetch optimization);
+- загрузка манифестов моделей и регистрация на GPU.
+
+Ключевые файлы:
+
+- `asset/AssetLoader.cpp`
+- `asset/AssetManifest.cpp`
+- `asset/AssetRegistry.cpp`
+- `asset/DracoMeshDecoder.cpp`
+- `asset/MeshBaker.cpp`
+- `asset/MeshGpuResources.cpp`
+- `asset/ModelPass.cpp`
+- `asset/ModelManifestLoader.cpp`
+
+### `src/audio/`
+
+- аудиодвижок на miniaudio;
+- async scan плейлиста через `std::jthread`;
+- управление громкостью (0.0..1.0, шаг 0.05);
+- горячие клавиши: Q play/pause, E stop, 7/8 volume, 9/0 next/prev.
+
+Ключевые файлы:
+
+- `audio/AudioEngine.cpp`
+
+### `src/bench/`
+
+- FrustumCullBenchmark — AVX2-оптимизированный микро-бенчмарк.
+
+Ключевые файлы:
+
+- `bench/FrustumCullBenchmark.cpp`
+
+### `src/c_kernels/`
+
+- CPU-оптимизированные ядра (AVX2) для производительных операций.
+
+Ключевые файлы:
+
+- `c_kernels/frustum_cull.cpp`
+- `c_kernels/FrustumCulling.cpp`
 
 ### `src/core/`
 
@@ -82,14 +133,15 @@ src/
 
 ### `src/debug/`
 
-- profiling glue;
-- HUD generation.
+- profiling glue (Tracy);
+- HUD generation (текстовый HUD с FPS, статистикой чанков, параметрами освещения);
+- 3D debug overlay boxes (chunk bounds, dirty chunk highlights).
 
 Ключевые файлы:
 
-- `debug/DebugHud.cpp`
-- `debug/Profiling.hpp`
-- `debug/ProfilingGpu.hpp`
+- `debug/DebugHud.cpp` — генерация HUD-вершин
+- `debug/DebugOverlays.cpp` — 3D дебаг-оверлеи (AABB)
+- `debug/Profiling.hpp` / `debug/ProfilingGpu.hpp` — Tracy макросы
 
 ### `src/ecs/`
 
@@ -113,11 +165,11 @@ src/
 
 Ключевые файлы:
 
-- `physics/PhysicsWorld.cpp`
-- `physics/PhysicsWorld.hpp`
-- `physics/PhysicsWorld_Walk.cpp`
-- `physics/PhysicsWorld_Internal.hpp`
-- `physics/GreedyPhysicsMerger.cpp`
+- `physics/PhysicsWorld.cpp` / `physics/PhysicsWorld.hpp` — инициализация Jolt, синхронизация мира
+- `physics/PhysicsWorld_Walk.cpp` — walk-режим: support score, edge grace, auto-jump, sneak
+- `physics/PhysicsWorld_Internal.hpp` — PhysicsState: JPH::PhysicsSystem, CharacterVirtual, chunk body map
+- `physics/GreedyPhysicsMerger.cpp` — жадное объединение вокселей в AABB (35× reduction)
+- `physics/walk/` — вспомогательные файлы walk-режима (WalkConstants.hpp, WalkInternals.cpp)
 
 ### `src/platform/`
 
@@ -135,37 +187,43 @@ src/
 
 Ключевые файлы:
 
-- `render/Renderer.cpp`
-- `render/RendererDrawFrame.cpp`
-- `render/RendererRecordCommands.cpp`
-- `render/RendererOverlay.cpp`
-- `render/RendererScreenshot.cpp`
-- `render/SceneResources.cpp`
-- `render/SceneResourcesUpdate.cpp`
-- `render/SceneResourcesVisibility.cpp`
-- `render/SceneResourcesDestroy.cpp`
-- `render/SceneResourcesUtilities.cpp`
-- `render/RayTracedShadows.cpp`
-- `render/RayTracedShadowsBlas.cpp`
-- `render/RayTracedShadowsTlas.cpp`
-- `render/RayTracedShadowsPass.cpp`
-- `render/RayTracedShadowsMask.cpp`
-- `render/RtxGiProbes.cpp`
-- `render/RtxGiProbesPipeline.cpp`
-- `render/RtxGiProbesUpdate.cpp`
-- `render/HizCulling.cpp`
-- `render/vulkan/VulkanInit.cpp`
-- `render/vulkan/VulkanSwapchain.cpp`
-- `render/vulkan/VulkanGraphicsPipeline.cpp`
-- `render/vulkan/VulkanGraphicsPipelineCreate.cpp`
-- `render/vulkan/VulkanGraphicsPipelineBindings.cpp`
-- `render/vulkan/VulkanGraphicsPipelineOverlay.cpp`
-- `render/vulkan/VulkanAsyncCompute.cpp`
-- `render/vulkan/VulkanFluidCaPipeline.cpp`
-- `render/vulkan/VulkanMeshShaderPipeline.cpp`
-- `render/vulkan/VulkanVoxelMeshingPipeline.cpp`
-- `render/vulkan/VulkanVoxelizePipeline.cpp`
-- `render/vulkan/VulkanWorldGenPipeline.cpp`
+- `render/Renderer.cpp` / `render/Renderer.hpp`
+- `render/RendererDrawFrame.cpp` — синхронизация кадра, HZB, презентация
+- `render/RendererRecordCommands.cpp` — запись графических команд
+- `render/RendererOverlay.cpp` — дебаг-оверлеи AABB
+- `render/RendererScreenshot.cpp` — захват кадра в BMP
+- `render/SceneResources.cpp` / `render/SceneResources.hpp` — оркестрация GPU-ресурсов
+- `render/SceneResourcesUpdate.cpp` — заливка CPU→GPU
+- `render/SceneResourcesVisibility.cpp` — CPU frustum culling
+- `render/SceneResourcesDestroy.cpp` — deferred NanoVDB очистка
+- `render/SceneResourcesUtilities.cpp` — VMA хелперы
+- `render/RayTracedShadows.cpp` / `render/RayTracedShadows.hpp` — менеджер RTX-теней
+- `render/RayTracedShadowsBlas.cpp` — сборка BLAS чанков
+- `render/RayTracedShadowsTlas.cpp` — сборка TLAS сцены
+- `render/RayTracedShadowsPass.cpp` — запись прохода теней
+- `render/RayTracedShadowsMask.cpp` — маска теней и fallback-текстуры
+- `render/RtxShadowPipeline.cpp` / `render/RtxShadowSBT.cpp` — RTX pipeline + SBT
+- `render/RtxGiProbes.cpp` / `render/RtxGiProbes.hpp` — DDGI зонды
+- `render/RtxGiProbesPipeline.cpp` — compute pipeline DDGI
+- `render/RtxGiProbesUpdate.cpp` — запись прохода обновления зондов
+- `render/HizCulling.cpp` / `render/HizCulling.hpp` — HZB occlusion culling
+- `render/LodDownsampleGpuConsume.cpp` — LOD downsample на GPU
+- `render/SkyAtmosphere.cpp` — атмосфера (Preetham / Hillaire)
+- `render/Cloudscape.cpp` — облака (Nubis ray-march)
+- `render/VolumetricFog.cpp` — объёмный туман (Wronski froxel)
+- `render/vulkan/VulkanBootstrap.cpp` / `render/vulkan/VulkanBootstrap.hpp` — инициализация Vulkan
+- `render/vulkan/VulkanSwapchain.cpp` — управление swapchain
+- `render/vulkan/VulkanGraphicsPipeline.cpp` — управление пайплайнами
+- `render/vulkan/VulkanGraphicsPipelineCreate.cpp` — создание конвейеров
+- `render/vulkan/VulkanGraphicsPipelineBindings.cpp` — привязка дескрипторов
+- `render/vulkan/VulkanGraphicsPipelineOverlay.cpp` — пайплайны оверлеев + HUD
+- `render/vulkan/VulkanAsyncCompute.cpp` — асинхронные вычисления (timeline semaphores)
+- `render/vulkan/VulkanFluidCaPipeline.cpp` — pipeline для Fluid CA
+- `render/vulkan/VulkanMeshShaderPipeline.cpp` — pipeline для mesh shaders (Pattern C)
+- `render/vulkan/VulkanVoxelMeshingPipeline.cpp` — pipeline для greedy mesher
+- `render/vulkan/VulkanVoxelizePipeline.cpp` — pipeline для вокселизации моделей
+- `render/vulkan/VulkanWorldGenPipeline.cpp` — pipeline для генерации мира
+- `render/vulkan/HardwareRayTracingProbe.cpp` — проверка поддержки аппаратной трассировки
 
 ### `src/voxel/`
 
@@ -199,13 +257,26 @@ src/
 
 Ключевые файлы:
 
-- `shaders/voxel.frag`
-- `shaders/voxel.vert`
-- `shaders/voxel_mesh.comp`
-- `shaders/probe_update.comp`
-- `shaders/voxel_rtx_shadow.rgen`
-- `shaders/fluid_ca.comp`
-- `shaders/hzb_cull.comp`
+- `shaders/voxel.frag` — основной фрагментный шейдер (PBR + DDA + RTX + DDGI)
+- `shaders/voxel.vert` — вершинный шейдер вокселей
+- `shaders/voxel_mesh.comp` — GPU greedy meshing (compute)
+- `shaders/voxel_mesh_pre.comp` — frustum culling pre-pass для mesh shaders
+- `shaders/voxel_mesh.mesh` — mesh shader (Pattern C)
+- `shaders/probe_update.comp` — DDGI probe update (compute)
+- `shaders/voxel_rtx_shadow.rgen` — RTX ray generation (тени солнца)
+- `shaders/voxel_rtx_shadow.rint` — RTX procedural intersection
+- `shaders/voxel_rtx_shadow.rchit` — RTX closest hit
+- `shaders/voxel_rtx_shadow.rmiss` — RTX miss
+- `shaders/fluid_ca.comp` — GPU клеточный автомат жидкости
+- `shaders/hzb_cull.comp` — HZB occlusion culling
+- `shaders/world_gen.comp` — процедурная генерация мира
+- `shaders/voxelize.comp` — вокселизация моделей
+- `shaders/lighting.glsl` — PBR BRDF функции (GGX, Fresnel-Schlick, Smith, tone mapping)
+- `shaders/model.vert` / `shaders/model.frag` — шейдеры моделей
+- `shaders/sky_atmosphere.vert` / `shaders/sky_atmosphere.frag` — атмосфера
+- `shaders/cloudscape.vert` / `shaders/cloudscape.frag` — облака
+- `shaders/volumetric_fog.comp` — объёмный туман (compute)
+- `shaders/common/common_constants.glsl` — общие константы
 
 ## Что это меняет для будущих правок
 

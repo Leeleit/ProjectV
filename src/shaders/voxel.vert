@@ -35,6 +35,7 @@ layout(location = 0) out vec3 outNormal;
 layout(location = 1) out vec3 outWorldPosition;
 layout(location = 2) flat out uint outMaterialIndex;
 layout(location = 3) out float outAmbientVisibility;
+layout(location = 4) out vec2 outQuadUV;
 
 vec3 DecodeFaceNormal(const uint faceIndex) {
     switch (faceIndex) {
@@ -133,6 +134,7 @@ void main() {
     outNormal = DecodeFaceNormal(faceIndex);
     outWorldPosition = worldPosition;
     outMaterialIndex = materialIndex;
+    outQuadUV = vec2[4](vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0), vec2(0.0, 1.0))[cornerIndex];
 
     outAmbientVisibility = 1.0;
 }
