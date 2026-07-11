@@ -75,18 +75,6 @@ bool ColorsMatch(
 	return true;
 }
 
-std::array<float, 4> TransformPoint(
-	const projectv::math::Mat4 &matrix,
-	const std::array<float, 3> &point)
-{
-	return {
-		matrix.c[0][0] * point[0] + matrix.c[1][0] * point[1] + matrix.c[2][0] * point[2] + matrix.c[3][0],
-		matrix.c[0][1] * point[0] + matrix.c[1][1] * point[1] + matrix.c[2][1] * point[2] + matrix.c[3][1],
-		matrix.c[0][2] * point[0] + matrix.c[1][2] * point[1] + matrix.c[2][2] * point[2] + matrix.c[3][2],
-		matrix.c[0][3] * point[0] + matrix.c[1][3] * point[1] + matrix.c[2][3] * point[2] + matrix.c[3][3],
-	};
-}
-
 uint32_t ReadLe32(const std::vector<uint8_t> &bytes, const size_t offset)
 {
 	const uint32_t byte0 = bytes[offset];
@@ -948,21 +936,10 @@ void TestBuildSunShadowCascadeSplitsClampsInvalidInputs(TestContext &context)
 	// CSM removed per TODO.md §5.2.D (session 20x).
 }
 
-void TestBuildSunShadowCascadeSplitsClampsInvalidInputsOriginal(TestContext &context)
-{
-	(void)context;
-	// CSM removed per TODO.md §5.2.D (session 20x).
-}
-
 void TestBuildSunShadowCascadeProjectionsFitEachViewDepthSlice(TestContext &context)
 {
 	(void)context;
 	// CSM removed per TODO.md §5.2.D (session 20x).
-}
-
-void TestBuildSunShadowCascadeProjectionsFitEachViewDepthSliceStub(TestContext &context) // stub marker
-{
-	(void)context;
 }
 
 void TestBuildSunShadowCascadeProjectionsSnapToShadowTexelGrid(TestContext &context)
@@ -2148,16 +2125,20 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 		return;
 	}
 
+	// noinspection DfaUnreadVariable, DfaUnusedValue
 	PlatformState platform{};
+	// noinspection DfaUnreadVariable, DfaUnusedValue
 	SimulationState simulation{};
 	CameraState camera = loaded.initialCamera;
 	InputState input{};
 	InitializeInputState(input);
+	// noinspection DfaUnreadVariable, DfaUnusedValue
 	InteractionState interaction = loaded.initialInteraction;
 	WorldState worldState{};
 	worldState.voxelWorld = std::move(loadedWorld);
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
 	RenderState render{};
+	// noinspection DfaUnreadVariable, DfaUnusedValue
 	DebugState debug{};
 
 	EXPECT_TRUE(context, physics != nullptr);

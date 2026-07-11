@@ -96,6 +96,7 @@ void TestRecordVolumetricFogAccumulationPassRejectsNullCommandBuffer(TestContext
 
 void TestRecordVolumetricFogAccumulationPassRejectsBadFrameIndex(TestContext &context)
 {
+	(void)context;
 	RenderState render{};
 	constexpr projectv::render::VolumetricFogPushConstants push{};
 	if (projectv::render::RecordVolumetricFogAccumulationPass(VK_NULL_HANDLE, render, push, MAX_FRAMES_IN_FLIGHT)) {

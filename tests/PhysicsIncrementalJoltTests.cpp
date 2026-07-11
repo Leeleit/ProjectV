@@ -18,6 +18,7 @@ struct TestContext {
 
 void TestQueueChunkRebuildRequestRejectsNullPhysics(TestContext &context)
 {
+	(void)context;
 	QueueChunkRebuildRequest(nullptr, 0u);
 }
 

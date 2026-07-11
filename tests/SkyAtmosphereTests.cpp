@@ -69,6 +69,7 @@ void TestCreateSkyAtmospherePipelinesRejectsNullContext(TestContext &context)
 
 void TestDestroySkyAtmospherePipelinesRejectsNull(TestContext &context)
 {
+	(void)context;
 	projectv::render::DestroySkyAtmospherePipelines(nullptr, nullptr);
 }
 
@@ -83,6 +84,7 @@ void TestRecordSkyAtmospherePassRejectsNullCommandBuffer(TestContext &context)
 
 void TestRecordSkyAtmospherePassRejectsNullSceneColor(TestContext &context)
 {
+	(void)context;
 	RenderState render{};
 	constexpr projectv::render::SkyAtmospherePushConstants push{};
 	if (projectv::render::RecordSkyAtmospherePass(VK_NULL_HANDLE, render, push, VK_NULL_HANDLE, VK_NULL_HANDLE, {1280u, 720u}, 0u)) {

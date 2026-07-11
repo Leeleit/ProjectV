@@ -18,7 +18,6 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 
 namespace {
 constexpr float kMaxFrameDeltaSeconds = 0.25f;		   // EVIL: 250ms cap; prevents huge dt spikes after pause/focus loss; tuned for 60 FPS frame budget
-constexpr float kLightingExposureStepStops = 0.25f;	   // EVIL: 1/4 stop per keyboard step; smaller → sluggish, larger → jarring
 constexpr float kMinLightingExposureBiasStops = -4.0f; // EVIL: -4 stops lower; matches ACES tone-map dark floor per VoxelMaterials.cpp:62
 constexpr float kMaxLightingExposureBiasStops = 4.0f;  // EVIL: +4 stops upper; symmetric to kMin; prevents exposure runaway
 

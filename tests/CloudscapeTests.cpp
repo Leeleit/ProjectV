@@ -80,6 +80,7 @@ void TestRecordCloudscapeRaymarchPassRejectsNullCommandBuffer(TestContext &conte
 
 void TestRecordCloudscapeRaymarchPassRejectsBadFrameIndex(TestContext &context)
 {
+	(void)context;
 	RenderState render{};
 	constexpr projectv::render::CloudscapePushConstants push{};
 	if (projectv::render::RecordCloudscapeRaymarchPass(VK_NULL_HANDLE, render, push, VK_NULL_HANDLE, VK_NULL_HANDLE, {1280u, 720u}, MAX_FRAMES_IN_FLIGHT)) {
@@ -88,6 +89,7 @@ void TestRecordCloudscapeRaymarchPassRejectsBadFrameIndex(TestContext &context)
 
 void TestRecordCloudscapeRaymarchPassRejectsZeroExtent(TestContext &context)
 {
+	(void)context;
 	RenderState render{};
 	constexpr projectv::render::CloudscapePushConstants push{};
 	if (projectv::render::RecordCloudscapeRaymarchPass(VK_NULL_HANDLE, render, push, VK_NULL_HANDLE, VK_NULL_HANDLE, {0u, 0u}, 0u)) {

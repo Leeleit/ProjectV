@@ -58,6 +58,7 @@ void TestCreateVoxelizePipelinesRejectsNullContext(TestContext &context)
 
 void TestDestroyVoxelizePipelinesRejectsNull(TestContext &context)
 {
+	(void)context;
 	projectv::render::DestroyVoxelizePipelines(nullptr, nullptr);
 }
 
@@ -78,6 +79,7 @@ void TestRecordVoxelizeDispatchRejectsNullCommandBuffer(TestContext &context)
 
 void TestRecordVoxelizeDispatchRejectsEmptyActiveChunks(TestContext &context)
 {
+	(void)context;
 	RenderState render{};
 	SceneFrameResources frameResources{};
 	constexpr projectv::render::VoxelizePushConstants pushConstants{};
@@ -108,6 +110,7 @@ void TestBuildVctClipmapMipChainRejectsNullCommandBuffer(TestContext &context)
 
 void TestBuildVctClipmapMipChainRejectsEmptyClipmap(TestContext &context)
 {
+	(void)context;
 	RenderState render{};
 	if (projectv::render::BuildVctClipmapMipChain(VK_NULL_HANDLE, render)) {
 	}

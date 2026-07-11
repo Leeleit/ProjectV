@@ -78,7 +78,7 @@ void BM_GreedyMeshRandom8(benchmark::State &state)
 {
 	const auto voxels = MakeRandomChunk(8, 42u);
 	const auto input = MakeInput(voxels, 8);
-	for (auto _ : state) {
+	for ([[maybe_unused]] auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}
@@ -89,7 +89,7 @@ void BM_GreedyMeshRandom16(benchmark::State &state)
 {
 	const auto voxels = MakeRandomChunk(16, 42u);
 	const auto input = MakeInput(voxels, 16);
-	for (auto _ : state) {
+	for ([[maybe_unused]] auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}
@@ -100,7 +100,7 @@ void BM_GreedyMeshRandom32(benchmark::State &state)
 {
 	const auto voxels = MakeRandomChunk(32, 42u);
 	const auto input = MakeInput(voxels, 32);
-	for (auto _ : state) {
+	for ([[maybe_unused]] auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}
@@ -111,7 +111,7 @@ void BM_GreedyMeshSolid8(benchmark::State &state)
 {
 	const std::vector<uint8_t> voxels(static_cast<size_t>(8) * 8 * 8, 3u);
 	const auto input = MakeInput(voxels, 8);
-	for (auto _ : state) {
+	for ([[maybe_unused]] auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}
@@ -122,7 +122,7 @@ void BM_GreedyMeshSolid32(benchmark::State &state)
 {
 	const std::vector<uint8_t> voxels(static_cast<size_t>(32) * 32 * 32, 3u);
 	const auto input = MakeInput(voxels, 32);
-	for (auto _ : state) {
+	for ([[maybe_unused]] auto _ : state) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}

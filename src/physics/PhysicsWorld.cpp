@@ -167,6 +167,7 @@ void DestroyAllChunkStaticBodies(PhysicsState &physics)
 
 bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWorld &world)
 {
+	(void)world;
 	PV_PROFILE_ZONE_N("RebuildStaticWorldBodyFromChunkShapes");
 	DestroyStaticWorldBody(physics);
 

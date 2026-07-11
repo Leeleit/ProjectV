@@ -138,6 +138,7 @@ void VerifyToViewReverseMapping() {
 
 void VerifyEmptyString() {
 	constexpr StringID emptyLit{""};
+	// noinspection DfaUnreadVariable, DfaUnusedValue
 	constexpr StringID emptyView{std::string_view{""}};
 	VERIFY(emptyLit == emptyView);
 	VERIFY_EQ(emptyLit.length, 0U);

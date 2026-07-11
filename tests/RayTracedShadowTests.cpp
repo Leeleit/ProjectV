@@ -53,7 +53,6 @@ void TestEnvGateOnRespected()
 	PROJECTV_RTX_EXPECT(
 		!projectv::render::IsRayTracedShadowEnabled(context),
 		"IsRayTracedShadowEnabled must be false when only accelerationStructure available (need both)");
-	context = VulkanContextState{};
 }
 
 void TestConfigDefaultValues()

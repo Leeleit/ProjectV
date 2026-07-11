@@ -142,6 +142,7 @@ void TestChunkOutsideFrustumBottom(TestContext &ctx)
 
 void TestDegenerateFovNoCrash(TestContext &ctx)
 {
+	(void)ctx;
 	const auto chunk = MakeChunk(0, 0, 0, 8, 8, 8, 1u);
 	CpuChunkCullingParams cam{};
 	cam.cameraForwardZ = 1.0f;
