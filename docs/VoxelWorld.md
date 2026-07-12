@@ -3,7 +3,8 @@
 > [!WARNING]
 > **Исторический документ.** В данном файле содержатся устаревшие детали реализации воксельной базы данных (например,
 > плоский массив `std::vector<uint8_t> voxels` вместо разреженного SVO дерева `Sparse64Tree`) и каскадных теней CSM.
-> Современное описание структур хранения приведено в [CODEBASE_GUIDE.md](CODEBASE_GUIDE.md), а физической структуры — в [Physics & Movement Guide](Physics_And_Movement_Guide.md).
+> Современное описание структур хранения приведено в [CODEBASE_GUIDE.md](CODEBASE_GUIDE.md), а физической структуры —
+> в [Physics & Movement Guide](Physics_And_Movement_Guide.md).
 
 Дата фиксации: `2026-04-22` (Обновлено: `2026-07-12`)
 

@@ -1,8 +1,10 @@
 # ProjectV Build And Run
 
 > [!NOTE]
-> **Платформозависимое руководство (Windows).** Данный файл описывает сборку и запуск проекта на операционной системе Windows.
-> Для сборки и тестирования в среде Linux (основной дев-контур проекта) используйте специализированное руководство [Linux Build & Run Guide](Linux_Build_And_Run.md).
+> **Платформозависимое руководство (Windows).** Данный файл описывает сборку и запуск проекта на операционной системе
+> Windows.
+> Для сборки и тестирования в среде Linux (основной дев-контур проекта) используйте специализированное
+> руководство [Linux Build & Run Guide](Linux_Build_And_Run.md).
 
 Дата фиксации: `2026-04-07` (Обновлено: `2026-07-11`)
 
@@ -19,7 +21,11 @@
 - Ninja;
 - `clang-cl`;
 - Visual Studio Build Tools / MSVC headers and linker environment;
-- **Visual C++ Redistributable** (`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`) — нужны `ProjectV.exe` на runtime, потому что `CMakeLists.txt` явно не override'ит `CMAKE_MSVC_RUNTIME_LIBRARY` и по дефолту это `/MD` (dynamic MSVC runtime). Либо поставь VC++ Redist с https://aka.ms/vs/17/release/vc_redist.x64.exe, либо пересобери со static runtime через `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded` (тогда runtime влинкован в `ProjectV.exe`, но это +20% к размеру ELF);
+- **Visual C++ Redistributable** (`vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll`) — нужны `ProjectV.exe` на
+  runtime, потому что `CMakeLists.txt` явно не override'ит `CMAKE_MSVC_RUNTIME_LIBRARY` и по дефолту это `/MD` (dynamic
+  MSVC runtime). Либо поставь VC++ Redist с https://aka.ms/vs/17/release/vc_redist.x64.exe, либо пересобери со static
+  runtime через `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded` (тогда runtime влинкован в `ProjectV.exe`, но это +20% к
+  размеру ELF);
 - Vulkan SDK с `glslc` или `glslangValidator` в `PATH`;
 - Git с поддержкой submodules.
 

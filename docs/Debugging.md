@@ -87,7 +87,8 @@ HUD verbosity contract:
 Editor-tool contract:
 
 - `OFF` сохраняет старый `LMB remove / RMB place` path;
-- `PAINT` красит hit voxel по `LMB` и ставит adjacent voxel по `RMB`; при активном anchor заполняет весь box между anchor и текущим target/placement voxel;
+- `PAINT` красит hit voxel по `LMB` и ставит adjacent voxel по `RMB`; при активном anchor заполняет весь box между
+  anchor и текущим target/placement voxel;
 - `ERASE` удаляет hit voxel обеими кнопками; при активном anchor стирает весь box между anchor и текущим target voxel;
 - `FILL` flood-fill'ит connected region материала hit voxel в выбранный placement material;
 - `INSPECT` оставляет raycast/read-only path и добавляет chunk-oriented target/placement telemetry/overlay.
@@ -101,7 +102,8 @@ Anchor contract:
 
 ## Runtime diagnostics
 
-Критические runtime ошибки проходят через `RuntimeDiagnostics` из [RuntimeDiagnostics.hpp](../src/core/RuntimeDiagnostics.hpp).
+Критические runtime ошибки проходят через `RuntimeDiagnostics`
+из [RuntimeDiagnostics.hpp](../src/core/RuntimeDiagnostics.hpp).
 
 Формат логов:
 
@@ -209,7 +211,8 @@ metrics pack.
    `linux-clang-debug-tracy-profiler` (если доступен) и отдельно собери target `tracy-profiler`.
 3. Запусти profiler и подключись к приложению.
 4. Смотри:
-   - CPU zones вокруг `UpdateApp`, `TickWalkCharacter`, `UpdateWalkGroundSupport`, `PrepareFrameRenderData`, `DrawFrame`;
+   - CPU zones вокруг `UpdateApp`, `TickWalkCharacter`, `UpdateWalkGroundSupport`, `PrepareFrameRenderData`,
+     `DrawFrame`;
    - GPU zones для `Voxel Meshing`, `Opaque Pass`, `Transparent Pass`, `Debug Overlay`, `Debug HUD`;
    - plot'ы по dirty chunks, face counts, upload bytes и `walk` state drift.
 

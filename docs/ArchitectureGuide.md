@@ -190,18 +190,18 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
 
 1. `SDL_AppEvent` обновляет input и window lifecycle flags.
 2. `UpdateApp`:
-   - применяет hotkeys;
-   - крутит control modes;
-   - тикает `creative`, `spectator` или `walk`;
-   - делает runtime interaction через `classic` remove/place или активный debug editor tool;
-   - синхронизирует physics после world edits.
+    - применяет hotkeys;
+    - крутит control modes;
+    - тикает `creative`, `spectator` или `walk`;
+    - делает runtime interaction через `classic` remove/place или активный debug editor tool;
+    - синхронизирует physics после world edits.
 3. `SyncEcsWorldState` обновляет ECS summary.
 4. `PrepareFrameRenderData`:
-   - забирает dirty chunk rebuild requests из `VoxelWorld`;
-   - обновляет CPU-side scene resources;
-   - ждёт fence текущего кадра;
-   - загружает актуальные scene buffers в per-frame mapped buffers;
-   - строит HUD vertices, selection state и debug overlay boxes.
+    - забирает dirty chunk rebuild requests из `VoxelWorld`;
+    - обновляет CPU-side scene resources;
+    - ждёт fence текущего кадра;
+    - загружает актуальные scene buffers в per-frame mapped buffers;
+    - строит HUD vertices, selection state и debug overlay boxes.
 5. `DrawFrame`:
     - **Drain** deferred NanoVDB destroys (VMA cleanup).
     - **Acquire** `vkAcquireNextImageKHR(UINT64_MAX)`.
@@ -234,7 +234,17 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
 
 - `creative` — collision-backed flight mode, подчиняется `pause` вместе с physics, edits разрешены;
 - `spectator` — observe-only noclip mode, не зависит от `pause` для camera movement, edits запрещены;
-- `walk` — grounded collision-based mode, использует physics controller с continuous voxel foot-support score под стопой, коротким `stick-to-floor` step-down и `OnContactSolve` anti-slide listener'ом, который при partial support без input режет downhill-компоненту только на одном best floor-like static contact за кадр; после полной потери опоры режим переходит в обычный gravity fall без lower-floor snap, jump кратко лочит sample-based regrounding и остаётся физическим без `Y`-snap helper'ов, при этом top-edge snag допускает только узкий non-rising ledge catch без upward snap, но уже с lateral probes по ширине капсулы и только из pre-step grounded support, а `Shift` включает отдельный lower-stance sneak path с непрерывной face-based support geometry: pre-move safe-walk проектирует `desired feet XZ` в объединение walkable top-face support area, cached support-region grace и post-solve correction/stick-to-floor используют ту же область; если `feet XZ` остаётся внутри cached support-region, sneak может вернуть небольшой solver-driven drop обратно к cached top-face height, а отпускание `Shift` на уже безопасной кромке удерживается коротким `ledge release` hold вместо мгновенного off-edge drop.
+- `walk` — grounded collision-based mode, использует physics controller с continuous voxel foot-support score под
+  стопой, коротким `stick-to-floor` step-down и `OnContactSolve` anti-slide listener'ом, который при partial support без
+  input режет downhill-компоненту только на одном best floor-like static contact за кадр; после полной потери опоры
+  режим переходит в обычный gravity fall без lower-floor snap, jump кратко лочит sample-based regrounding и остаётся
+  физическим без `Y`-snap helper'ов, при этом top-edge snag допускает только узкий non-rising ledge catch без upward
+  snap, но уже с lateral probes по ширине капсулы и только из pre-step grounded support, а `Shift` включает отдельный
+  lower-stance sneak path с непрерывной face-based support geometry: pre-move safe-walk проектирует `desired feet XZ` в
+  объединение walkable top-face support area, cached support-region grace и post-solve correction/stick-to-floor
+  используют ту же область; если `feet XZ` остаётся внутри cached support-region, sneak может вернуть небольшой
+  solver-driven drop обратно к cached top-face height, а отпускание `Shift` на уже безопасной кромке удерживается
+  коротким `ledge release` hold вместо мгновенного off-edge drop.
 
 Это не финальная gameplay-модель. Это честный MVP split между debug camera, observe mode и базовым player-like mode.
 

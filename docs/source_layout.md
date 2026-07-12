@@ -7,9 +7,11 @@
 
 ## Правило include paths
 
-`ProjectV` больше не полагается на широкие transitional include directories вроде `src/app`, `src/render` или `src/voxel`.
+`ProjectV` больше не полагается на широкие transitional include directories вроде `src/app`, `src/render` или
+`src/voxel`.
 
-Для production target и test target в include path остаётся только корень `src/`, поэтому project headers нужно подключать явными путями от корня:
+Для production target и test target в include path остаётся только корень `src/`, поэтому project headers нужно
+подключать явными путями от корня:
 
 ```cpp
 #include "app/Camera.hpp"
@@ -253,7 +255,8 @@ src/
 
 ### `src/shaders/`
 
-Шейдеры пока сознательно остаются отдельной плоской зоной внутри `src/`. Это не считается нарушением `8.2`: перенос shader assets в другую структуру не был нужен для текущего mainline.
+Шейдеры пока сознательно остаются отдельной плоской зоной внутри `src/`. Это не считается нарушением `8.2`: перенос
+shader assets в другую структуру не был нужен для текущего mainline.
 
 Ключевые файлы:
 

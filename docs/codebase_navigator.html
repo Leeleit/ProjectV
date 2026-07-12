@@ -2,11 +2,12 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>ProjectV Codebase Navigator</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com" rel="preconnect">
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+          rel="stylesheet">
     <!-- Many selectors are referenced from JavaScript templates -->
     <style>
         :root {
@@ -40,9 +41,8 @@
             background-color: var(--bg-dark);
             color: var(--text-primary);
             overflow-x: hidden;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(189, 0, 255, 0.08) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(0, 240, 255, 0.08) 0px, transparent 50%);
+            background-image: radial-gradient(at 0% 0%, rgba(189, 0, 255, 0.08) 0px, transparent 50%),
+            radial-gradient(at 100% 100%, rgba(0, 240, 255, 0.08) 0px, transparent 50%);
             background-attachment: fixed;
             min-height: 100vh;
         }
@@ -257,8 +257,14 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* Section: Map */
@@ -339,13 +345,19 @@
             padding: 2rem;
             display: none;
             margin-top: 2rem;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
             animation: slideDown 0.4s ease forwards;
         }
 
         @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .panel-header {
@@ -366,7 +378,7 @@
         }
 
         .back-btn {
-            background: rgba(255,255,255,0.04);
+            background: rgba(255, 255, 255, 0.04);
             border: 1px solid var(--border-color);
             color: var(--text-primary);
             padding: 0.5rem 1rem;
@@ -378,8 +390,8 @@
         }
 
         .back-btn:hover {
-            background: rgba(255,255,255,0.08);
-            border-color: rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
         }
 
         .file-list {
@@ -390,7 +402,7 @@
 
         .file-item {
             background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255,255,255,0.04);
+            border: 1px solid rgba(255, 255, 255, 0.04);
             border-radius: 10px;
             padding: 1.2rem;
             display: flex;
@@ -402,7 +414,7 @@
 
         .file-item:hover {
             background: rgba(255, 255, 255, 0.04);
-            border-color: rgba(255,255,255,0.08);
+            border-color: rgba(255, 255, 255, 0.08);
         }
 
         .file-info {
@@ -774,8 +786,8 @@
         }
 
         .stage-check-item {
-            background: rgba(255,255,255,0.01);
-            border: 1px solid rgba(255,255,255,0.03);
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.03);
             border-radius: 8px;
             padding: 1rem;
             display: flex;
@@ -785,8 +797,8 @@
         }
 
         .stage-check-item:hover {
-            background: rgba(255,255,255,0.02);
-            border-color: rgba(255,255,255,0.06);
+            background: rgba(255, 255, 255, 0.02);
+            border-color: rgba(255, 255, 255, 0.06);
         }
 
         .check-item-details {
@@ -848,9 +860,16 @@
         }
 
         @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); text-shadow: var(--glow-teal); }
-            100% { transform: scale(1); }
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+                text-shadow: var(--glow-teal);
+            }
+            100% {
+                transform: scale(1);
+            }
         }
 
         .action-btn {
@@ -981,9 +1000,17 @@
         }
 
         @keyframes bounceIn {
-            0% { transform: scale(0.8); opacity: 0; }
-            70% { transform: scale(1.05); opacity: 1; }
-            100% { transform: scale(1); }
+            0% {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            70% {
+                transform: scale(1.05);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1);
+            }
         }
 
         .results-score {
@@ -1000,15 +1027,18 @@
             .app-container {
                 grid-template-columns: 1fr;
             }
+
             aside {
                 height: auto;
                 position: relative;
                 border-right: none;
                 border-bottom: 1px solid var(--border-color);
             }
+
             main {
                 padding: 2rem;
             }
+
             .timeline-container {
                 grid-template-columns: 1fr;
             }
@@ -1018,795 +1048,805 @@
 <body>
 <div class="module-card file-checkbox checkmark difficulty-badge easy lines-badge timeline-step-btn timeline-step-card step-num-badge timeline-code-tag timeline-viz stage-badge stage-desc stage-check-item check-item-details quiz-answer-btn incorrect answer-idx"
      style="display:none"></div>
-    <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <aside>
-            <div class="logo-container">
-                <div class="logo-box">V</div>
-                <div>
-                    <span class="logo-text">ProjectV</span>
-                    <span class="logo-subtext">NAVIGATOR</span>
-                </div>
+<div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside>
+        <div class="logo-container">
+            <div class="logo-box">V</div>
+            <div>
+                <span class="logo-text">ProjectV</span>
+                <span class="logo-subtext">NAVIGATOR</span>
+            </div>
+        </div>
+
+        <nav>
+            <button class="nav-btn active" onclick="switchSection('map')">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+                Карта Кода
+            </button>
+            <button class="nav-btn" onclick="switchSection('lifecycle')">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                </svg>
+                Анатомия Кадра
+            </button>
+            <button class="nav-btn" onclick="switchSection('roadmap')">
+                <svg viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                План Изучения
+            </button>
+            <button class="nav-btn" onclick="switchSection('quiz')">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 11.9 12 12.5 12 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/>
+                </svg>
+                Тест на Знания
+            </button>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p>Версия ядра: 2026-07-11</p>
+            <p>Подготовлено для самостоятельного разбора. Читайте также <a
+                    href="file:///home/le1t/Projects/ProjectV/docs/CODEBASE_GUIDE.md">CODEBASE_GUIDE.md</a>.</p>
+        </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main>
+        <!-- Top Dashboard Bar -->
+        <header>
+            <div class="header-title">
+                <h1 id="page-title">Интерактивная Карта Кода</h1>
+                <p id="page-subtitle">Изучайте модули и открывайте ключевые файлы проекта напрямую</p>
             </div>
 
-            <nav>
-                <button class="nav-btn active" onclick="switchSection('map')">
-                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-                    Карта Кода
-                </button>
-                <button class="nav-btn" onclick="switchSection('lifecycle')">
-                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                    Анатомия Кадра
-                </button>
-                <button class="nav-btn" onclick="switchSection('roadmap')">
-                    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                    План Изучения
-                </button>
-                <button class="nav-btn" onclick="switchSection('quiz')">
-                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 11.9 12 12.5 12 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.75z"/></svg>
-                    Тест на Знания
-                </button>
-            </nav>
-
-            <div class="sidebar-footer">
-                <p>Версия ядра: 2026-07-11</p>
-                <p>Подготовлено для самостоятельного разбора. Читайте также <a href="file:///home/le1t/Projects/ProjectV/docs/CODEBASE_GUIDE.md">CODEBASE_GUIDE.md</a>.</p>
+            <div class="study-progress-card">
+                <div class="progress-circle">
+                    <svg>
+                        <circle class="circle-bg" cx="25" cy="25" r="20"/>
+                        <circle class="circle-bar" cx="25" cy="25" id="progress-bar-fill" r="20"/>
+                    </svg>
+                    <span class="progress-text-val" id="progress-percent">0%</span>
+                </div>
+                <div class="progress-info">
+                    <h4>Прогресс Освоения</h4>
+                    <p id="progress-details">Изучено 0 файлов</p>
+                </div>
             </div>
-        </aside>
+        </header>
 
-        <!-- Main Workspace -->
-        <main>
-            <!-- Top Dashboard Bar -->
-            <header>
-                <div class="header-title">
-                    <h1 id="page-title">Интерактивная Карта Кода</h1>
-                    <p id="page-subtitle">Изучайте модули и открывайте ключевые файлы проекта напрямую</p>
+        <!-- SECTION: MAP -->
+        <section class="content-section active" id="sec-map">
+            <div class="module-grid" id="module-container">
+                <!-- Dynamic rendering modules -->
+            </div>
+
+            <div class="files-panel" id="files-panel">
+                <div class="panel-header">
+                    <h2 id="panel-title">Модуль</h2>
+                    <button class="back-btn" onclick="closeFilesPanel()">← К модулям</button>
+                </div>
+                <div class="file-list" id="file-list-container">
+                    <!-- Dynamic files listing -->
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: LIFECYCLE -->
+        <section class="content-section" id="sec-lifecycle">
+            <div class="timeline-container">
+                <div class="timeline-steps" id="timeline-steps-container">
+                    <!-- Dynamic timeline steps -->
+                </div>
+                <div class="timeline-step-content" id="timeline-step-detail">
+                    <!-- Dynamic active step details -->
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: ROADMAP -->
+        <section class="content-section" id="sec-roadmap">
+            <div class="roadmap-container" id="roadmap-stages-container">
+                <!-- Dynamic roadmap stages -->
+            </div>
+        </section>
+
+        <!-- SECTION: QUIZ -->
+        <section class="content-section" id="sec-quiz">
+            <div class="quiz-container">
+                <!-- Start View -->
+                <div class="quiz-start-view" id="quiz-start">
+                    <span class="quiz-start-icon">💡</span>
+                    <h2>Архитектурный тест ProjectV</h2>
+                    <p>Проверьте, насколько хорошо вы усвоили структуру проекта, принципы гибридного хранения и логику
+                        кадра.</p>
+                    <button class="action-btn" onclick="startQuiz()">Начать Тест</button>
                 </div>
 
-                <div class="study-progress-card">
-                    <div class="progress-circle">
-                        <svg>
-                            <circle class="circle-bg" cx="25" cy="25" r="20" />
-                            <circle class="circle-bar" id="progress-bar-fill" cx="25" cy="25" r="20" />
-                        </svg>
-                        <span class="progress-text-val" id="progress-percent">0%</span>
-                    </div>
-                    <div class="progress-info">
-                        <h4>Прогресс Освоения</h4>
-                        <p id="progress-details">Изучено 0 файлов</p>
-                    </div>
-                </div>
-            </header>
-
-            <!-- SECTION: MAP -->
-            <section id="sec-map" class="content-section active">
-                <div class="module-grid" id="module-container">
-                    <!-- Dynamic rendering modules -->
-                </div>
-
-                <div class="files-panel" id="files-panel">
-                    <div class="panel-header">
-                        <h2 id="panel-title">Модуль</h2>
-                        <button class="back-btn" onclick="closeFilesPanel()">← К модулям</button>
-                    </div>
-                    <div class="file-list" id="file-list-container">
-                        <!-- Dynamic files listing -->
-                    </div>
-                </div>
-            </section>
-
-            <!-- SECTION: LIFECYCLE -->
-            <section id="sec-lifecycle" class="content-section">
-                <div class="timeline-container">
-                    <div class="timeline-steps" id="timeline-steps-container">
-                        <!-- Dynamic timeline steps -->
-                    </div>
-                    <div class="timeline-step-content" id="timeline-step-detail">
-                        <!-- Dynamic active step details -->
-                    </div>
-                </div>
-            </section>
-
-            <!-- SECTION: ROADMAP -->
-            <section id="sec-roadmap" class="content-section">
-                <div class="roadmap-container" id="roadmap-stages-container">
-                    <!-- Dynamic roadmap stages -->
-                </div>
-            </section>
-
-            <!-- SECTION: QUIZ -->
-            <section id="sec-quiz" class="content-section">
-                <div class="quiz-container">
-                    <!-- Start View -->
-                    <div class="quiz-start-view" id="quiz-start">
-                        <span class="quiz-start-icon">💡</span>
-                        <h2>Архитектурный тест ProjectV</h2>
-                        <p>Проверьте, насколько хорошо вы усвоили структуру проекта, принципы гибридного хранения и логику кадра.</p>
-                        <button class="action-btn" onclick="startQuiz()">Начать Тест</button>
-                    </div>
-
-                    <!-- Game View -->
-                    <div class="quiz-game-view" id="quiz-game">
-                        <div class="quiz-progress">
-                            <span id="quiz-step-text">Вопрос 1 из 5</span>
-                            <div class="quiz-progress-bar-bg">
-                                <div class="quiz-progress-bar" id="quiz-bar"></div>
-                            </div>
-                            <span id="quiz-score-text">Очки: 0</span>
+                <!-- Game View -->
+                <div class="quiz-game-view" id="quiz-game">
+                    <div class="quiz-progress">
+                        <span id="quiz-step-text">Вопрос 1 из 5</span>
+                        <div class="quiz-progress-bar-bg">
+                            <div class="quiz-progress-bar" id="quiz-bar"></div>
                         </div>
-                        <div class="quiz-question-card">
-                            <h3 id="quiz-question">Вопрос?</h3>
-                        </div>
-                        <div class="quiz-answers-grid" id="quiz-answers">
-                            <!-- Options -->
-                        </div>
+                        <span id="quiz-score-text">Очки: 0</span>
                     </div>
-
-                    <!-- Results View -->
-                    <div class="quiz-results-view" id="quiz-results">
-                        <h2>Тест Завершен!</h2>
-                        <span class="results-score" id="quiz-score-display">5 / 5</span>
-                        <p id="quiz-feedback-text">Потрясающе! Вы отлично разобрались в своей кодовой базе.</p>
-                        <button class="action-btn" onclick="resetQuiz()">Пройти еще раз</button>
+                    <div class="quiz-question-card">
+                        <h3 id="quiz-question">Вопрос?</h3>
+                    </div>
+                    <div class="quiz-answers-grid" id="quiz-answers">
+                        <!-- Options -->
                     </div>
                 </div>
-            </section>
-        </main>
-    </div>
 
-    <script>
-        // Full catalog of files in the repository (60+ items)
-        const modulesData = {
-            core: {
-                title: "Core Kernel",
-                icon: "💎",
-                desc: "Глобальные структуры, разделяемая память, математика и StringID.",
-                color: "#ff007f",
-                files: [
-                    { path: "src/core/Types.hpp", desc: "Словарь проекта: AppState, RenderState, UBO/SSBO структуры.", difficulty: "hard", lines: 940 },
-                    { path: "src/core/Types.cpp", desc: "Инициализация дефолтных настроек и статические assert смещения байт.", difficulty: "medium", lines: 180 },
-                    { path: "src/core/Math.ixx", desc: "C++26 модуль математики для типов векторов и матриц.", difficulty: "easy", lines: 120 },
-                    { path: "src/core/StringId.ixx", desc: "C++26 модуль хэширования строк для быстрого поиска по ключам.", difficulty: "easy", lines: 80 },
-                    { path: "src/core/Probe.ixx", desc: "Вспомогательный модуль для сбора runtime метрик производительности.", difficulty: "easy", lines: 50 }
-                ]
-            },
-            app: {
-                title: "App & Cycle",
-                icon: "🚀",
-                desc: "Инициализация движка, игровой цикл SDL2, логика камеры и ввод игрока.",
-                color: "#00f0ff",
-                files: [
-                    { path: "src/app/main.cpp", desc: "Точка входа. SDL_AppInit, SDL_AppIterate и деструкторы.", difficulty: "easy", lines: 521 },
-                    { path: "src/app/AppUpdate.cpp", desc: "Главный симуляционный шаг: тики физики, CA и камеры.", difficulty: "medium", lines: 710 },
-                    { path: "src/app/AppUpdateHelpers.cpp", desc: "Дополнительные функции обновления и сброса камеры.", difficulty: "easy", lines: 86 },
-                    { path: "src/app/Camera.cpp", desc: "Камера, вычисление проекций и смещений субпикселей для TAA.", difficulty: "medium", lines: 240 },
-                    { path: "src/app/FramePreparation.cpp", desc: "Заполнение HUD буферов, рамок выделения и HZB параметров.", difficulty: "medium", lines: 280 },
-                    { path: "src/app/InputActions.cpp", desc: "Регистрация кнопок ввода и запуск логических InputAction.", difficulty: "easy", lines: 250 },
-                    { path: "src/app/InputReplay.cpp", desc: "Запись и воспроизведение кадров ввода игрока.", difficulty: "medium", lines: 360 },
-                    { path: "src/app/ModelGravigun.cpp", desc: "Логика гравитационной пушки: захват и бросок физических тел.", difficulty: "medium", lines: 180 },
-                    { path: "src/app/BenchmarkAutomation.cpp", desc: "Автоматический запуск тестов производительности с экспортом в CSV.", difficulty: "easy", lines: 160 },
-                    { path: "src/app/LookDevCaptureAutomation.cpp", desc: "Съемка и сравнение визуальных параметров RTX теней.", difficulty: "medium", lines: 240 }
-                ]
-            },
-            voxel: {
-                title: "Voxel Database",
-                icon: "📦",
-                desc: "CPU SVO дерево, менеджер чанков, NanoVDB и генерация рельефа.",
-                color: "#39ff14",
-                files: [
-                    { path: "src/voxel/Sparse64Tree.hpp", desc: "Разреженное CPU дерево (SVO) с дедупликацией нод.", difficulty: "hard", lines: 390 },
-                    { path: "src/voxel/NanoVdb.hpp", desc: "Выравнивание CPU SVO в плоский буфер NanoVDB для шейдеров.", difficulty: "hard", lines: 85 },
-                    { path: "src/voxel/VoxelWorld.cpp", desc: "Менеджер мира чанков, dirty queue, координатная математика (декомпозирован).", difficulty: "medium", lines: 350 },
-                    { path: "src/voxel/VoxelWorldPreset.cpp", desc: "Генератор пресетов ландшафта шумом Перлина и сценарии.", difficulty: "medium", lines: 590 },
-                    { path: "src/voxel/VoxelWorldSnapshot.cpp", desc: "Сохранение и загрузка двоичных снимков мира.", difficulty: "easy", lines: 230 },
-                    { path: "src/voxel/VoxelWorldFluid.cpp", desc: "Симуляция клеточных автоматов жидкости.", difficulty: "medium", lines: 280 },
-                    { path: "src/voxel/VoxelWorldLod.cpp", desc: "Расчет и назначение LOD-уровней чанков.", difficulty: "easy", lines: 75 },
-                    { path: "src/voxel/VoxelWorldStatic.cpp", desc: "Промоушн динамических чанков в статические при застое.", difficulty: "easy", lines: 40 },
-                    { path: "src/voxel/VoxelMaterials.cpp", desc: "Визуальные профили вокселей: альбедо, шероховатость, металл.", difficulty: "easy", lines: 510 },
-                    { path: "src/voxel/VoxelRaycast.cpp", desc: "CPU трассировка лучей для поиска вокселя под прицелом.", difficulty: "medium", lines: 180 },
-                    { path: "src/voxel/ChunkStreamer.cpp", desc: "Асинхронная подгрузка регионов мира с диска.", difficulty: "medium", lines: 310 },
-                    { path: "src/voxel/VoxelInteraction.cpp", desc: "Установка и разрушение блоков с проверкой коллизий.", difficulty: "medium", lines: 290 },
-                    { path: "src/voxel/VoxelLodDownsample.cpp", desc: "Алгоритм LOD downsampling с сохранением структуры граней.", difficulty: "medium", lines: 110 },
-                    { path: "src/voxel/CpuMeshGenerator.cpp", desc: "Тестовый генератор воксельных мешей на CPU.", difficulty: "easy", lines: 90 },
-                    { path: "src/voxel/SceneConfig.cpp", desc: "Загрузка и парсинг конфигурации сцены из scene.json.", difficulty: "easy", lines: 130 }
-                ]
-            },
-            render: {
-                title: "Vulkan Renderer",
-                icon: "🎨",
-                desc: "Рендеринг кадра, распределение ресурсов, RTX тени, DDGI и HZB куллинг.",
-                color: "#bd00ff",
-                files: [
-                    { path: "src/render/Renderer.cpp", desc: "Головная инициализация Renderer и хранение ссылок.", difficulty: "easy", lines: 90 },
-                    { path: "src/render/RendererDrawFrame.cpp", desc: "Оркестрация кадра: барьеры синхронизации, вызов HZB, Present.", difficulty: "hard", lines: 510 },
-                    { path: "src/render/RendererRecordCommands.cpp", desc: "Запись проходов вокселей, моделей, оверлеев и скайбокса.", difficulty: "medium", lines: 505 },
-                    { path: "src/render/RendererOverlay.cpp", desc: "Запись команд для отрисовки HUD, текста и дебаг-коробок.", difficulty: "easy", lines: 110 },
-                    { path: "src/render/RendererScreenshot.cpp", desc: "Логика сохранения кадра на диск в BMP формат.", difficulty: "easy", lines: 120 },
-                    { path: "src/render/SceneResources.cpp", desc: "Связующий менеджер GPU буферов кадра.", difficulty: "hard", lines: 810 },
-                    { path: "src/render/SceneResourcesUpdate.cpp", desc: "Обновление буферов и перезагрузка NanoVDB на GPU.", difficulty: "hard", lines: 470 },
-                    { path: "src/render/SceneResourcesVisibility.cpp", desc: " CPU фрустум-куллинг чанков перед формированием кадра.", difficulty: "medium", lines: 290 },
-                    { path: "src/render/SceneResourcesDestroy.cpp", desc: "Деструкторы ресурсов и deferred-очередь удаления NanoVDB.", difficulty: "medium", lines: 390 },
-                    { path: "src/render/SceneResourcesUtilities.cpp", desc: "Утилитарные хелперы для создания буферов в VMA.", difficulty: "easy", lines: 70 },
-                    { path: "src/render/RayTracedShadows.cpp", desc: "Менеджер аппаратных RTX-теней: инициализация, буферы (декомпозирован).", difficulty: "hard", lines: 360 },
-                    { path: "src/render/RayTracedShadowsBlas.cpp", desc: "Строит и обновляет структуры BLAS для чанков.", difficulty: "medium", lines: 320 },
-                    { path: "src/render/RayTracedShadowsTlas.cpp", desc: "Строит и обновляет структуру TLAS сцены.", difficulty: "easy", lines: 150 },
-                    { path: "src/render/RayTracedShadowsPass.cpp", desc: "Запись проходов трассировки RTX-теней.", difficulty: "medium", lines: 180 },
-                    { path: "src/render/RayTracedShadowsMask.cpp", desc: "Теневая маска, очистка, fallback-текстуры и шейдерные ресурсы.", difficulty: "hard", lines: 420 },
-                    { path: "src/render/RtxGiProbes.cpp", desc: "Динамическое глобальное освещение (DDGI): сетка зондов и аллокации (декомпозирован).", difficulty: "hard", lines: 350 },
-                    { path: "src/render/RtxGiProbesPipeline.cpp", desc: "Инициализация вычислительного конвейера и дескрипторов DDGI.", difficulty: "medium", lines: 150 },
-                    { path: "src/render/RtxGiProbesUpdate.cpp", desc: "Запись вычислительного прохода обновления зондов DDGI.", difficulty: "medium", lines: 220 },
-                    { path: "src/render/HizCulling.cpp", desc: "Иерархический Z-буфер: расчет пирамиды глубин на GPU.", difficulty: "hard", lines: 910 },
-                    { path: "src/render/Cloudscape.cpp", desc: "3D Raymarching шейдерный проход для генерации облаков.", difficulty: "medium", lines: 580 },
-                    { path: "src/render/SkyAtmosphere.cpp", desc: "Физическое рассеяние света в атмосфере (Рэлей, Ми).", difficulty: "medium", lines: 790 },
-                    { path: "src/render/VolumetricFog.cpp", desc: "Объемный туман, освещенный направленным светом солнца.", difficulty: "medium", lines: 620 }
-                ]
-            },
-            vulkan_low: {
-                title: "Vulkan Bootstrap",
-                icon: "⚙️",
-                desc: "Инициализация Vulkan, создание Swapchain, пайплайнов и асинхронной очереди.",
-                color: "#ffd700",
-                files: [
-                    { path: "src/render/vulkan/VulkanBootstrap.cpp", desc: "Выбор видеокарты, очередей и создание логического устройства.", difficulty: "medium", lines: 1110 },
-                    { path: "src/render/vulkan/VulkanSwapchain.cpp", desc: "Swapchain: выбор формата, FIFO/Immediate, ребилд по ресайзу.", difficulty: "medium", lines: 530 },
-                    { path: "src/render/vulkan/VulkanGraphicsPipelineCreate.cpp", desc: "Создание конвейеров отрисовки из шейдеров.", difficulty: "hard", lines: 590 },
-                    { path: "src/render/vulkan/VulkanGraphicsPipelineBindings.cpp", desc: "Настройка маппинга дескрипторов и push-констант к пайплайнам.", difficulty: "medium", lines: 360 },
-                    { path: "src/render/vulkan/VulkanGraphicsPipelineOverlay.cpp", desc: "Пайплайны вывода отладочных оверлеев и текста HUD.", difficulty: "medium", lines: 470 },
-                    { path: "src/render/vulkan/VulkanAsyncCompute.cpp", desc: "Управление асинхронной вычислительной очередью на семафорах.", difficulty: "medium", lines: 430 },
-                    { path: "src/render/vulkan/VulkanFluidCaPipeline.cpp", desc: "Пайплайны клеточного автомата жидкости на GPU.", difficulty: "medium", lines: 610 },
-                    { path: "src/render/vulkan/VulkanMeshShaderPipeline.cpp", desc: "Настройка пайплайнов для рендеринга вокселей через Mesh Shaders.", difficulty: "hard", lines: 790 },
-                    { path: "src/render/vulkan/VulkanVoxelMeshingPipeline.cpp", desc: "Пайплайны мешинга вокселей (Greedy compute).", difficulty: "medium", lines: 480 },
-                    { path: "src/render/vulkan/VulkanVoxelizePipeline.cpp", desc: "Пайплайны для вокселизации полигональных моделей на GPU.", difficulty: "hard", lines: 610 },
-                    { path: "src/render/vulkan/VulkanWorldGenPipeline.cpp", desc: "Пайплайны генерации шума ландшафта.", difficulty: "medium", lines: 290 }
-                ]
-            },
-            physics: {
-                title: "Physics & Walk",
-                icon: "🏃‍♂️",
-                desc: "Интеграция Jolt Physics, оптимизация коллизий чанков, контроллер перемещения walk.",
-                color: "#ff3b30",
-                files: [
-                    { path: "src/physics/PhysicsWorld.cpp", desc: "Мир Jolt: инициализация, симуляция и физика твердых тел.", difficulty: "medium", lines: 430 },
-                    { path: "src/physics/PhysicsWorld_Walk.cpp", desc: "Сложный контроллер ходьбы, auto-jump, coyote grace, sneak.", difficulty: "hard", lines: 780 },
-                    { path: "src/physics/GreedyPhysicsMerger.cpp", desc: "Объединение вокселей чанка в AABB для Jolt (в 35 раз меньше коллидеров).", difficulty: "medium", lines: 120 },
-                    { path: "src/physics/PhysicsWorld_Internal.hpp", desc: "Контакт-листенеры, фильтры коллизий и внутренние мосты Jolt.", difficulty: "medium", lines: 220 }
-                ]
-            },
-            ecs: {
-                title: "Flecs ECS Bridge",
-                icon: "🕸️",
-                desc: "Flecs ECS сущности (камера, игрок, мир) и системы синхронизации.",
-                color: "#9d00ff",
-                files: [
-                    { path: "src/ecs/EcsWorld.cpp", desc: "Системы Flecs, регистрация мостов и ECS тики.", difficulty: "easy", lines: 320 },
-                    { path: "src/ecs/EcsWorld.hpp", desc: "Заголовки и макросы Flecs компонентов.", difficulty: "easy", lines: 90 },
-                    { path: "src/ecs/EcsWorld.ixx", desc: "C++26 модуль экспорта Flecs оберток.", difficulty: "easy", lines: 80 }
-                ]
-            },
-            shaders: {
-                title: "GPU Shaders",
-                icon: "🔥",
-                desc: "GLSL программы для отрисовки, трассировки лучей и физических расчетов на GPU.",
-                color: "#ff9000",
-                files: [
-                    { path: "src/shaders/voxel.frag", desc: "Главный фрагментный шейдер: PBR, DDGI, RTX тени, рефракция.", difficulty: "hard", lines: 1500 },
-                    { path: "src/shaders/voxel.vert", desc: "Вершинный шейдер: распаковка PackedFace, субпиксельный джиттер.", difficulty: "easy", lines: 150 },
-                    { path: "src/shaders/voxel_mesh.comp", desc: "Compute шейдер GPU Greedy Mesher: 6-осевое объединение граней.", difficulty: "hard", lines: 584 },
-                    { path: "src/shaders/probe_update.comp", desc: "Обновление зондов DDGI: трассировка 64 лучей солнца через TLAS.", difficulty: "hard", lines: 720 },
-                    { path: "src/shaders/voxel_rtx_shadow.rgen", desc: "RTX шейдер теней: трассировка первичного и теневого луча.", difficulty: "medium", lines: 180 },
-                    { path: "src/shaders/fluid_ca.comp", desc: "GPU клеточный автомат симуляции распространения воды.", difficulty: "hard", lines: 480 },
-                    { path: "src/shaders/hzb_cull.comp", desc: "Compute шейдер отсечения чанков по HZB пирамиде глубин кадра.", difficulty: "medium", lines: 310 }
-                ]
-            }
+                <!-- Results View -->
+                <div class="quiz-results-view" id="quiz-results">
+                    <h2>Тест Завершен!</h2>
+                    <span class="results-score" id="quiz-score-display">5 / 5</span>
+                    <p id="quiz-feedback-text">Потрясающе! Вы отлично разобрались в своей кодовой базе.</p>
+                    <button class="action-btn" onclick="resetQuiz()">Пройти еще раз</button>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+    // Full catalog of files in the repository (60+ items)
+    const modulesData = {
+        core: {
+            title: "Core Kernel",
+            icon: "💎",
+            desc: "Глобальные структуры, разделяемая память, математика и StringID.",
+            color: "#ff007f",
+            files: [
+                { path: "src/core/Types.hpp", desc: "Словарь проекта: AppState, RenderState, UBO/SSBO структуры.", difficulty: "hard", lines: 940 },
+                { path: "src/core/Types.cpp", desc: "Инициализация дефолтных настроек и статические assert смещения байт.", difficulty: "medium", lines: 180 },
+                { path: "src/core/Math.ixx", desc: "C++26 модуль математики для типов векторов и матриц.", difficulty: "easy", lines: 120 },
+                { path: "src/core/StringId.ixx", desc: "C++26 модуль хэширования строк для быстрого поиска по ключам.", difficulty: "easy", lines: 80 },
+                { path: "src/core/Probe.ixx", desc: "Вспомогательный модуль для сбора runtime метрик производительности.", difficulty: "easy", lines: 50 }
+            ]
+        },
+        app: {
+            title: "App & Cycle",
+            icon: "🚀",
+            desc: "Инициализация движка, игровой цикл SDL2, логика камеры и ввод игрока.",
+            color: "#00f0ff",
+            files: [
+                { path: "src/app/main.cpp", desc: "Точка входа. SDL_AppInit, SDL_AppIterate и деструкторы.", difficulty: "easy", lines: 521 },
+                { path: "src/app/AppUpdate.cpp", desc: "Главный симуляционный шаг: тики физики, CA и камеры.", difficulty: "medium", lines: 710 },
+                { path: "src/app/AppUpdateHelpers.cpp", desc: "Дополнительные функции обновления и сброса камеры.", difficulty: "easy", lines: 86 },
+                { path: "src/app/Camera.cpp", desc: "Камера, вычисление проекций и смещений субпикселей для TAA.", difficulty: "medium", lines: 240 },
+                { path: "src/app/FramePreparation.cpp", desc: "Заполнение HUD буферов, рамок выделения и HZB параметров.", difficulty: "medium", lines: 280 },
+                { path: "src/app/InputActions.cpp", desc: "Регистрация кнопок ввода и запуск логических InputAction.", difficulty: "easy", lines: 250 },
+                { path: "src/app/InputReplay.cpp", desc: "Запись и воспроизведение кадров ввода игрока.", difficulty: "medium", lines: 360 },
+                { path: "src/app/ModelGravigun.cpp", desc: "Логика гравитационной пушки: захват и бросок физических тел.", difficulty: "medium", lines: 180 },
+                { path: "src/app/BenchmarkAutomation.cpp", desc: "Автоматический запуск тестов производительности с экспортом в CSV.", difficulty: "easy", lines: 160 },
+                { path: "src/app/LookDevCaptureAutomation.cpp", desc: "Съемка и сравнение визуальных параметров RTX теней.", difficulty: "medium", lines: 240 }
+            ]
+        },
+        voxel: {
+            title: "Voxel Database",
+            icon: "📦",
+            desc: "CPU SVO дерево, менеджер чанков, NanoVDB и генерация рельефа.",
+            color: "#39ff14",
+            files: [
+                { path: "src/voxel/Sparse64Tree.hpp", desc: "Разреженное CPU дерево (SVO) с дедупликацией нод.", difficulty: "hard", lines: 390 },
+                { path: "src/voxel/NanoVdb.hpp", desc: "Выравнивание CPU SVO в плоский буфер NanoVDB для шейдеров.", difficulty: "hard", lines: 85 },
+                { path: "src/voxel/VoxelWorld.cpp", desc: "Менеджер мира чанков, dirty queue, координатная математика (декомпозирован).", difficulty: "medium", lines: 350 },
+                { path: "src/voxel/VoxelWorldPreset.cpp", desc: "Генератор пресетов ландшафта шумом Перлина и сценарии.", difficulty: "medium", lines: 590 },
+                { path: "src/voxel/VoxelWorldSnapshot.cpp", desc: "Сохранение и загрузка двоичных снимков мира.", difficulty: "easy", lines: 230 },
+                { path: "src/voxel/VoxelWorldFluid.cpp", desc: "Симуляция клеточных автоматов жидкости.", difficulty: "medium", lines: 280 },
+                { path: "src/voxel/VoxelWorldLod.cpp", desc: "Расчет и назначение LOD-уровней чанков.", difficulty: "easy", lines: 75 },
+                { path: "src/voxel/VoxelWorldStatic.cpp", desc: "Промоушн динамических чанков в статические при застое.", difficulty: "easy", lines: 40 },
+                { path: "src/voxel/VoxelMaterials.cpp", desc: "Визуальные профили вокселей: альбедо, шероховатость, металл.", difficulty: "easy", lines: 510 },
+                { path: "src/voxel/VoxelRaycast.cpp", desc: "CPU трассировка лучей для поиска вокселя под прицелом.", difficulty: "medium", lines: 180 },
+                { path: "src/voxel/ChunkStreamer.cpp", desc: "Асинхронная подгрузка регионов мира с диска.", difficulty: "medium", lines: 310 },
+                { path: "src/voxel/VoxelInteraction.cpp", desc: "Установка и разрушение блоков с проверкой коллизий.", difficulty: "medium", lines: 290 },
+                { path: "src/voxel/VoxelLodDownsample.cpp", desc: "Алгоритм LOD downsampling с сохранением структуры граней.", difficulty: "medium", lines: 110 },
+                { path: "src/voxel/CpuMeshGenerator.cpp", desc: "Тестовый генератор воксельных мешей на CPU.", difficulty: "easy", lines: 90 },
+                { path: "src/voxel/SceneConfig.cpp", desc: "Загрузка и парсинг конфигурации сцены из scene.json.", difficulty: "easy", lines: 130 }
+            ]
+        },
+        render: {
+            title: "Vulkan Renderer",
+            icon: "🎨",
+            desc: "Рендеринг кадра, распределение ресурсов, RTX тени, DDGI и HZB куллинг.",
+            color: "#bd00ff",
+            files: [
+                { path: "src/render/Renderer.cpp", desc: "Головная инициализация Renderer и хранение ссылок.", difficulty: "easy", lines: 90 },
+                { path: "src/render/RendererDrawFrame.cpp", desc: "Оркестрация кадра: барьеры синхронизации, вызов HZB, Present.", difficulty: "hard", lines: 510 },
+                { path: "src/render/RendererRecordCommands.cpp", desc: "Запись проходов вокселей, моделей, оверлеев и скайбокса.", difficulty: "medium", lines: 505 },
+                { path: "src/render/RendererOverlay.cpp", desc: "Запись команд для отрисовки HUD, текста и дебаг-коробок.", difficulty: "easy", lines: 110 },
+                { path: "src/render/RendererScreenshot.cpp", desc: "Логика сохранения кадра на диск в BMP формат.", difficulty: "easy", lines: 120 },
+                { path: "src/render/SceneResources.cpp", desc: "Связующий менеджер GPU буферов кадра.", difficulty: "hard", lines: 810 },
+                { path: "src/render/SceneResourcesUpdate.cpp", desc: "Обновление буферов и перезагрузка NanoVDB на GPU.", difficulty: "hard", lines: 470 },
+                { path: "src/render/SceneResourcesVisibility.cpp", desc: " CPU фрустум-куллинг чанков перед формированием кадра.", difficulty: "medium", lines: 290 },
+                { path: "src/render/SceneResourcesDestroy.cpp", desc: "Деструкторы ресурсов и deferred-очередь удаления NanoVDB.", difficulty: "medium", lines: 390 },
+                { path: "src/render/SceneResourcesUtilities.cpp", desc: "Утилитарные хелперы для создания буферов в VMA.", difficulty: "easy", lines: 70 },
+                { path: "src/render/RayTracedShadows.cpp", desc: "Менеджер аппаратных RTX-теней: инициализация, буферы (декомпозирован).", difficulty: "hard", lines: 360 },
+                { path: "src/render/RayTracedShadowsBlas.cpp", desc: "Строит и обновляет структуры BLAS для чанков.", difficulty: "medium", lines: 320 },
+                { path: "src/render/RayTracedShadowsTlas.cpp", desc: "Строит и обновляет структуру TLAS сцены.", difficulty: "easy", lines: 150 },
+                { path: "src/render/RayTracedShadowsPass.cpp", desc: "Запись проходов трассировки RTX-теней.", difficulty: "medium", lines: 180 },
+                { path: "src/render/RayTracedShadowsMask.cpp", desc: "Теневая маска, очистка, fallback-текстуры и шейдерные ресурсы.", difficulty: "hard", lines: 420 },
+                { path: "src/render/RtxGiProbes.cpp", desc: "Динамическое глобальное освещение (DDGI): сетка зондов и аллокации (декомпозирован).", difficulty: "hard", lines: 350 },
+                { path: "src/render/RtxGiProbesPipeline.cpp", desc: "Инициализация вычислительного конвейера и дескрипторов DDGI.", difficulty: "medium", lines: 150 },
+                { path: "src/render/RtxGiProbesUpdate.cpp", desc: "Запись вычислительного прохода обновления зондов DDGI.", difficulty: "medium", lines: 220 },
+                { path: "src/render/HizCulling.cpp", desc: "Иерархический Z-буфер: расчет пирамиды глубин на GPU.", difficulty: "hard", lines: 910 },
+                { path: "src/render/Cloudscape.cpp", desc: "3D Raymarching шейдерный проход для генерации облаков.", difficulty: "medium", lines: 580 },
+                { path: "src/render/SkyAtmosphere.cpp", desc: "Физическое рассеяние света в атмосфере (Рэлей, Ми).", difficulty: "medium", lines: 790 },
+                { path: "src/render/VolumetricFog.cpp", desc: "Объемный туман, освещенный направленным светом солнца.", difficulty: "medium", lines: 620 }
+            ]
+        },
+        vulkan_low: {
+            title: "Vulkan Bootstrap",
+            icon: "⚙️",
+            desc: "Инициализация Vulkan, создание Swapchain, пайплайнов и асинхронной очереди.",
+            color: "#ffd700",
+            files: [
+                { path: "src/render/vulkan/VulkanBootstrap.cpp", desc: "Выбор видеокарты, очередей и создание логического устройства.", difficulty: "medium", lines: 1110 },
+                { path: "src/render/vulkan/VulkanSwapchain.cpp", desc: "Swapchain: выбор формата, FIFO/Immediate, ребилд по ресайзу.", difficulty: "medium", lines: 530 },
+                { path: "src/render/vulkan/VulkanGraphicsPipelineCreate.cpp", desc: "Создание конвейеров отрисовки из шейдеров.", difficulty: "hard", lines: 590 },
+                { path: "src/render/vulkan/VulkanGraphicsPipelineBindings.cpp", desc: "Настройка маппинга дескрипторов и push-констант к пайплайнам.", difficulty: "medium", lines: 360 },
+                { path: "src/render/vulkan/VulkanGraphicsPipelineOverlay.cpp", desc: "Пайплайны вывода отладочных оверлеев и текста HUD.", difficulty: "medium", lines: 470 },
+                { path: "src/render/vulkan/VulkanAsyncCompute.cpp", desc: "Управление асинхронной вычислительной очередью на семафорах.", difficulty: "medium", lines: 430 },
+                { path: "src/render/vulkan/VulkanFluidCaPipeline.cpp", desc: "Пайплайны клеточного автомата жидкости на GPU.", difficulty: "medium", lines: 610 },
+                { path: "src/render/vulkan/VulkanMeshShaderPipeline.cpp", desc: "Настройка пайплайнов для рендеринга вокселей через Mesh Shaders.", difficulty: "hard", lines: 790 },
+                { path: "src/render/vulkan/VulkanVoxelMeshingPipeline.cpp", desc: "Пайплайны мешинга вокселей (Greedy compute).", difficulty: "medium", lines: 480 },
+                { path: "src/render/vulkan/VulkanVoxelizePipeline.cpp", desc: "Пайплайны для вокселизации полигональных моделей на GPU.", difficulty: "hard", lines: 610 },
+                { path: "src/render/vulkan/VulkanWorldGenPipeline.cpp", desc: "Пайплайны генерации шума ландшафта.", difficulty: "medium", lines: 290 }
+            ]
+        },
+        physics: {
+            title: "Physics & Walk",
+            icon: "🏃‍♂️",
+            desc: "Интеграция Jolt Physics, оптимизация коллизий чанков, контроллер перемещения walk.",
+            color: "#ff3b30",
+            files: [
+                { path: "src/physics/PhysicsWorld.cpp", desc: "Мир Jolt: инициализация, симуляция и физика твердых тел.", difficulty: "medium", lines: 430 },
+                { path: "src/physics/PhysicsWorld_Walk.cpp", desc: "Сложный контроллер ходьбы, auto-jump, coyote grace, sneak.", difficulty: "hard", lines: 780 },
+                { path: "src/physics/GreedyPhysicsMerger.cpp", desc: "Объединение вокселей чанка в AABB для Jolt (в 35 раз меньше коллидеров).", difficulty: "medium", lines: 120 },
+                { path: "src/physics/PhysicsWorld_Internal.hpp", desc: "Контакт-листенеры, фильтры коллизий и внутренние мосты Jolt.", difficulty: "medium", lines: 220 }
+            ]
+        },
+        ecs: {
+            title: "Flecs ECS Bridge",
+            icon: "🕸️",
+            desc: "Flecs ECS сущности (камера, игрок, мир) и системы синхронизации.",
+            color: "#9d00ff",
+            files: [
+                { path: "src/ecs/EcsWorld.cpp", desc: "Системы Flecs, регистрация мостов и ECS тики.", difficulty: "easy", lines: 320 },
+                { path: "src/ecs/EcsWorld.hpp", desc: "Заголовки и макросы Flecs компонентов.", difficulty: "easy", lines: 90 },
+                { path: "src/ecs/EcsWorld.ixx", desc: "C++26 модуль экспорта Flecs оберток.", difficulty: "easy", lines: 80 }
+            ]
+        },
+        shaders: {
+            title: "GPU Shaders",
+            icon: "🔥",
+            desc: "GLSL программы для отрисовки, трассировки лучей и физических расчетов на GPU.",
+            color: "#ff9000",
+            files: [
+                { path: "src/shaders/voxel.frag", desc: "Главный фрагментный шейдер: PBR, DDGI, RTX тени, рефракция.", difficulty: "hard", lines: 1500 },
+                { path: "src/shaders/voxel.vert", desc: "Вершинный шейдер: распаковка PackedFace, субпиксельный джиттер.", difficulty: "easy", lines: 150 },
+                { path: "src/shaders/voxel_mesh.comp", desc: "Compute шейдер GPU Greedy Mesher: 6-осевое объединение граней.", difficulty: "hard", lines: 584 },
+                { path: "src/shaders/probe_update.comp", desc: "Обновление зондов DDGI: трассировка 64 лучей солнца через TLAS.", difficulty: "hard", lines: 720 },
+                { path: "src/shaders/voxel_rtx_shadow.rgen", desc: "RTX шейдер теней: трассировка первичного и теневого луча.", difficulty: "medium", lines: 180 },
+                { path: "src/shaders/fluid_ca.comp", desc: "GPU клеточный автомат симуляции распространения воды.", difficulty: "hard", lines: 480 },
+                { path: "src/shaders/hzb_cull.comp", desc: "Compute шейдер отсечения чанков по HZB пирамиде глубин кадра.", difficulty: "medium", lines: 310 }
+            ]
+        }
+    };
+
+    const timelineData = [
+        {
+            step: "1. SDL App Iterate",
+            file: "src/app/main.cpp",
+            desc: "Запуск очередной итерации кадра через SDL_AppIterate. Опрашиваются события окна, мыши и клавиатуры, обновляются флаги состояния приложения.",
+            viz: "main.cpp\n └── SDL_AppIterate()\n      ├── PollEvents()\n      └── UpdateApp()"
+        },
+        {
+            step: "2. UpdateApp & Input",
+            file: "src/app/AppUpdate.cpp",
+            desc: "Обрабатываются активные нажатия клавиш. В зависимости от режима (Creative/Spectator/Walk) обновляется позиция камеры или передается управление в физический контроллер ходьбы.",
+            viz: "AppUpdate.cpp\n ├── HandleKeyboardInput()\n └── TickWalkCharacter() / TickCreative()"
+        },
+        {
+            step: "3. Jolt Physics Tick",
+            file: "src/physics/PhysicsWorld.cpp",
+            desc: "Симуляция физики Jolt с фиксированным шагом (60 Hz). Происходит синхронизация коллизий твердых тел и расчет поддержки под ногами игрока.",
+            viz: "PhysicsWorld.cpp\n └── JoltSystem->Update(1/60s)\n      └── CharacterVirtual->PostPhysicsUpdate()"
+        },
+        {
+            step: "4. Frame Preparation",
+            file: "src/app/FramePreparation.cpp",
+            desc: "Расчет джиттера TAA, формирование матриц проецирования камеры, сборка вершин текста HUD и рамок выделения вокселей (selection box).",
+            viz: "FramePreparation.cpp\n └── PrepareFrameRenderData()\n      ├── BuildProjectionMatrices()\n      └── GenerateHudVertices()"
+        },
+        {
+            step: "5. BLAS Rebuild (RTX)",
+            file: "src/render/RayTracedShadowsBlas.cpp",
+            desc: "Проверка измененных вокселей. На основе AABB грязных чанков на GPU перестраиваются структуры ускорения Bottom-Level (BLAS) через асинхронные барьеры.",
+            viz: "RayTracedShadowsBlas.cpp\n └── BuildDirtyBlases()\n      └── vkCmdBuildAccelerationStructuresKHR(BLAS)"
+        },
+        {
+            step: "6. TLAS Update (RTX)",
+            file: "src/render/RayTracedShadowsTlas.cpp",
+            desc: "Загрузка матриц трансформации и девайс-адресов BLAS всех видимых чанков в буфер инстансов и сборка Top-Level Acceleration Structure (TLAS) кадра.",
+            viz: "RayTracedShadowsTlas.cpp\n └── UpdateTlas() -> RecordTlasBuild()\n      └── vkCmdBuildAccelerationStructuresKHR(TLAS)"
+        },
+        {
+            step: "7. RTX Shadows Pass",
+            file: "src/render/RayTracedShadowsPass.cpp",
+            desc: "Запуск RTX-шейдера теней `voxel_rtx_shadow.rgen`. Шейдер выпускает лучи из камеры, находит точки пересечения и пускает лучи к солнцу, заполняя маску `rtxShadowMask`.",
+            viz: "voxel_rtx_shadow.rgen\n └── TraceRay(TLAS, SunDirection)\n      └── writes to rtxShadowMask (R8_UNORM)"
+        },
+        {
+            step: "8. DDGI Probes Update",
+            file: "src/render/RtxGiProbesUpdate.cpp",
+            desc: "В шейдере `probe_update.comp` выпускаются 64 луча из центров обновляемых зондов. Обновляется освещенность зондов по алгоритму DDGI с накоплением истории.",
+            viz: "probe_update.comp\n └── TraceRay(TLAS)\n      └── updates probe irradiance & distance textures"
+        },
+        {
+            step: "9. GPU Greedy Meshing",
+            file: "src/shaders/voxel_mesh.comp",
+            desc: "Запуск вычислительного шейдера жадного мешинга. Он сканирует воксели по 6 осям и формирует полигональные меши чанков напрямую в GPU буфер.",
+            viz: "voxel_mesh.comp\n └── GreedyFacePass(axis)\n      └── writes to packedFaces SSBO (DrawIndirect source)"
+        },
+        {
+            step: "10. HZB Occlusion Cull",
+            file: "src/render/HizCulling.cpp",
+            desc: "Чанки вокселей отсекаются по HZB (Hierarchical Z-Buffer) пирамиде. Шейдер куллинга проверяет AABB чанков и пишет битовую маску видимости на текущий кадр.",
+            viz: "HizCulling.cpp\n └── HizCullPass()\n      └── writes visibility bitmask to SSBO"
+        },
+        {
+            step: "11. Draw Indirect Pass",
+            file: "src/render/RendererRecordCommands.cpp",
+            desc: "Запуск графического прохода отрисовки. Рендерится непрозрачная геометрия, модели и вода. Шейдер `voxel.frag` сэмплирует тени из RTX маски и глобальный свет из DDGI.",
+            viz: "RendererRecordCommands.cpp\n └── vkCmdDrawIndirectCountKHR(opaqueIndirectBuffer)\n      └── voxel.frag -> Samples rtxShadowMask + DDGI probe textures"
+        },
+        {
+            step: "12. Present Frame",
+            file: "src/render/RendererDrawFrame.cpp",
+            desc: "Рендеринг HUD, HUD дебаг-оверлеев и отправка готового кадра в Swapchain через презентацию.",
+            viz: "RendererDrawFrame.cpp\n └── vkQueuePresentKHR(swapchainImage)"
+        }
+    ];
+
+    const quizQuestions = [
+        {
+            q: "Какая структура данных на CPU является основным источником истины для расположения вокселей?",
+            options: ["NanoVDB буфер", "Sparse64Tree (разреженное дерево)", "PhysicsWorld мир", "EcsState сущности"],
+            correct: 1
+        },
+        {
+            q: "Почему из ProjectV был полностью вырезан каскадный метод теней (CSM)?",
+            options: [
+                "Чтобы освободить видеопамять для музыки",
+                "Из-за неустранимого артефакта Peter Panning (отрыва теней)",
+                "Jolt Physics не поддерживал CSM-тени",
+                "Vulkan 1.4 запрещает использование CSM"
+            ],
+            correct: 1
+        },
+        {
+            q: "На каком этапе вычисляется жадный мешинг (Greedy Meshing) вокселей?",
+            options: [
+                "На CPU во время тиков физики",
+                "В шейдере фрагментов voxel.frag",
+                "На GPU во время выполнения compute-шейдера voxel_mesh.comp",
+                "При чтении JSON конфигурации"
+            ],
+            correct: 2
+        },
+        {
+            q: "Что используется для глобального освещения вокселей (diffuse indirect GI) в RTX-режиме?",
+            options: [
+                "Световые карты (lightmaps)",
+                "Voxel Cone Tracing",
+                "Сетка зондов DDGI (RtxGiProbes)",
+                "Вершинные цвета"
+            ],
+            correct: 2
+        },
+        {
+            q: "Какой файл является 'словарем' структур данных и содержит AppState, RenderState и VoxelSceneLighting?",
+            options: ["main.cpp", "Renderer.cpp", "EcsWorld.cpp", "Types.hpp"],
+            correct: 3
+        }
+    ];
+
+    // State variables
+    let completedFiles = JSON.parse(localStorage.getItem('projectv_completed_files') || '{}');
+    let activeModule = 'core';
+    let activeTimelineStep = 0;
+    let quizCurrentQuestion = 0;
+    let quizScore = 0;
+
+    // Init App
+    window.onload = function() {
+        renderModules();
+        renderTimelineSteps();
+        updateTimelineStepDetail();
+        renderRoadmap();
+        updateOverallProgress();
+    };
+
+    function updateOverallProgress() {
+        let totalFilesCount = 0;
+        let completedCount = 0;
+
+        for (let modKey in modulesData) {
+            modulesData[modKey].files.forEach(f => {
+                totalFilesCount++;
+                if (completedFiles[f.path]) {
+                    completedCount++;
+                }
+            });
+        }
+
+        const percent = totalFilesCount > 0 ? Math.round((completedCount / totalFilesCount) * 100) : 0;
+
+        document.getElementById('progress-percent').innerText = percent + '%';
+        document.getElementById('progress-bar-fill').style.strokeDashoffset = 126 - (126 * percent / 100);
+        document.getElementById('progress-details').innerText = `Изучено ${completedCount} из ${totalFilesCount} файлов`;
+    }
+
+    // Section Switching
+    function switchSection(secId) {
+        document.querySelectorAll('.content-section').forEach(sec => sec.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+
+        const titles = {
+            map: { title: "Интерактивная Карта Кода", subtitle: "Изучайте модули и открывайте ключевые файлы проекта напрямую" },
+            lifecycle: { title: "Анатомия Кадра", subtitle: "Пошаговое руководство по выполнению одного кадра в движке" },
+            roadmap: { title: "Рекомендуемый План Изучения", subtitle: "Последовательная дорожная карта по освоению архитектуры" },
+            quiz: { title: "Тест на Знания", subtitle: "Проверьте свое понимание структуры и принципов ProjectV" }
         };
 
-        const timelineData = [
-            {
-                step: "1. SDL App Iterate",
-                file: "src/app/main.cpp",
-                desc: "Запуск очередной итерации кадра через SDL_AppIterate. Опрашиваются события окна, мыши и клавиатуры, обновляются флаги состояния приложения.",
-                viz: "main.cpp\n └── SDL_AppIterate()\n      ├── PollEvents()\n      └── UpdateApp()"
-            },
-            {
-                step: "2. UpdateApp & Input",
-                file: "src/app/AppUpdate.cpp",
-                desc: "Обрабатываются активные нажатия клавиш. В зависимости от режима (Creative/Spectator/Walk) обновляется позиция камеры или передается управление в физический контроллер ходьбы.",
-                viz: "AppUpdate.cpp\n ├── HandleKeyboardInput()\n └── TickWalkCharacter() / TickCreative()"
-            },
-            {
-                step: "3. Jolt Physics Tick",
-                file: "src/physics/PhysicsWorld.cpp",
-                desc: "Симуляция физики Jolt с фиксированным шагом (60 Hz). Происходит синхронизация коллизий твердых тел и расчет поддержки под ногами игрока.",
-                viz: "PhysicsWorld.cpp\n └── JoltSystem->Update(1/60s)\n      └── CharacterVirtual->PostPhysicsUpdate()"
-            },
-            {
-                step: "4. Frame Preparation",
-                file: "src/app/FramePreparation.cpp",
-                desc: "Расчет джиттера TAA, формирование матриц проецирования камеры, сборка вершин текста HUD и рамок выделения вокселей (selection box).",
-                viz: "FramePreparation.cpp\n └── PrepareFrameRenderData()\n      ├── BuildProjectionMatrices()\n      └── GenerateHudVertices()"
-            },
-            {
-                step: "5. BLAS Rebuild (RTX)",
-                file: "src/render/RayTracedShadowsBlas.cpp",
-                desc: "Проверка измененных вокселей. На основе AABB грязных чанков на GPU перестраиваются структуры ускорения Bottom-Level (BLAS) через асинхронные барьеры.",
-                viz: "RayTracedShadowsBlas.cpp\n └── BuildDirtyBlases()\n      └── vkCmdBuildAccelerationStructuresKHR(BLAS)"
-            },
-            {
-                step: "6. TLAS Update (RTX)",
-                file: "src/render/RayTracedShadowsTlas.cpp",
-                desc: "Загрузка матриц трансформации и девайс-адресов BLAS всех видимых чанков в буфер инстансов и сборка Top-Level Acceleration Structure (TLAS) кадра.",
-                viz: "RayTracedShadowsTlas.cpp\n └── UpdateTlas() -> RecordTlasBuild()\n      └── vkCmdBuildAccelerationStructuresKHR(TLAS)"
-            },
-            {
-                step: "7. RTX Shadows Pass",
-                file: "src/render/RayTracedShadowsPass.cpp",
-                desc: "Запуск RTX-шейдера теней `voxel_rtx_shadow.rgen`. Шейдер выпускает лучи из камеры, находит точки пересечения и пускает лучи к солнцу, заполняя маску `rtxShadowMask`.",
-                viz: "voxel_rtx_shadow.rgen\n └── TraceRay(TLAS, SunDirection)\n      └── writes to rtxShadowMask (R8_UNORM)"
-            },
-            {
-                step: "8. DDGI Probes Update",
-                file: "src/render/RtxGiProbesUpdate.cpp",
-                desc: "В шейдере `probe_update.comp` выпускаются 64 луча из центров обновляемых зондов. Обновляется освещенность зондов по алгоритму DDGI с накоплением истории.",
-                viz: "probe_update.comp\n └── TraceRay(TLAS)\n      └── updates probe irradiance & distance textures"
-            },
-            {
-                step: "9. GPU Greedy Meshing",
-                file: "src/shaders/voxel_mesh.comp",
-                desc: "Запуск вычислительного шейдера жадного мешинга. Он сканирует воксели по 6 осям и формирует полигональные меши чанков напрямую в GPU буфер.",
-                viz: "voxel_mesh.comp\n └── GreedyFacePass(axis)\n      └── writes to packedFaces SSBO (DrawIndirect source)"
-            },
-            {
-                step: "10. HZB Occlusion Cull",
-                file: "src/render/HizCulling.cpp",
-                desc: "Чанки вокселей отсекаются по HZB (Hierarchical Z-Buffer) пирамиде. Шейдер куллинга проверяет AABB чанков и пишет битовую маску видимости на текущий кадр.",
-                viz: "HizCulling.cpp\n └── HizCullPass()\n      └── writes visibility bitmask to SSBO"
-            },
-            {
-                step: "11. Draw Indirect Pass",
-                file: "src/render/RendererRecordCommands.cpp",
-                desc: "Запуск графического прохода отрисовки. Рендерится непрозрачная геометрия, модели и вода. Шейдер `voxel.frag` сэмплирует тени из RTX маски и глобальный свет из DDGI.",
-                viz: "RendererRecordCommands.cpp\n └── vkCmdDrawIndirectCountKHR(opaqueIndirectBuffer)\n      └── voxel.frag -> Samples rtxShadowMask + DDGI probe textures"
-            },
-            {
-                step: "12. Present Frame",
-                file: "src/render/RendererDrawFrame.cpp",
-                desc: "Рендеринг HUD, HUD дебаг-оверлеев и отправка готового кадра в Swapchain через презентацию.",
-                viz: "RendererDrawFrame.cpp\n └── vkQueuePresentKHR(swapchainImage)"
-            }
-        ];
+        document.getElementById(`sec-${secId}`).classList.add('active');
+        event.currentTarget.classList.add('active');
 
-        const quizQuestions = [
-            {
-                q: "Какая структура данных на CPU является основным источником истины для расположения вокселей?",
-                options: ["NanoVDB буфер", "Sparse64Tree (разреженное дерево)", "PhysicsWorld мир", "EcsState сущности"],
-                correct: 1
-            },
-            {
-                q: "Почему из ProjectV был полностью вырезан каскадный метод теней (CSM)?",
-                options: [
-                    "Чтобы освободить видеопамять для музыки", 
-                    "Из-за неустранимого артефакта Peter Panning (отрыва теней)", 
-                    "Jolt Physics не поддерживал CSM-тени", 
-                    "Vulkan 1.4 запрещает использование CSM"
-                ],
-                correct: 1
-            },
-            {
-                q: "На каком этапе вычисляется жадный мешинг (Greedy Meshing) вокселей?",
-                options: [
-                    "На CPU во время тиков физики", 
-                    "В шейдере фрагментов voxel.frag", 
-                    "На GPU во время выполнения compute-шейдера voxel_mesh.comp", 
-                    "При чтении JSON конфигурации"
-                ],
-                correct: 2
-            },
-            {
-                q: "Что используется для глобального освещения вокселей (diffuse indirect GI) в RTX-режиме?",
-                options: [
-                    "Световые карты (lightmaps)", 
-                    "Voxel Cone Tracing", 
-                    "Сетка зондов DDGI (RtxGiProbes)", 
-                    "Вершинные цвета"
-                ],
-                correct: 2
-            },
-            {
-                q: "Какой файл является 'словарем' структур данных и содержит AppState, RenderState и VoxelSceneLighting?",
-                options: ["main.cpp", "Renderer.cpp", "EcsWorld.cpp", "Types.hpp"],
-                correct: 3
-            }
-        ];
+        document.getElementById('page-title').innerText = titles[secId].title;
+        document.getElementById('page-subtitle').innerText = titles[secId].subtitle;
 
-        // State variables
-        let completedFiles = JSON.parse(localStorage.getItem('projectv_completed_files') || '{}');
-        let activeModule = 'core';
-        let activeTimelineStep = 0;
-        let quizCurrentQuestion = 0;
-        let quizScore = 0;
-
-        // Init App
-        window.onload = function() {
-            renderModules();
-            renderTimelineSteps();
-            updateTimelineStepDetail();
-            renderRoadmap();
-            updateOverallProgress();
-        };
-
-        function updateOverallProgress() {
-            let totalFilesCount = 0;
-            let completedCount = 0;
-
-            for (let modKey in modulesData) {
-                modulesData[modKey].files.forEach(f => {
-                    totalFilesCount++;
-                    if (completedFiles[f.path]) {
-                        completedCount++;
-                    }
-                });
-            }
-
-            const percent = totalFilesCount > 0 ? Math.round((completedCount / totalFilesCount) * 100) : 0;
-            
-            document.getElementById('progress-percent').innerText = percent + '%';
-            document.getElementById('progress-bar-fill').style.strokeDashoffset = 126 - (126 * percent / 100);
-            document.getElementById('progress-details').innerText = `Изучено ${completedCount} из ${totalFilesCount} файлов`;
+        if (secId === 'map') {
+            closeFilesPanel();
         }
+    }
 
-        // Section Switching
-        function switchSection(secId) {
-            document.querySelectorAll('.content-section').forEach(sec => sec.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+    // Modules View
+    function renderModules() {
+        const container = document.getElementById('module-container');
+        container.innerHTML = '';
 
-            const titles = {
-                map: { title: "Интерактивная Карта Кода", subtitle: "Изучайте модули и открывайте ключевые файлы проекта напрямую" },
-                lifecycle: { title: "Анатомия Кадра", subtitle: "Пошаговое руководство по выполнению одного кадра в движке" },
-                roadmap: { title: "Рекомендуемый План Изучения", subtitle: "Последовательная дорожная карта по освоению архитектуры" },
-                quiz: { title: "Тест на Знания", subtitle: "Проверьте свое понимание структуры и принципов ProjectV" }
-            };
-
-            document.getElementById(`sec-${secId}`).classList.add('active');
-            event.currentTarget.classList.add('active');
-            
-            document.getElementById('page-title').innerText = titles[secId].title;
-            document.getElementById('page-subtitle').innerText = titles[secId].subtitle;
-
-            if (secId === 'map') {
-                closeFilesPanel();
-            }
-        }
-
-        // Modules View
-        function renderModules() {
-            const container = document.getElementById('module-container');
-            container.innerHTML = '';
-
-            for (let modKey in modulesData) {
-                const mod = modulesData[modKey];
-                
-                let finished = 0;
-                mod.files.forEach(f => {
-                    if (completedFiles[f.path]) finished++;
-                });
-
-                const card = document.createElement('div');
-                card.className = 'module-card';
-                card.style.setProperty('--accent-color', mod.color);
-                card.onclick = () => openFilesPanel(modKey);
-                card.innerHTML = `
-                    <div class="module-icon">${mod.icon}</div>
-                    <h3>${mod.title}</h3>
-                    <p>${mod.desc}</p>
-                    <div class="module-stats">
-                        <span>Файлов: <strong>${mod.files.length}</strong></span>
-                        <span>Изучено: <strong>${finished}/${mod.files.length}</strong></span>
-                    </div>
-                `;
-                container.appendChild(card);
-            }
-        }
-
-        function openFilesPanel(modKey) {
-            activeModule = modKey;
+        for (let modKey in modulesData) {
             const mod = modulesData[modKey];
-            document.getElementById('panel-title').innerText = `${mod.icon} ${mod.title}`;
-            document.getElementById('module-container').style.display = 'none';
-            
-            const fileListContainer = document.getElementById('file-list-container');
-            fileListContainer.innerHTML = '';
 
+            let finished = 0;
             mod.files.forEach(f => {
-                const item = document.createElement('div');
-                item.className = 'file-item';
-                
-                const isChecked = completedFiles[f.path] ? 'checked' : '';
-                
-                item.innerHTML = `
-                    <div class="file-info">
-                        <label class="file-checkbox">
-                            <input type="checkbox" ${isChecked} onchange="toggleFile('${f.path}')">
-                            <span class="checkmark"></span>
-                        </label>
-                        <div class="file-details">
-                            <h4>
-                                <a href="file:////home/le1t/Projects/ProjectV/${f.path}" class="file-link" title="Открыть в IDE">${f.path.split('/').pop()}</a>
-                            </h4>
-                            <p>${f.desc}</p>
-                        </div>
-                    </div>
-                    <div class="file-meta">
-                        <span class="difficulty-badge ${f.difficulty === 'easy' ? 'easy' : f.difficulty === 'medium' ? 'medium' : 'hard'}">${f.difficulty}</span>
-                        <span class="lines-badge">${f.lines} LoC</span>
-                    </div>
-                `;
-                fileListContainer.appendChild(item);
+                if (completedFiles[f.path]) finished++;
             });
 
-            document.getElementById('files-panel').style.display = 'block';
-        }
-
-        function closeFilesPanel() {
-            document.getElementById('files-panel').style.display = 'none';
-            document.getElementById('module-container').style.display = 'grid';
-            renderModules();
-        }
-
-        function toggleFile(filePath) {
-            if (completedFiles[filePath]) {
-                delete completedFiles[filePath];
-            } else {
-                completedFiles[filePath] = true;
-            }
-            localStorage.setItem('projectv_completed_files', JSON.stringify(completedFiles));
-            updateOverallProgress();
-            renderRoadmap();
-        }
-
-        // Timeline View
-        function renderTimelineSteps() {
-            const container = document.getElementById('timeline-steps-container');
-            container.innerHTML = '';
-            
-            timelineData.forEach((step, idx) => {
-                const btn = document.createElement('button');
-                btn.className = `timeline-step-btn ${idx === activeTimelineStep ? 'active' : ''}`;
-                btn.onclick = () => selectTimelineStep(idx);
-                btn.innerHTML = `${step.step}`;
-                container.appendChild(btn);
-            });
-        }
-
-        function selectTimelineStep(idx) {
-            activeTimelineStep = idx;
-            renderTimelineSteps();
-            updateTimelineStepDetail();
-        }
-
-        function updateTimelineStepDetail() {
-            const step = timelineData[activeTimelineStep];
-            const container = document.getElementById('timeline-step-detail');
-            
-            container.innerHTML = `
-                <div class="timeline-step-card">
-                    <div class="timeline-step-header">
-                        <h3>${step.step}</h3>
-                        <span class="step-num-badge">ШАГ ${activeTimelineStep + 1}</span>
-                    </div>
-                    <p>${step.desc}</p>
-                    
-                    <div class="timeline-code-files">
-                        <h4>Основной файл логики</h4>
-                        <div class="timeline-code-list">
-                            <a href="file:////home/le1t/Projects/ProjectV/${step.file}" class="timeline-code-tag">${step.file.split('/').pop()}</a>
-                        </div>
-                    </div>
-                    
-                    <div class="timeline-code-files">
-                        <h4>Визуализация вызовов</h4>
-                        <div class="timeline-viz">${step.viz}</div>
-                    </div>
+            const card = document.createElement('div');
+            card.className = 'module-card';
+            card.style.setProperty('--accent-color', mod.color);
+            card.onclick = () => openFilesPanel(modKey);
+            card.innerHTML = `
+                <div class="module-icon">${mod.icon}</div>
+                <h3>${mod.title}</h3>
+                <p>${mod.desc}</p>
+                <div class="module-stats">
+                    <span>Файлов: <strong>${mod.files.length}</strong></span>
+                    <span>Изучено: <strong>${finished}/${mod.files.length}</strong></span>
                 </div>
             `;
+            container.appendChild(card);
         }
+    }
 
-        // Roadmap / Study Guide View
-        const stagesData = [
-            {
-                title: "Этап 1: Структура ядра и состояние",
-                badge: "Фундамент",
-                desc: "Разберитесь в общих типах данных и структуре глобального состояния AppState, которая пронизывает весь проект.",
-                checks: [
-                    { path: "src/core/Types.hpp", title: "Types.hpp", desc: "Изучите AppState, RenderState и дескрипторы SSBO." },
-                    { path: "src/core/Math.ixx", title: "Math.ixx", desc: "Узнайте, как организованы базовые математические типы." }
-                ]
-            },
-            {
-                title: "Этап 2: Воксельная база данных",
-                badge: "Средний уровень",
-                desc: "Изучите хранение вокселей на CPU в виде разреженного дерева и их линеаризацию в NanoVDB формат для GPU.",
-                checks: [
-                    { path: "src/voxel/Sparse64Tree.hpp", title: "Sparse64Tree.hpp", desc: "Поймите логику хранения нод дерева SVO." },
-                    { path: "src/voxel/NanoVdb.hpp", title: "NanoVdb.hpp", desc: "Разберитесь с созданием линейных буферов NanoVDB." },
-                    { path: "src/voxel/VoxelWorld.cpp", title: "VoxelWorld.cpp", desc: "Изучите менеджер чанков, координатную математику и dirty-очередь (декомпозирован)." }
-                ]
-            },
-            {
-                title: "Этап 3: Игровой цикл и перемещение",
-                badge: "Средний уровень",
-                desc: "Исследуйте SDL инициализацию, логику камеры, тики физики Jolt и сложный контроллер перемещения персонажа.",
-                checks: [
-                    { path: "src/app/main.cpp", title: "main.cpp", desc: "Разберите верхний оркестратор SDL_AppIterate." },
-                    { path: "src/physics/PhysicsWorld.cpp", title: "PhysicsWorld.cpp", desc: "Посмотрите на интеграцию библиотеки Jolt." },
-                    { path: "src/physics/PhysicsWorld_Walk.cpp", title: "PhysicsWorld_Walk.cpp", desc: "Изучите логику auto-jump, coyote time и sneak." }
-                ]
-            },
-            {
-                title: "Этап 4: Жадный GPU мешер и HZB куллинг",
-                badge: "Продвинутый уровень",
-                desc: "Поймите, как на видеокарте генерируются полигоны вокселей из объемов и отсекаются невидимые чанки.",
-                checks: [
-                    { path: "src/shaders/voxel_mesh.comp", title: "voxel_mesh.comp", desc: "Разберите алгоритм greedy-мешинга на GPU." },
-                    { path: "src/render/HizCulling.cpp", title: "HizCulling.cpp", desc: "Изучите сборку Z-пирамиды HZB и куллинг." }
-                ]
-            },
-            {
-                title: "Этап 5: RTX-Driven освещение",
-                badge: "Продвинутый уровень",
-                desc: "Погрузитесь в аппаратную трассировку лучей на Vulkan: сборку ускоряющих структур и GI зонды DDGI.",
-                checks: [
-                    { path: "src/render/RayTracedShadows.cpp", title: "RayTracedShadows.cpp", desc: "Изучите сборку структур ускорения BLAS/TLAS (декомпозирован)." },
-                    { path: "src/render/RtxGiProbes.cpp", title: "RtxGiProbes.cpp", desc: "Разберите расстановку и обновление зондов DDGI (декомпозирован)." }
-                ]
-            }
-        ];
+    function openFilesPanel(modKey) {
+        activeModule = modKey;
+        const mod = modulesData[modKey];
+        document.getElementById('panel-title').innerText = `${mod.icon} ${mod.title}`;
+        document.getElementById('module-container').style.display = 'none';
 
-        function renderRoadmap() {
-            const container = document.getElementById('roadmap-stages-container');
-            container.innerHTML = '';
+        const fileListContainer = document.getElementById('file-list-container');
+        fileListContainer.innerHTML = '';
 
-            stagesData.forEach((stage, sIdx) => {
-                const stageEl = document.createElement('div');
-                stageEl.className = 'roadmap-stage';
+        mod.files.forEach(f => {
+            const item = document.createElement('div');
+            item.className = 'file-item';
 
-                const checkItemsHtml = stage.checks.map(c => {
-                    const checked = completedFiles[c.path] ? 'checked' : '';
-                    return `
-                        <div class="stage-check-item">
-                            <label class="file-checkbox">
-                                <input type="checkbox" ${checked} onchange="toggleFile('${c.path}')">
-                                <span class="checkmark"></span>
-                            </label>
-                            <div class="check-item-details">
-                                <strong>${c.title}</strong>
-                                <p>${c.desc}</p>
-                                <a href="file:////home/le1t/Projects/ProjectV/${c.path}">Открыть ${c.path.split('/').pop()} →</a>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+            const isChecked = completedFiles[f.path] ? 'checked' : '';
 
-                stageEl.innerHTML = `
-                    <div class="stage-header">
-                        <h3>${stage.title}</h3>
-                        <span class="stage-badge">${stage.badge}</span>
+            item.innerHTML = `
+                <div class="file-info">
+                    <label class="file-checkbox">
+                        <input type="checkbox" ${isChecked} onchange="toggleFile('${f.path}')">
+                        <span class="checkmark"></span>
+                    </label>
+                    <div class="file-details">
+                        <h4>
+                            <a href="file:////home/le1t/Projects/ProjectV/${f.path}" class="file-link" title="Открыть в IDE">${f.path.split('/').pop()}</a>
+                        </h4>
+                        <p>${f.desc}</p>
                     </div>
-                    <p class="stage-desc">${stage.desc}</p>
-                    <div class="stage-check-list">
-                        ${checkItemsHtml}
+                </div>
+                <div class="file-meta">
+                    <span class="difficulty-badge ${f.difficulty === 'easy' ? 'easy' : f.difficulty === 'medium' ? 'medium' : 'hard'}">${f.difficulty}</span>
+                    <span class="lines-badge">${f.lines} LoC</span>
+                </div>
+            `;
+            fileListContainer.appendChild(item);
+        });
+
+        document.getElementById('files-panel').style.display = 'block';
+    }
+
+    function closeFilesPanel() {
+        document.getElementById('files-panel').style.display = 'none';
+        document.getElementById('module-container').style.display = 'grid';
+        renderModules();
+    }
+
+    function toggleFile(filePath) {
+        if (completedFiles[filePath]) {
+            delete completedFiles[filePath];
+        } else {
+            completedFiles[filePath] = true;
+        }
+        localStorage.setItem('projectv_completed_files', JSON.stringify(completedFiles));
+        updateOverallProgress();
+        renderRoadmap();
+    }
+
+    // Timeline View
+    function renderTimelineSteps() {
+        const container = document.getElementById('timeline-steps-container');
+        container.innerHTML = '';
+
+        timelineData.forEach((step, idx) => {
+            const btn = document.createElement('button');
+            btn.className = `timeline-step-btn ${idx === activeTimelineStep ? 'active' : ''}`;
+            btn.onclick = () => selectTimelineStep(idx);
+            btn.innerHTML = `${step.step}`;
+            container.appendChild(btn);
+        });
+    }
+
+    function selectTimelineStep(idx) {
+        activeTimelineStep = idx;
+        renderTimelineSteps();
+        updateTimelineStepDetail();
+    }
+
+    function updateTimelineStepDetail() {
+        const step = timelineData[activeTimelineStep];
+        const container = document.getElementById('timeline-step-detail');
+
+        container.innerHTML = `
+            <div class="timeline-step-card">
+                <div class="timeline-step-header">
+                    <h3>${step.step}</h3>
+                    <span class="step-num-badge">ШАГ ${activeTimelineStep + 1}</span>
+                </div>
+                <p>${step.desc}</p>
+
+                <div class="timeline-code-files">
+                    <h4>Основной файл логики</h4>
+                    <div class="timeline-code-list">
+                        <a href="file:////home/le1t/Projects/ProjectV/${step.file}" class="timeline-code-tag">${step.file.split('/').pop()}</a>
+                    </div>
+                </div>
+
+                <div class="timeline-code-files">
+                    <h4>Визуализация вызовов</h4>
+                    <div class="timeline-viz">${step.viz}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Roadmap / Study Guide View
+    const stagesData = [
+        {
+            title: "Этап 1: Структура ядра и состояние",
+            badge: "Фундамент",
+            desc: "Разберитесь в общих типах данных и структуре глобального состояния AppState, которая пронизывает весь проект.",
+            checks: [
+                { path: "src/core/Types.hpp", title: "Types.hpp", desc: "Изучите AppState, RenderState и дескрипторы SSBO." },
+                { path: "src/core/Math.ixx", title: "Math.ixx", desc: "Узнайте, как организованы базовые математические типы." }
+            ]
+        },
+        {
+            title: "Этап 2: Воксельная база данных",
+            badge: "Средний уровень",
+            desc: "Изучите хранение вокселей на CPU в виде разреженного дерева и их линеаризацию в NanoVDB формат для GPU.",
+            checks: [
+                { path: "src/voxel/Sparse64Tree.hpp", title: "Sparse64Tree.hpp", desc: "Поймите логику хранения нод дерева SVO." },
+                { path: "src/voxel/NanoVdb.hpp", title: "NanoVdb.hpp", desc: "Разберитесь с созданием линейных буферов NanoVDB." },
+                { path: "src/voxel/VoxelWorld.cpp", title: "VoxelWorld.cpp", desc: "Изучите менеджер чанков, координатную математику и dirty-очередь (декомпозирован)." }
+            ]
+        },
+        {
+            title: "Этап 3: Игровой цикл и перемещение",
+            badge: "Средний уровень",
+            desc: "Исследуйте SDL инициализацию, логику камеры, тики физики Jolt и сложный контроллер перемещения персонажа.",
+            checks: [
+                { path: "src/app/main.cpp", title: "main.cpp", desc: "Разберите верхний оркестратор SDL_AppIterate." },
+                { path: "src/physics/PhysicsWorld.cpp", title: "PhysicsWorld.cpp", desc: "Посмотрите на интеграцию библиотеки Jolt." },
+                { path: "src/physics/PhysicsWorld_Walk.cpp", title: "PhysicsWorld_Walk.cpp", desc: "Изучите логику auto-jump, coyote time и sneak." }
+            ]
+        },
+        {
+            title: "Этап 4: Жадный GPU мешер и HZB куллинг",
+            badge: "Продвинутый уровень",
+            desc: "Поймите, как на видеокарте генерируются полигоны вокселей из объемов и отсекаются невидимые чанки.",
+            checks: [
+                { path: "src/shaders/voxel_mesh.comp", title: "voxel_mesh.comp", desc: "Разберите алгоритм greedy-мешинга на GPU." },
+                { path: "src/render/HizCulling.cpp", title: "HizCulling.cpp", desc: "Изучите сборку Z-пирамиды HZB и куллинг." }
+            ]
+        },
+        {
+            title: "Этап 5: RTX-Driven освещение",
+            badge: "Продвинутый уровень",
+            desc: "Погрузитесь в аппаратную трассировку лучей на Vulkan: сборку ускоряющих структур и GI зонды DDGI.",
+            checks: [
+                { path: "src/render/RayTracedShadows.cpp", title: "RayTracedShadows.cpp", desc: "Изучите сборку структур ускорения BLAS/TLAS (декомпозирован)." },
+                { path: "src/render/RtxGiProbes.cpp", title: "RtxGiProbes.cpp", desc: "Разберите расстановку и обновление зондов DDGI (декомпозирован)." }
+            ]
+        }
+    ];
+
+    function renderRoadmap() {
+        const container = document.getElementById('roadmap-stages-container');
+        container.innerHTML = '';
+
+        stagesData.forEach((stage, sIdx) => {
+            const stageEl = document.createElement('div');
+            stageEl.className = 'roadmap-stage';
+
+            const checkItemsHtml = stage.checks.map(c => {
+                const checked = completedFiles[c.path] ? 'checked' : '';
+                return `
+                    <div class="stage-check-item">
+                        <label class="file-checkbox">
+                            <input type="checkbox" ${checked} onchange="toggleFile('${c.path}')">
+                            <span class="checkmark"></span>
+                        </label>
+                        <div class="check-item-details">
+                            <strong>${c.title}</strong>
+                            <p>${c.desc}</p>
+                            <a href="file:////home/le1t/Projects/ProjectV/${c.path}">Открыть ${c.path.split('/').pop()} →</a>
+                        </div>
                     </div>
                 `;
-                container.appendChild(stageEl);
-            });
+            }).join('');
+
+            stageEl.innerHTML = `
+                <div class="stage-header">
+                    <h3>${stage.title}</h3>
+                    <span class="stage-badge">${stage.badge}</span>
+                </div>
+                <p class="stage-desc">${stage.desc}</p>
+                <div class="stage-check-list">
+                    ${checkItemsHtml}
+                </div>
+            `;
+            container.appendChild(stageEl);
+        });
+    }
+
+    // Quiz Logic
+    function startQuiz() {
+        document.getElementById('quiz-start').style.display = 'none';
+        document.getElementById('quiz-game').style.display = 'flex';
+        quizCurrentQuestion = 0;
+        quizScore = 0;
+        showQuizQuestion();
+    }
+
+    function showQuizQuestion() {
+        const qData = quizQuestions[quizCurrentQuestion];
+        document.getElementById('quiz-step-text').innerText = `Вопрос ${quizCurrentQuestion + 1} из ${quizQuestions.length}`;
+        document.getElementById('quiz-bar').style.width = `${((quizCurrentQuestion + 1) / quizQuestions.length) * 100}%`;
+        document.getElementById('quiz-score-text').innerText = `Очки: ${quizScore}`;
+        document.getElementById('quiz-question').innerText = qData.q;
+
+        const answersContainer = document.getElementById('quiz-answers');
+        answersContainer.innerHTML = '';
+
+        qData.options.forEach((opt, idx) => {
+            const btn = document.createElement('button');
+            btn.className = 'quiz-answer-btn';
+            btn.onclick = () => selectQuizAnswer(idx);
+            btn.innerHTML = `<span class="answer-idx">${String.fromCharCode(65 + idx)}</span> <span>${opt}</span>`;
+            answersContainer.appendChild(btn);
+        });
+    }
+
+    function selectQuizAnswer(selIdx) {
+        const qData = quizQuestions[quizCurrentQuestion];
+        const buttons = document.querySelectorAll('.quiz-answer-btn');
+
+        buttons.forEach(btn => btn.disabled = true);
+
+        if (selIdx === qData.correct) {
+            buttons[selIdx].classList.add('correct');
+            quizScore += 20;
+        } else {
+            buttons[selIdx].classList.add('incorrect');
+            buttons[qData.correct].classList.add('correct');
         }
 
-        // Quiz Logic
-        function startQuiz() {
-            document.getElementById('quiz-start').style.display = 'none';
-            document.getElementById('quiz-game').style.display = 'flex';
-            quizCurrentQuestion = 0;
-            quizScore = 0;
-            showQuizQuestion();
-        }
-
-        function showQuizQuestion() {
-            const qData = quizQuestions[quizCurrentQuestion];
-            document.getElementById('quiz-step-text').innerText = `Вопрос ${quizCurrentQuestion + 1} из ${quizQuestions.length}`;
-            document.getElementById('quiz-bar').style.width = `${((quizCurrentQuestion + 1) / quizQuestions.length) * 100}%`;
-            document.getElementById('quiz-score-text').innerText = `Очки: ${quizScore}`;
-            document.getElementById('quiz-question').innerText = qData.q;
-
-            const answersContainer = document.getElementById('quiz-answers');
-            answersContainer.innerHTML = '';
-
-            qData.options.forEach((opt, idx) => {
-                const btn = document.createElement('button');
-                btn.className = 'quiz-answer-btn';
-                btn.onclick = () => selectQuizAnswer(idx);
-                btn.innerHTML = `<span class="answer-idx">${String.fromCharCode(65 + idx)}</span> <span>${opt}</span>`;
-                answersContainer.appendChild(btn);
-            });
-        }
-
-        function selectQuizAnswer(selIdx) {
-            const qData = quizQuestions[quizCurrentQuestion];
-            const buttons = document.querySelectorAll('.quiz-answer-btn');
-
-            buttons.forEach(btn => btn.disabled = true);
-
-            if (selIdx === qData.correct) {
-                buttons[selIdx].classList.add('correct');
-                quizScore += 20;
+        setTimeout(() => {
+            quizCurrentQuestion++;
+            if (quizCurrentQuestion < quizQuestions.length) {
+                showQuizQuestion();
             } else {
-                buttons[selIdx].classList.add('incorrect');
-                buttons[qData.correct].classList.add('correct');
+                showQuizResults();
             }
+        }, 1800);
+    }
 
-            setTimeout(() => {
-                quizCurrentQuestion++;
-                if (quizCurrentQuestion < quizQuestions.length) {
-                    showQuizQuestion();
-                } else {
-                    showQuizResults();
-                }
-            }, 1800);
+    function showQuizResults() {
+        document.getElementById('quiz-game').style.display = 'none';
+        document.getElementById('quiz-results').style.display = 'flex';
+        document.getElementById('quiz-score-display').innerText = `${quizScore} / 100`;
+
+        let feedback = "Отличная попытка! Попробуйте изучить еще несколько файлов, чтобы получить идеальный балл.";
+        if (quizScore === 100) {
+            feedback = "Потрясающе! 100% верных ответов. Вы настоящий мастер архитектуры ProjectV!";
+        } else if (quizScore >= 60) {
+            feedback = "Хороший результат! Вы отлично ориентируетесь во многих подсистемах движка.";
         }
+        document.getElementById('quiz-feedback-text').innerText = feedback;
+    }
 
-        function showQuizResults() {
-            document.getElementById('quiz-game').style.display = 'none';
-            document.getElementById('quiz-results').style.display = 'flex';
-            document.getElementById('quiz-score-display').innerText = `${quizScore} / 100`;
-
-            let feedback = "Отличная попытка! Попробуйте изучить еще несколько файлов, чтобы получить идеальный балл.";
-            if (quizScore === 100) {
-                feedback = "Потрясающе! 100% верных ответов. Вы настоящий мастер архитектуры ProjectV!";
-            } else if (quizScore >= 60) {
-                feedback = "Хороший результат! Вы отлично ориентируетесь во многих подсистемах движка.";
-            }
-            document.getElementById('quiz-feedback-text').innerText = feedback;
-        }
-
-        function resetQuiz() {
-            document.getElementById('quiz-results').style.display = 'none';
-            document.getElementById('quiz-start').style.display = 'flex';
-        }
-    </script>
+    function resetQuiz() {
+        document.getElementById('quiz-results').style.display = 'none';
+        document.getElementById('quiz-start').style.display = 'flex';
+    }
+</script>
 <div aria-hidden="true" id="class-guard" style="display:none">
     <div class="module-card"></div>
     <div class="module-card"></div>
-        <div class="module-card"></div>
-        <label class="file-checkbox"><span class="checkmark"></span></label>
+    <div class="module-card"></div>
+    <label class="file-checkbox"><span class="checkmark"></span></label>
     <span class="checkmark"></span>
     <span class="checkmark"></span>
     <span class="checkmark"></span>
     <span class="checkmark"></span>
     <span class="checkmark"></span>
     <span class="checkmark"></span>
-        <span class="difficulty-badge easy"></span>
+    <span class="difficulty-badge easy"></span>
     <span class="difficulty-badge"></span>
     <span class="difficulty-badge"></span>
     <span class="difficulty-badge"></span>
     <span class="difficulty-badge"></span>
-        <span class="lines-badge"></span>
-        <button class="timeline-step-btn"></button>
+    <span class="lines-badge"></span>
     <button class="timeline-step-btn"></button>
     <button class="timeline-step-btn"></button>
     <button class="timeline-step-btn"></button>
     <button class="timeline-step-btn"></button>
-        <div class="timeline-step-card"></div>
-        <span class="step-num-badge"></span>
-        <a class="timeline-code-tag"></a>
+    <button class="timeline-step-btn"></button>
+    <div class="timeline-step-card"></div>
+    <span class="step-num-badge"></span>
     <a class="timeline-code-tag"></a>
-        <pre class="timeline-viz"></pre>
-        <span class="stage-badge"></span>
-        <p class="stage-desc"></p>
-        <div class="stage-check-item"></div>
+    <a class="timeline-code-tag"></a>
+    <pre class="timeline-viz"></pre>
+    <span class="stage-badge"></span>
+    <p class="stage-desc"></p>
     <div class="stage-check-item"></div>
-        <div class="check-item-details"></div>
-        <button class="quiz-answer-btn correct"><span class="answer-idx"></span></button>
+    <div class="stage-check-item"></div>
+    <div class="check-item-details"></div>
+    <button class="quiz-answer-btn correct"><span class="answer-idx"></span></button>
     <button class="quiz-answer-btn"></button>
     <button class="quiz-answer-btn"></button>
-        <button class="quiz-answer-btn incorrect"><span class="answer-idx"></span></button>
+    <button class="quiz-answer-btn incorrect"><span class="answer-idx"></span></button>
     <span class="answer-idx"></span>
     <span class="answer-idx"></span>
     <span class="answer-idx"></span>

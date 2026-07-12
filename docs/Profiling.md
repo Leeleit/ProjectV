@@ -32,8 +32,10 @@ Scene preset выбирается через runtime env var `PROJECTV_SCENE_PRE
 
 ### Что мерить на какой сцене
 
-- `VoxelLab` — повседневный default baseline: mixed opaque + transparent + fluid scene, полезен для общего regression-check.
-- `FlatBenchmark` — почти плоская сцена без стекла и жидкости; хороший baseline для camera/update/render cost без stress-case geometry.
+- `VoxelLab` — повседневный default baseline: mixed opaque + transparent + fluid scene, полезен для общего
+  regression-check.
+- `FlatBenchmark` — почти плоская сцена без стекла и жидкости; хороший baseline для camera/update/render cost без
+  stress-case geometry.
 - `TransparencyStress` — dense набор стеклянных колонн; нужен для transparent pass и face-count pressure.
 - `ChunkGrid` — world-wide chunk markers; полезен для active chunk coverage, upload path и chunk-oriented debug.
 - `MeshingStress` — 3D checker volume; нужен для worst-case-ish meshing, face generation и upload churn.

@@ -45,7 +45,8 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVFailurePro
 Ожидаемый результат:
 
 - probe с пустым `PROJECTV_SHADER_BASE_DIR` завершает приложение с non-zero exit code и логом про missing shader blob;
-- probe с `PROJECTV_FAIL_INIT_STAGE=before_voxel_meshing_pipeline` завершает приложение с non-zero exit code и явным intentional init failure log;
+- probe с `PROJECTV_FAIL_INIT_STAGE=before_voxel_meshing_pipeline` завершает приложение с non-zero exit code и явным
+  intentional init failure log;
 - оба сценария завершаются быстро, без зависания процесса.
 
 ## Базовый manual smoke
@@ -62,7 +63,7 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVFailurePro
 10. Не снимая `pause`, переключиться в `creative` и убедиться, что physics-backed movement больше не идёт, пока пауза
     активна.
 11. Переключиться в `walk` и убедиться, что камера не телепортируется в центр/на пол без необходимости, не проваливается
-   сквозь платформу и не проходит сквозь voxel-геометрию.
+    сквозь платформу и не проходит сквозь voxel-геометрию.
 12. В `walk` режиме нажать `Space` и проверить, что jump работает, а затем ЛКМ/ПКМ проверить, что edits по-прежнему
     меняют мир и collision остаётся консистентной после world edits.
 13. Нажать `Tab`, проверить toggle relative mouse mode, затем вернуть захват мыши обратно.
@@ -83,7 +84,8 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVFailurePro
 
 Эти проверки всё ещё остаются отдельным следующим слоем:
 
-- единый стиль runtime error logging во всех init/runtime путях за пределами уже покрытого bootstrap/render/pipeline path;
+- единый стиль runtime error logging во всех init/runtime путях за пределами уже покрытого bootstrap/render/pipeline
+  path;
 - минимальные debug asserts/check macros в остальных runtime-модулях;
 - интеграция smoke/failure probes в автоматический контур.
 
