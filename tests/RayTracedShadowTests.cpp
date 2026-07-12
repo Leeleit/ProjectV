@@ -18,12 +18,12 @@ namespace {
 
 int gFailureCount = 0;
 
-#define PROJECTV_RTX_EXPECT(cond, message)                                                              \
-	do {                                                                                                  \
-		if (!(cond)) {                                                                                    \
-			runtime::LogRuntimeFailure("Tests", "ProjectVRayTracedShadowTests", message);               \
-			++gFailureCount;                                                                              \
-		}                                                                                                 \
+#define PROJECTV_RTX_EXPECT(cond, message)                                                \
+	do {                                                                                  \
+		if (!(cond)) {                                                                    \
+			runtime::LogRuntimeFailure("Tests", "ProjectVRayTracedShadowTests", message); \
+			++gFailureCount;                                                              \
+		}                                                                                 \
 	} while (false)
 
 void TestEnvGateDefaultsOff()
@@ -160,9 +160,9 @@ void TestDirtyChunkRebuildStructLayout()
 	constexpr projectv::render::DirtyChunkRebuild entry{};
 	PROJECTV_RTX_EXPECT(entry.chunkIndex == 0u, "DirtyChunkRebuild default chunkIndex must be 0");
 	PROJECTV_RTX_EXPECT(entry.aabb.minX == 0.0f && entry.aabb.maxX == 0.0f,
-		"DirtyChunkRebuild default AABB must be zero-init");
+						"DirtyChunkRebuild default AABB must be zero-init");
 	PROJECTV_RTX_EXPECT(sizeof(VkAabbPositionsKHR) == 24u,
-		"VkAabbPositionsKHR must remain 24 bytes (6 floats) per Vulkan 1.4 spec");
+						"VkAabbPositionsKHR must remain 24 bytes (6 floats) per Vulkan 1.4 spec");
 }
 
 void TestBuildChunkBlasAabbBoundsCheck()
@@ -263,8 +263,8 @@ void TestRecordTlasBuildGuardsForZeroInstanceCount()
 
 void TestRtxSunShadowRayHelperExistsInShader()
 {
-	std::ifstream fp{ std::string{ PROJECTV_TESTS_SOURCE_DIR } + "/../src/shaders/voxel.frag",
-		std::ios::binary };
+	std::ifstream fp{std::string{PROJECTV_TESTS_SOURCE_DIR} + "/../src/shaders/voxel.frag",
+					 std::ios::binary};
 	PROJECTV_RTX_EXPECT(fp.good(), "voxel.frag must be readable from source root");
 	if (!fp.good()) {
 		return;
@@ -488,13 +488,13 @@ void TestRtxShadowSbtClassHasGetters()
 void TestRtxShadowShaderFilesExistInBuildDirectory()
 {
 	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
-	const std::string baseDir = buildDir != nullptr ? std::string{ buildDir } : std::string{};
-	for (const char *suffix : { "/voxel_rtx_shadow.rgen.spv",
-								 "/voxel_rtx_shadow.rint.spv",
-								 "/voxel_rtx_shadow.rchit.spv",
-								 "/voxel_rtx_shadow.rmiss.spv" }) {
+	const std::string baseDir = buildDir != nullptr ? std::string{buildDir} : std::string{};
+	for (const char *suffix : {"/voxel_rtx_shadow.rgen.spv",
+							   "/voxel_rtx_shadow.rint.spv",
+							   "/voxel_rtx_shadow.rchit.spv",
+							   "/voxel_rtx_shadow.rmiss.spv"}) {
 		const std::string path = baseDir + suffix;
-		std::ifstream file{ path, std::ios::binary };
+		std::ifstream file{path, std::ios::binary};
 		PROJECTV_RTX_EXPECT(
 			file.good(),
 			"RTX shadow shader binary missing: " + path);
@@ -504,8 +504,8 @@ void TestRtxShadowShaderFilesExistInBuildDirectory()
 void TestRtxShadowIntersectionShaderUsesVoxelDdaPattern()
 {
 	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
-	const std::string path = std::string{ buildDir != nullptr ? buildDir : "" } + "/voxel_rtx_shadow.rint.spv";
-	std::ifstream file{ path, std::ios::binary };
+	const std::string path = std::string{buildDir != nullptr ? buildDir : ""} + "/voxel_rtx_shadow.rint.spv";
+	std::ifstream file{path, std::ios::binary};
 	if (!file.good()) {
 		gFailureCount++;
 		runtime::LogRuntimeFailure(
@@ -515,7 +515,7 @@ void TestRtxShadowIntersectionShaderUsesVoxelDdaPattern()
 		return;
 	}
 	const std::string sourcePath = PROJECTV_TESTS_SOURCE_DIR "/../src/shaders/voxel_rtx_shadow.rint";
-	std::ifstream source{ sourcePath, std::ios::binary };
+	std::ifstream source{sourcePath, std::ios::binary};
 	if (!source.good()) {
 		gFailureCount++;
 		runtime::LogRuntimeFailure(
@@ -559,7 +559,7 @@ void TestRtxGiProbeHostHeaderExistsAndLinks()
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

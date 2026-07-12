@@ -36,13 +36,11 @@ constexpr void VerifyVec3Arithmetic()
 		std::fprintf(stderr, "Vec3 length: %.9f\n", static_cast<double>(length(a)));
 		std::abort();
 	}
-	if (cross(a, b).x != 2.0f * 6.0f - 3.0f * 5.0f
-		|| cross(a, b).y != 3.0f * 4.0f - 1.0f * 6.0f
-		|| cross(a, b).z != 1.0f * 5.0f - 2.0f * 4.0f) {
+	if (cross(a, b).x != 2.0f * 6.0f - 3.0f * 5.0f || cross(a, b).y != 3.0f * 4.0f - 1.0f * 6.0f || cross(a, b).z != 1.0f * 5.0f - 2.0f * 4.0f) {
 		std::fprintf(stderr, "Vec3 cross: %.9f %.9f %.9f\n",
-			static_cast<double>(cross(a, b).x),
-			static_cast<double>(cross(a, b).y),
-			static_cast<double>(cross(a, b).z));
+					 static_cast<double>(cross(a, b).x),
+					 static_cast<double>(cross(a, b).y),
+					 static_cast<double>(cross(a, b).z));
 		std::abort();
 	}
 	const Vec3 n = normalize(a);
@@ -50,8 +48,7 @@ constexpr void VerifyVec3Arithmetic()
 		std::fprintf(stderr, "Vec3 normalize: %.9f\n", static_cast<double>(length(n)));
 		std::abort();
 	}
-	if ((a + b).x != 5.0f || (a - b).y != -3.0f || (-a).z != -3.0f
-		|| (a * 2.0f).x != 2.0f || (2.0f * a).y != 4.0f || (b / 2.0f).z != 3.0f) {
+	if ((a + b).x != 5.0f || (a - b).y != -3.0f || (-a).z != -3.0f || (a * 2.0f).x != 2.0f || (2.0f * a).y != 4.0f || (b / 2.0f).z != 3.0f) {
 		std::fprintf(stderr, "Vec3 +/-/*// failure\n");
 		std::abort();
 	}
@@ -73,8 +70,7 @@ constexpr void VerifyVec4Arithmetic()
 		std::fprintf(stderr, "Vec4 length: %.9f\n", static_cast<double>(length(a)));
 		std::abort();
 	}
-	if ((a + b).w != 12.0f || (a - b).w != -4.0f || (-a).x != -1.0f
-		|| (a * 3.0f).w != 12.0f) {
+	if ((a + b).w != 12.0f || (a - b).w != -4.0f || (-a).x != -1.0f || (a * 3.0f).w != 12.0f) {
 		std::fprintf(stderr, "Vec4 +/-/* failure\n");
 		std::abort();
 	}
@@ -88,7 +84,7 @@ constexpr void VerifyMat4Identity()
 			const float expected = col == row ? 1.0f : 0.0f;
 			if (id.m(col, row) != expected) {
 				std::fprintf(stderr, "identity(%zu, %zu) = %.9f\n",
-					col, row, static_cast<double>(id.m(col, row)));
+							 col, row, static_cast<double>(id.m(col, row)));
 				std::abort();
 			}
 		}
@@ -98,8 +94,8 @@ constexpr void VerifyMat4Identity()
 	const Vec4 r = id * v;
 	if (r.x != 1.0f || r.y != 2.0f || r.z != 3.0f || r.w != 4.0f) {
 		std::fprintf(stderr, "identity * vec: %.9f %.9f %.9f %.9f\n",
-			static_cast<double>(r.x), static_cast<double>(r.y),
-			static_cast<double>(r.z), static_cast<double>(r.w));
+					 static_cast<double>(r.x), static_cast<double>(r.y),
+					 static_cast<double>(r.z), static_cast<double>(r.w));
 		std::abort();
 	}
 }
@@ -123,8 +119,8 @@ constexpr void VerifyMat4Transpose()
 		for (std::size_t row = 0; row < 4; ++row) {
 			if (t.m(col, row) != expected[col][row]) {
 				std::fprintf(stderr, "transpose(%zu, %zu) = %.9f, expected %.9f\n",
-					col, row, static_cast<double>(t.m(col, row)),
-					static_cast<double>(expected[col][row]));
+							 col, row, static_cast<double>(t.m(col, row)),
+							 static_cast<double>(expected[col][row]));
 				std::abort();
 			}
 		}
@@ -149,7 +145,7 @@ constexpr void VerifyMat4Inverse()
 			const float expected = col == row ? 1.0f : 0.0f;
 			if (invId.m(col, row) != expected) {
 				std::fprintf(stderr, "inverse(identity)(%zu, %zu) = %.9f\n",
-					col, row, static_cast<double>(invId.m(col, row)));
+							 col, row, static_cast<double>(invId.m(col, row)));
 				std::abort();
 			}
 		}
@@ -167,8 +163,8 @@ constexpr void VerifyMat4Inverse()
 			const float expected = col == row ? 1.0f : 0.0f;
 			if (std::fabs(prod.m(col, row) - expected) >= 1e-5f) {
 				std::fprintf(stderr, "a * inv(a) at (%zu, %zu) = %.9f, expected %.9f\n",
-					col, row, static_cast<double>(prod.m(col, row)),
-					static_cast<double>(expected));
+							 col, row, static_cast<double>(prod.m(col, row)),
+							 static_cast<double>(expected));
 				std::abort();
 			}
 		}
@@ -217,14 +213,25 @@ constexpr void VerifyFromArrayHelpers()
 	}
 
 	constexpr std::array a16{
-		1.0f, 2.0f, 3.0f, 4.0f,
-		5.0f, 6.0f, 7.0f, 8.0f,
-		9.0f, 10.0f, 11.0f, 12.0f,
-		13.0f, 14.0f, 15.0f, 16.0f,
+		1.0f,
+		2.0f,
+		3.0f,
+		4.0f,
+		5.0f,
+		6.0f,
+		7.0f,
+		8.0f,
+		9.0f,
+		10.0f,
+		11.0f,
+		12.0f,
+		13.0f,
+		14.0f,
+		15.0f,
+		16.0f,
 	};
 	const Mat4 m16 = fromArray16(a16);
-	if (m16.m(0, 0) != 1.0f || m16.m(1, 1) != 6.0f
-		|| m16.m(2, 2) != 11.0f || m16.m(3, 3) != 16.0f) {
+	if (m16.m(0, 0) != 1.0f || m16.m(1, 1) != 6.0f || m16.m(2, 2) != 11.0f || m16.m(3, 3) != 16.0f) {
 		std::fprintf(stderr, "fromArray16 failed\n");
 		std::abort();
 	}

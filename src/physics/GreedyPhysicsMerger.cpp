@@ -1,5 +1,7 @@
 #include "physics/GreedyPhysicsMerger.hpp"
 
+#include "core/EnvUtils.hpp"
+
 #include <cassert>
 #include <cstdlib>
 #include <vector>
@@ -12,7 +14,7 @@ namespace {
 
 bool IsGreedyPhysicsMeshEnabledFromEnvironment()
 {
-	const char *value = std::getenv("PROJECTV_GREEDY_PHYSICS_MESH");
+	const char *value = core::GetEnvVar("PROJECTV_GREEDY_PHYSICS_MESH");
 	if (value == nullptr) {
 		return true;
 	}

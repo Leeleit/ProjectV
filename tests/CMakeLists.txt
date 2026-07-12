@@ -1,11 +1,11 @@
 macro(projectv_test_add_modules TARGET) # pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
     if (NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
         target_sources(${TARGET} PRIVATE
-            FILE_SET CXX_MODULES FILES
-            ${CMAKE_SOURCE_DIR}/src/core/Math.ixx
-            ${CMAKE_SOURCE_DIR}/src/core/StringId.ixx
-            BASE_DIRS
-            ${CMAKE_SOURCE_DIR}/src
+                FILE_SET CXX_MODULES FILES
+                ${CMAKE_SOURCE_DIR}/src/core/Math.ixx
+                ${CMAKE_SOURCE_DIR}/src/core/StringId.ixx
+                BASE_DIRS
+                ${CMAKE_SOURCE_DIR}/src
         )
     endif ()
 endmacro()
@@ -314,72 +314,72 @@ add_test(NAME ProjectVStringIdTests COMMAND ProjectVStringIdTests)
 set_tests_properties(ProjectVStringIdTests PROPERTIES LABELS "unit")
 
 if (NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
-add_executable(ProjectVModuleSmoke
-        ModuleSmokeTest.cpp
-)
+    add_executable(ProjectVModuleSmoke
+            ModuleSmokeTest.cpp
+    )
 
-target_sources(ProjectVModuleSmoke PRIVATE
-        FILE_SET CXX_MODULES FILES
-        ${CMAKE_SOURCE_DIR}/src/core/Probe.ixx
-        BASE_DIRS
-        ${CMAKE_SOURCE_DIR}/src
-)
+    target_sources(ProjectVModuleSmoke PRIVATE
+            FILE_SET CXX_MODULES FILES
+            ${CMAKE_SOURCE_DIR}/src/core/Probe.ixx
+            BASE_DIRS
+            ${CMAKE_SOURCE_DIR}/src
+    )
 
-target_compile_definitions(ProjectVModuleSmoke PRIVATE
-        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
-)
+    target_compile_definitions(ProjectVModuleSmoke PRIVATE
+            PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+    )
 
-target_include_directories(ProjectVModuleSmoke PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-)
+    target_include_directories(ProjectVModuleSmoke PRIVATE
+            ${CMAKE_SOURCE_DIR}/src
+    )
 
-target_link_libraries(ProjectVModuleSmoke PRIVATE projectv_build_options)
+    target_link_libraries(ProjectVModuleSmoke PRIVATE projectv_build_options)
 
-add_test(NAME ProjectVModuleSmoke COMMAND ProjectVModuleSmoke)
-set_tests_properties(ProjectVModuleSmoke PROPERTIES LABELS "unit")
+    add_test(NAME ProjectVModuleSmoke COMMAND ProjectVModuleSmoke)
+    set_tests_properties(ProjectVModuleSmoke PROPERTIES LABELS "unit")
 
-add_executable(ProjectVStdModuleProbe
-        StdModuleProbe.cpp
-)
+    add_executable(ProjectVStdModuleProbe
+            StdModuleProbe.cpp
+    )
 
-target_link_directories(ProjectVStdModuleProbe PRIVATE
-        /usr/lib
-)
-target_link_options(ProjectVStdModuleProbe PRIVATE
-        -stdlib=libc++
-)
-target_link_libraries(ProjectVStdModuleProbe PRIVATE
-        c++
-        c++abi
-        "-l:libstdc++.so.6"
-)
+    target_link_directories(ProjectVStdModuleProbe PRIVATE
+            /usr/lib
+    )
+    target_link_options(ProjectVStdModuleProbe PRIVATE
+            -stdlib=libc++
+    )
+    target_link_libraries(ProjectVStdModuleProbe PRIVATE
+            c++
+            c++abi
+            "-l:libstdc++.so.6"
+    )
 
-add_custom_command(
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
-        COMMAND /usr/sbin/clang++
-                -std=c++26
-                -stdlib=libc++
-                -Wno-reserved-identifier
-                -Wno-reserved-module-identifier
-                --precompile
-                -o ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
-                /usr/share/libc++/v1/std.cppm
-        DEPENDS /usr/share/libc++/v1/std.cppm
-        COMMENT "Precompiling libc++ std.pcm"
-        VERBATIM
-)
-add_custom_target(std_pcm_build DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/std.pcm)
-add_dependencies(ProjectVStdModuleProbe std_pcm_build)
+    add_custom_command(
+            OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
+            COMMAND /usr/sbin/clang++
+            -std=c++26
+            -stdlib=libc++
+            -Wno-reserved-identifier
+            -Wno-reserved-module-identifier
+            --precompile
+            -o ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
+            /usr/share/libc++/v1/std.cppm
+            DEPENDS /usr/share/libc++/v1/std.cppm
+            COMMENT "Precompiling libc++ std.pcm"
+            VERBATIM
+    )
+    add_custom_target(std_pcm_build DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/std.pcm)
+    add_dependencies(ProjectVStdModuleProbe std_pcm_build)
 
-target_compile_options(ProjectVStdModuleProbe PRIVATE
-        -fmodule-file=std=${CMAKE_CURRENT_BINARY_DIR}/std.pcm
-)
-target_sources(ProjectVStdModuleProbe PRIVATE
-        ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
-)
+    target_compile_options(ProjectVStdModuleProbe PRIVATE
+            -fmodule-file=std=${CMAKE_CURRENT_BINARY_DIR}/std.pcm
+    )
+    target_sources(ProjectVStdModuleProbe PRIVATE
+            ${CMAKE_CURRENT_BINARY_DIR}/std.pcm
+    )
 
-add_test(NAME ProjectVStdModuleProbe COMMAND ProjectVStdModuleProbe)
-set_tests_properties(ProjectVStdModuleProbe PROPERTIES LABELS "unit")
+    add_test(NAME ProjectVStdModuleProbe COMMAND ProjectVStdModuleProbe)
+    set_tests_properties(ProjectVStdModuleProbe PROPERTIES LABELS "unit")
 endif ()
 
 if (PROJECTV_ENABLE_BENCHMARKS)
@@ -1256,7 +1256,7 @@ target_link_libraries(ProjectVRayTracedShadowTests PRIVATE GPUOpen::VulkanMemory
 add_test(NAME ProjectVRayTracedShadowTests COMMAND ProjectVRayTracedShadowTests)
 set_tests_properties(ProjectVRayTracedShadowTests PROPERTIES LABELS "unit")
 set_tests_properties(ProjectVRayTracedShadowTests PROPERTIES
-	ENVIRONMENT "PROJECTV_BUILD_DIR=$<TARGET_FILE_DIR:ProjectVRayTracedShadowTests>/../src")
+        ENVIRONMENT "PROJECTV_BUILD_DIR=$<TARGET_FILE_DIR:ProjectVRayTracedShadowTests>/../src")
 
 projectv_test_add_modules(ProjectVRayTracedShadowTests)
 

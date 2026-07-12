@@ -1,5 +1,7 @@
 #include "asset/AssetManifest.hpp"
 
+#include "core/EnvUtils.hpp"
+
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -110,28 +112,36 @@ bool ParseEntry(const std::string &rawEntry, ManifestEntry &out)
 	const std::string_view pathView = at == std::string_view::npos
 										  ? trimmed
 										  : trimmed.substr(0, at);
+	if (pathView.empty()) {
+		return false;
+	}
+
+	ManifestEntry entry;
+	entry.path.assign(pathView);
+	entry.id = core::StringID{std::string_view{DefaultIdStemForPath(entry.path)}};
+	entry.position = glm::vec3(0.0f);
+	entry.rotationDegrees = glm::vec3(0.0f);
+	entry.scale = 1.0f;
+
 	const std::string_view transformView = at == std::string_view::npos
 											   ? std::string_view{}
 											   : trimmed.substr(at + 1);
 
-	out.path.assign(pathView);
-	if (out.path.empty()) {
-		return false;
-	}
-	out.id = core::StringID{std::string_view{DefaultIdStemForPath(out.path)}};
-	out.position = glm::vec3(0.0f);
-	out.rotationDegrees = glm::vec3(0.0f);
-	out.scale = 1.0f;
-
-	const auto commaCount = static_cast<size_t>(std::count(transformView.begin(), transformView.end(), ','));
+	bool parsed = false;
 	if (transformView.empty()) {
+		parsed = true;
+	} else {
+		const auto commaCount = static_cast<size_t>(std::ranges::count(transformView, ','));
+		if (commaCount == 2) {
+			parsed = TryParseVec3(transformView, entry.position);
+		} else if (commaCount == 6) {
+			parsed = TryParseFullTransform(transformView, entry);
+		}
+	}
+
+	if (parsed) {
+		out = std::move(entry);
 		return true;
-	}
-	if (commaCount == 2) {
-		return TryParseVec3(transformView, out.position);
-	}
-	if (commaCount == 6) {
-		return TryParseFullTransform(transformView, out);
 	}
 	return false;
 }
@@ -158,7 +168,7 @@ std::vector<ManifestEntry> ParseAssetManifestString(const std::string &raw)
 
 std::vector<ManifestEntry> ParseAssetManifestFromEnv()
 {
-	const char *raw = std::getenv("PROJECTV_MODELS");
+	const char *raw = core::GetEnvVar("PROJECTV_MODELS");
 	if (!raw || *raw == '\0') {
 		return {};
 	}

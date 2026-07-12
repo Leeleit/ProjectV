@@ -2,7 +2,6 @@
 
 #include <array> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include <cstddef>
-#include <cstdint>
 #include <unordered_map>
 #include <vector>
 

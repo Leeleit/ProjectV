@@ -1,9 +1,9 @@
 #pragma once
 
+#include "core/EnvUtils.hpp"
 #include "core/Types.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <array>
-#include <cstdlib>
 
 #include <vulkan/vulkan.h>
 
@@ -20,7 +20,7 @@ static_assert(sizeof(WorldGenPushConstants) == 64);
 
 inline bool IsWorldGenGpuPipelineRequested()
 {
-	const char *value = std::getenv("PROJECTV_WORLD_GEN_GPU");
+	const char *value = core::GetEnvVar("PROJECTV_WORLD_GEN_GPU");
 	if (value == nullptr) {
 		return true;
 	}

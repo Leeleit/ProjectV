@@ -3,17 +3,12 @@
 import projectv.math;
 import projectv.string_id;
 
-#include "physics/PhysicsWorld.hpp"
 #include "physics/GreedyPhysicsMerger.hpp"
 
-#include "app/InputActions.hpp"
-#include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
 #include "debug/Profiling.hpp"
 
-#include <algorithm>
 #include <cmath>
-#include <limits>
 #include <mutex>
 #include <unordered_map>
 
@@ -22,20 +17,11 @@ import projectv.string_id;
 #pragma clang diagnostic ignored "-Weverything"
 #include <Jolt/Jolt.h>
 #include <Jolt/Core/Factory.h>
-#include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyID.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
-#include <Jolt/Physics/Body/BodyLock.h>
-#include <Jolt/Physics/Body/MotionType.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
-#include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/ObjectLayer.h>
-#include <Jolt/Physics/Collision/RayCast.h>
-#include <Jolt/Physics/Collision/Shape/BoxShape.h>
-#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
-#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
-#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/Collision/Shape/SubShapeID.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>

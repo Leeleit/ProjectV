@@ -1,9 +1,9 @@
 #pragma once
 
+#include "core/EnvUtils.hpp"
 #include "core/Types.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <array>
-#include <cstdlib>
 
 #include <vulkan/vulkan.h>
 
@@ -27,7 +27,7 @@ static_assert(sizeof(FluidCaGpuFrameStats) == 16);
 
 inline bool IsFluidCaGpuPipelineRequested()
 {
-	const char *value = std::getenv("PROJECTV_FLUID_CA_GPU");
+	const char *value = core::GetEnvVar("PROJECTV_FLUID_CA_GPU");
 	if (value == nullptr) {
 		return true;
 	}
@@ -36,7 +36,7 @@ inline bool IsFluidCaGpuPipelineRequested()
 
 inline bool IsAsyncComputeEnabled()
 {
-	if (const char *value = std::getenv("PROJECTV_ASYNC_COMPUTE")) {
+	if (const char *value = core::GetEnvVar("PROJECTV_ASYNC_COMPUTE")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
 	return true;

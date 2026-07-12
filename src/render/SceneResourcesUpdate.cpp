@@ -1,5 +1,14 @@
 #include "render/SceneResourcesInternal.hpp"
 
+#include "core/RuntimeDiagnostics.hpp"
+#include "debug/Profiling.hpp"
+#include "render/vulkan/VulkanDebug.hpp"
+#include "voxel/NanoVdb.hpp"
+
+#include <algorithm>
+#include <array>
+#include <span>
+
 bool UpdateSceneResources(
 	WorldState *world,
 	RenderState *render,

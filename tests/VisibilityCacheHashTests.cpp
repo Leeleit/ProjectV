@@ -48,7 +48,6 @@ int main()
 	}
 	std::printf("[OK] determinism: same input -> same hash\n");
 
-
 	{
 		const ChunkCullingParameters parameters =
 			MakeParameters(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
@@ -70,7 +69,6 @@ int main()
 	}
 	std::printf("[OK] position: quantization groups sub-step shifts\n");
 
-
 	{
 		const ChunkCullingParameters parameters =
 			MakeParameters(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
@@ -84,7 +82,6 @@ int main()
 	}
 	std::printf("[OK] forward: distinct forward vectors -> distinct hashes\n");
 
-
 	{
 		const ChunkCullingParameters parameters =
 			MakeParameters(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
@@ -97,7 +94,6 @@ int main()
 			"chunks: chunk count change changes hash");
 	}
 	std::printf("[OK] version+chunks: changes alter hash\n");
-
 
 	{
 		const ChunkCullingParameters origin =

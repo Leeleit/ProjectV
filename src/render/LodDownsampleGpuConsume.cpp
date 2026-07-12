@@ -1,10 +1,10 @@
 #include "render/LodDownsampleGpuConsume.hpp"
 
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "voxel/VoxelLodDownsample.hpp"
 
 #include <algorithm>
-#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -12,7 +12,7 @@ namespace projectv::render {
 
 bool IsLodDownsampledGpuConsumeEnabled()
 {
-	if (const char *value = std::getenv("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME")) {
+	if (const char *value = core::GetEnvVar("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME")) {
 		return value[0] == 'O' && value[1] == 'N';
 	}
 	return false;

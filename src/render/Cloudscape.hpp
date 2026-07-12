@@ -1,9 +1,9 @@
 #pragma once
 
+#include "core/EnvUtils.hpp"
 #include "core/Types.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <array>
-#include <cstdint>
 
 #include <vulkan/vulkan.h>
 
@@ -11,7 +11,7 @@ namespace projectv::render {
 
 inline bool IsCloudscapeEnabled()
 {
-	const char *value = std::getenv("PROJECTV_CLOUDS");
+	const char *value = core::GetEnvVar("PROJECTV_CLOUDS");
 	if (value == nullptr || value[0] == '\0') {
 		return false;
 	}

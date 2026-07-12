@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-
 // EVIL: tuned per-actor constants — see agent/knowledge.md §20 for walk-authority contract
 constexpr float kWalkCapsuleRadius = 0.35f;
 constexpr float kWalkCapsuleHalfHeight = 0.55f;

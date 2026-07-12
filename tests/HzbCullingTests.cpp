@@ -16,10 +16,10 @@ struct TestContext {
 };
 
 #define EXPECT_FALSE(context, condition, expr) \
-	do {                                         \
-		if (condition) {                         \
-			(context).Fail(expr);                \
-		}                                        \
+	do {                                       \
+		if (condition) {                       \
+			(context).Fail(expr);              \
+		}                                      \
 	} while (false)
 
 #define EXPECT_EQUAL_UINT(context, expected, actual, line, expr)                                                                                                 \
@@ -55,7 +55,7 @@ void TestComputeHzbMipLevelCountTiny(TestContext &context)
 	EXPECT_EQUAL_UINT(context, 1u, levels, __LINE__, "1x1 -> 1 mip level");
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

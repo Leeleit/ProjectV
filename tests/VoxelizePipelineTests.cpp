@@ -163,7 +163,7 @@ void TestDebugViewCycle(TestContext &context)
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

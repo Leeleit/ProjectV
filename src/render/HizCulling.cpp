@@ -1,9 +1,10 @@
 #include "render/HizCulling.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
+#include "core/EnvUtils.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdlib>
 #include <limits>
 #include <vector>
 
@@ -92,7 +93,7 @@ namespace projectv::render {
 
 bool IsHzbCullingEnabled()
 {
-	if (const char *value = std::getenv("PROJECTV_HZB_CULLING")) {
+	if (const char *value = core::GetEnvVar("PROJECTV_HZB_CULLING")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
 	return false;
@@ -100,7 +101,7 @@ bool IsHzbCullingEnabled()
 
 bool IsMeshShaderPipelineEnabled()
 {
-	if (const char *value = std::getenv("PROJECTV_MESH_SHADER_PIPELINE")) {
+	if (const char *value = core::GetEnvVar("PROJECTV_MESH_SHADER_PIPELINE")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
 	return false;
@@ -108,7 +109,7 @@ bool IsMeshShaderPipelineEnabled()
 
 bool IsHzbSmartMipEnabled()
 {
-	if (const char *value = std::getenv("PROJECTV_HZB_SMART_MIP")) {
+	if (const char *value = core::GetEnvVar("PROJECTV_HZB_SMART_MIP")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
 	return false;
@@ -116,7 +117,7 @@ bool IsHzbSmartMipEnabled()
 
 bool IsHzbSmartBlendWidthEnabled()
 {
-	if (const char *value = std::getenv("PROJECTV_HZB_SMART_BLEND_WIDTH")) {
+	if (const char *value = core::GetEnvVar("PROJECTV_HZB_SMART_BLEND_WIDTH")) {
 		return value[0] == 'O' && value[1] == 'N';
 	}
 	return false;

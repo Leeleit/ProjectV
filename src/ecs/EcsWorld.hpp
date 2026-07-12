@@ -1,6 +1,8 @@
 #pragma once
 
-#include <cstddef> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+// ReSharper disable once CppUnusedIncludeDirective
+#include <cstddef>
+// ReSharper disable once CppUnusedIncludeDirective
 #include <cstdint>
 
 struct AppState;

@@ -1,5 +1,8 @@
 #include "render/SceneResourcesInternal.hpp"
 
+#include "core/RuntimeDiagnostics.hpp"
+#include "debug/Profiling.hpp"
+
 void DestroySceneResources(
 	VulkanContextState *context,
 	RenderState *render)

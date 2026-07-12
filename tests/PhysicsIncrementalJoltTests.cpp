@@ -91,7 +91,7 @@ void TestProcessChunkRebuildQueueEmptyQueueReturnsZero(TestContext &context)
 	DestroyPhysicsState(physics);
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

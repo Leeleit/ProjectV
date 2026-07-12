@@ -1,6 +1,9 @@
+#include "physics/PhysicsWorld.hpp"
 #include "physics/PhysicsWorld_Internal.hpp"
 #include "physics/walk/WalkInternals.hpp"
 #include "physics/walk/WalkConstants.hpp"
+
+#include "app/InputActions.hpp"
 
 void ResetWalkCharacter(PhysicsState *physics)
 {
@@ -741,18 +744,10 @@ PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics)
 	info.cachedSneakSupportReferenceFeetY =
 		physics->walkCachedSneakSupportRegion.valid ? physics->walkCachedSneakSupportRegion.referenceFeetPosition[1] : 0.0f;
 
-	switch (physics->walkSupportState) {
-	case WalkSupportState::Grounded:
-		info.supportState = PhysicsWalkSupportDebugState::Grounded;
-		break;
-	case WalkSupportState::EdgeGrace:
-		info.supportState = PhysicsWalkSupportDebugState::EdgeGrace;
-		break;
-	case WalkSupportState::Air:
-	default:
-		info.supportState = PhysicsWalkSupportDebugState::Air;
-		break;
-	}
+	static_assert(static_cast<uint8_t>(WalkSupportState::Grounded) == static_cast<uint8_t>(PhysicsWalkSupportDebugState::Grounded));
+	static_assert(static_cast<uint8_t>(WalkSupportState::EdgeGrace) == static_cast<uint8_t>(PhysicsWalkSupportDebugState::EdgeGrace));
+	static_assert(static_cast<uint8_t>(WalkSupportState::Air) == static_cast<uint8_t>(PhysicsWalkSupportDebugState::Air));
+	info.supportState = static_cast<PhysicsWalkSupportDebugState>(physics->walkSupportState);
 
 	return info;
 }

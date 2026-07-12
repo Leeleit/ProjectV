@@ -314,7 +314,7 @@ void TestPrebakeVersionIncrementsAfterBake(StreamTestContext &test)
 	const uint64_t after = projectv::voxel::GetChunkStreamerPrebakeVersion();
 	if (after <= before) {
 		std::fprintf(stderr, "prebakeVersion before=%llu after=%llu\n",
-			static_cast<unsigned long long>(before), static_cast<unsigned long long>(after));
+					 static_cast<unsigned long long>(before), static_cast<unsigned long long>(after));
 		test.Fail(__LINE__, "BakeAllChunksToDisk must bump prebake version");
 	}
 	projectv::voxel::StopChunkStreamerWorker();
@@ -322,7 +322,7 @@ void TestPrebakeVersionIncrementsAfterBake(StreamTestContext &test)
 	(void)unsetResult;
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

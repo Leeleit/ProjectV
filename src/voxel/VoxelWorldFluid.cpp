@@ -1,4 +1,5 @@
 import projectv.math;
+#include "core/EnvUtils.hpp"
 import projectv.string_id;
 
 #include "voxel/VoxelWorldInternal.hpp"
@@ -16,7 +17,7 @@ bool IsFluidCaGpuEnabled()
 	if (gFluidCaGpuEnabledForTesting) {
 		return true;
 	}
-	if (const char *value = std::getenv("PROJECTV_FLUID_CA_GPU")) {
+	if (const char *value = projectv::core::GetEnvVar("PROJECTV_FLUID_CA_GPU")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
 	return false;

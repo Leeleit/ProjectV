@@ -1,6 +1,5 @@
 #pragma once
 
-#include "debug/Profiling.hpp"
 #include "volk.h"
 
 #if defined(PROJECTV_ENABLE_TRACY)

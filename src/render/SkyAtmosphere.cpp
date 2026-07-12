@@ -1,5 +1,6 @@
 #include "render/SkyAtmosphere.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
@@ -38,7 +39,7 @@ namespace projectv::render {
 
 bool IsSkyLutPrecomputeEnabled()
 {
-	const char *value = std::getenv("PROJECTV_SKY_LUT");
+	const char *value = core::GetEnvVar("PROJECTV_SKY_LUT");
 	return value != nullptr && value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
 }
 
@@ -78,43 +79,55 @@ bool CreateSkyLutResources(VulkanContextState *context, RenderState *render)
 	PV_CHECK_OR_RETURN(
 		context && render && context->device && context->allocator,
 		"Render", "CreateSkyLutResources.Preconditions", "missing context");
+
+	bool ok = true;
+	bool creationAttempted = false;
 	if (!IsSkyLutPrecomputeEnabled()) {
 		DestroySkyLutResources(context, render);
-		return false;
-	}
+		ok = false;
+	} else {
+		DestroySkyLutResources(context, render);
+		creationAttempted = true;
 
-	DestroySkyLutResources(context, render);
-
-	if (render->skyLutLinearSampler == VK_NULL_HANDLE) {
-		VkSamplerCreateInfo samplerInfo{};
-		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerInfo.magFilter = VK_FILTER_LINEAR;
-		samplerInfo.minFilter = VK_FILTER_LINEAR;
-		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
-		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		samplerInfo.anisotropyEnable = VK_FALSE;
-		samplerInfo.unnormalizedCoordinates = VK_FALSE;
-		if (vkCreateSampler(context->device, &samplerInfo, nullptr, &render->skyLutLinearSampler) != VK_SUCCESS) {
-			runtime::LogRuntimeFailure(
-				"Render", "CreateSkyLutResources.vkCreateSampler", "failed");
-			DestroySkyLutResources(context, render);
-			return false;
+		if (render->skyLutLinearSampler == VK_NULL_HANDLE) {
+			VkSamplerCreateInfo samplerInfo{};
+			samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+			samplerInfo.magFilter = VK_FILTER_LINEAR;
+			samplerInfo.minFilter = VK_FILTER_LINEAR;
+			samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+			samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+			samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+			samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+			samplerInfo.anisotropyEnable = VK_FALSE;
+			samplerInfo.unnormalizedCoordinates = VK_FALSE;
+			if (vkCreateSampler(context->device, &samplerInfo, nullptr, &render->skyLutLinearSampler) != VK_SUCCESS) {
+				runtime::LogRuntimeFailure(
+					"Render", "CreateSkyLutResources.vkCreateSampler", "failed");
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyLutLinearSampler), VK_OBJECT_TYPE_SAMPLER, "SkyLutLinearSampler");
+			}
 		}
-		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyLutLinearSampler), VK_OBJECT_TYPE_SAMPLER, "SkyLutLinearSampler");
+
+		if (ok) {
+			if (!CreateSkyViewLut(context, render)) {
+				ok = false;
+			}
+		}
+		if (ok) {
+			if (!CreateMultiScatteringLut(context, render)) {
+				ok = false;
+			}
+		}
+		if (ok) {
+			render->skyLutPrecomputeEnabled = true;
+		}
 	}
 
-	if (!CreateSkyViewLut(context, render)) {
+	if (!ok && creationAttempted) {
 		DestroySkyLutResources(context, render);
-		return false;
 	}
-	if (!CreateMultiScatteringLut(context, render)) {
-		DestroySkyLutResources(context, render);
-		return false;
-	}
-	render->skyLutPrecomputeEnabled = true;
-	return true;
+	return ok;
 }
 
 float CosThetaClamped(const float cosTheta)
@@ -192,6 +205,8 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 		}
 	}
 
+	bool ok = true;
+
 	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -218,7 +233,7 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 		nullptr);
 	if (createResult != VK_SUCCESS) {
 		runtime::LogVkFailure("CreateSkyViewLut.vmaCreateImage", createResult);
-		return false;
+		ok = false;
 	}
 
 	VkImageViewCreateInfo viewInfo{};
@@ -227,41 +242,49 @@ bool CreateSkyViewLut(VulkanContextState *context, RenderState *render)
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = kSkyViewLutFormat;
 	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-	if (vkCreateImageView(context->device, &viewInfo, nullptr, &render->skyViewLutView) != VK_SUCCESS) {
-		vmaDestroyImage(context->allocator, render->skyViewLutImage, render->skyViewLutAllocation);
-		render->skyViewLutImage = VK_NULL_HANDLE;
-		render->skyViewLutAllocation = nullptr;
+	if (ok && vkCreateImageView(context->device, &viewInfo, nullptr, &render->skyViewLutView) != VK_SUCCESS) {
 		runtime::LogRuntimeFailure(
 			"Render", "CreateSkyViewLut.vkCreateImageView", "failed");
-		return false;
+		ok = false;
 	}
 
 	void *mapped = nullptr;
-	const VkResult mapResult = vmaMapMemory(context->allocator, render->skyViewLutAllocation, &mapped);
-	if (mapResult != VK_SUCCESS || mapped == nullptr) {
-		vkDestroyImageView(context->device, render->skyViewLutView, nullptr);
-		vmaDestroyImage(context->allocator, render->skyViewLutImage, render->skyViewLutAllocation);
-		render->skyViewLutImage = VK_NULL_HANDLE;
-		render->skyViewLutView = VK_NULL_HANDLE;
-		render->skyViewLutAllocation = nullptr;
-		runtime::LogVkFailure("CreateSkyViewLut.vmaMapMemory", mapResult);
-		return false;
+	if (ok) {
+		const VkResult mapResult = vmaMapMemory(context->allocator, render->skyViewLutAllocation, &mapped);
+		if (mapResult != VK_SUCCESS || mapped == nullptr) {
+			runtime::LogVkFailure("CreateSkyViewLut.vmaMapMemory", mapResult);
+			ok = false;
+		}
 	}
 
-	std::vector<uint16_t> halfFloats(static_cast<std::size_t>(kSkyViewLutWidth) * kSkyViewLutHeight * 4);
-	for (size_t i = 0; i < lutData.size(); ++i) {
-		halfFloats[i * 4 + 0] = glm::packHalf1x16(lutData[i].r);
-		halfFloats[i * 4 + 1] = glm::packHalf1x16(lutData[i].g);
-		halfFloats[i * 4 + 2] = glm::packHalf1x16(lutData[i].b);
-		halfFloats[i * 4 + 3] = glm::packHalf1x16(lutData[i].a);
+	if (ok && mapped != nullptr) {
+		std::vector<uint16_t> halfFloats(static_cast<std::size_t>(kSkyViewLutWidth) * kSkyViewLutHeight * 4);
+		for (size_t i = 0; i < lutData.size(); ++i) {
+			halfFloats[i * 4 + 0] = glm::packHalf1x16(lutData[i].r);
+			halfFloats[i * 4 + 1] = glm::packHalf1x16(lutData[i].g);
+			halfFloats[i * 4 + 2] = glm::packHalf1x16(lutData[i].b);
+			halfFloats[i * 4 + 3] = glm::packHalf1x16(lutData[i].a);
+		}
+		std::memcpy(mapped, halfFloats.data(), halfFloats.size() * sizeof(uint16_t));
+		vmaUnmapMemory(context->allocator, render->skyViewLutAllocation);
+		vmaInvalidateAllocation(context->allocator, render->skyViewLutAllocation, 0u, VK_WHOLE_SIZE);
 	}
-	std::memcpy(mapped, halfFloats.data(), halfFloats.size() * sizeof(uint16_t));
-	vmaUnmapMemory(context->allocator, render->skyViewLutAllocation);
-	vmaInvalidateAllocation(context->allocator, render->skyViewLutAllocation, 0u, VK_WHOLE_SIZE);
 
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyViewLutImage), VK_OBJECT_TYPE_IMAGE, "SkyViewLutImage");
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyViewLutView), VK_OBJECT_TYPE_IMAGE_VIEW, "SkyViewLutView");
-	return true;
+	if (ok) {
+		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyViewLutImage), VK_OBJECT_TYPE_IMAGE, "SkyViewLutImage");
+		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyViewLutView), VK_OBJECT_TYPE_IMAGE_VIEW, "SkyViewLutView");
+	} else {
+		if (render->skyViewLutView != VK_NULL_HANDLE) {
+			vkDestroyImageView(context->device, render->skyViewLutView, nullptr);
+			render->skyViewLutView = VK_NULL_HANDLE;
+		}
+		if (render->skyViewLutImage != VK_NULL_HANDLE) {
+			vmaDestroyImage(context->allocator, render->skyViewLutImage, render->skyViewLutAllocation);
+			render->skyViewLutImage = VK_NULL_HANDLE;
+			render->skyViewLutAllocation = nullptr;
+		}
+	}
+	return ok;
 }
 
 bool CreateMultiScatteringLut(VulkanContextState *context, RenderState *render)
@@ -292,6 +315,8 @@ bool CreateMultiScatteringLut(VulkanContextState *context, RenderState *render)
 		}
 	}
 
+	bool ok = true;
+
 	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -318,7 +343,7 @@ bool CreateMultiScatteringLut(VulkanContextState *context, RenderState *render)
 		nullptr);
 	if (createResult != VK_SUCCESS) {
 		runtime::LogVkFailure("CreateMultiScatteringLut.vmaCreateImage", createResult);
-		return false;
+		ok = false;
 	}
 
 	VkImageViewCreateInfo viewInfo{};
@@ -327,41 +352,49 @@ bool CreateMultiScatteringLut(VulkanContextState *context, RenderState *render)
 	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	viewInfo.format = kMultiScatteringLutFormat;
 	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-	if (vkCreateImageView(context->device, &viewInfo, nullptr, &render->multiScatteringLutView) != VK_SUCCESS) {
-		vmaDestroyImage(context->allocator, render->multiScatteringLutImage, render->multiScatteringLutAllocation);
-		render->multiScatteringLutImage = VK_NULL_HANDLE;
-		render->multiScatteringLutAllocation = nullptr;
+	if (ok && vkCreateImageView(context->device, &viewInfo, nullptr, &render->multiScatteringLutView) != VK_SUCCESS) {
 		runtime::LogRuntimeFailure(
 			"Render", "CreateMultiScatteringLut.vkCreateImageView", "failed");
-		return false;
+		ok = false;
 	}
 
 	void *mapped = nullptr;
-	const VkResult mapResult = vmaMapMemory(context->allocator, render->multiScatteringLutAllocation, &mapped);
-	if (mapResult != VK_SUCCESS || mapped == nullptr) {
-		vkDestroyImageView(context->device, render->multiScatteringLutView, nullptr);
-		vmaDestroyImage(context->allocator, render->multiScatteringLutImage, render->multiScatteringLutAllocation);
-		render->multiScatteringLutImage = VK_NULL_HANDLE;
-		render->multiScatteringLutView = VK_NULL_HANDLE;
-		render->multiScatteringLutAllocation = nullptr;
-		runtime::LogVkFailure("CreateMultiScatteringLut.vmaMapMemory", mapResult);
-		return false;
+	if (ok) {
+		const VkResult mapResult = vmaMapMemory(context->allocator, render->multiScatteringLutAllocation, &mapped);
+		if (mapResult != VK_SUCCESS || mapped == nullptr) {
+			runtime::LogVkFailure("CreateMultiScatteringLut.vmaMapMemory", mapResult);
+			ok = false;
+		}
 	}
 
-	std::vector<uint16_t> halfFloats(static_cast<std::size_t>(kMultiScatteringLutWidth) * kMultiScatteringLutHeight * 4);
-	for (size_t i = 0; i < lutData.size(); ++i) {
-		halfFloats[i * 4 + 0] = glm::packHalf1x16(lutData[i].r);
-		halfFloats[i * 4 + 1] = glm::packHalf1x16(lutData[i].g);
-		halfFloats[i * 4 + 2] = glm::packHalf1x16(lutData[i].b);
-		halfFloats[i * 4 + 3] = glm::packHalf1x16(lutData[i].a);
+	if (ok && mapped != nullptr) {
+		std::vector<uint16_t> halfFloats(static_cast<std::size_t>(kMultiScatteringLutWidth) * kMultiScatteringLutHeight * 4);
+		for (size_t i = 0; i < lutData.size(); ++i) {
+			halfFloats[i * 4 + 0] = glm::packHalf1x16(lutData[i].r);
+			halfFloats[i * 4 + 1] = glm::packHalf1x16(lutData[i].g);
+			halfFloats[i * 4 + 2] = glm::packHalf1x16(lutData[i].b);
+			halfFloats[i * 4 + 3] = glm::packHalf1x16(lutData[i].a);
+		}
+		std::memcpy(mapped, halfFloats.data(), halfFloats.size() * sizeof(uint16_t));
+		vmaUnmapMemory(context->allocator, render->multiScatteringLutAllocation);
+		vmaInvalidateAllocation(context->allocator, render->multiScatteringLutAllocation, 0u, VK_WHOLE_SIZE);
 	}
-	std::memcpy(mapped, halfFloats.data(), halfFloats.size() * sizeof(uint16_t));
-	vmaUnmapMemory(context->allocator, render->multiScatteringLutAllocation);
-	vmaInvalidateAllocation(context->allocator, render->multiScatteringLutAllocation, 0u, VK_WHOLE_SIZE);
 
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->multiScatteringLutImage), VK_OBJECT_TYPE_IMAGE, "MultiScatteringLutImage");
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->multiScatteringLutView), VK_OBJECT_TYPE_IMAGE_VIEW, "MultiScatteringLutView");
-	return true;
+	if (ok) {
+		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->multiScatteringLutImage), VK_OBJECT_TYPE_IMAGE, "MultiScatteringLutImage");
+		SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->multiScatteringLutView), VK_OBJECT_TYPE_IMAGE_VIEW, "MultiScatteringLutView");
+	} else {
+		if (render->multiScatteringLutView != VK_NULL_HANDLE) {
+			vkDestroyImageView(context->device, render->multiScatteringLutView, nullptr);
+			render->multiScatteringLutView = VK_NULL_HANDLE;
+		}
+		if (render->multiScatteringLutImage != VK_NULL_HANDLE) {
+			vmaDestroyImage(context->allocator, render->multiScatteringLutImage, render->multiScatteringLutAllocation);
+			render->multiScatteringLutImage = VK_NULL_HANDLE;
+			render->multiScatteringLutAllocation = nullptr;
+		}
+	}
+	return ok;
 }
 
 void DestroySkyAtmospherePipelines(VulkanContextState *context, RenderState *render)
@@ -402,241 +435,262 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 	PV_CHECK_OR_RETURN(
 		context && render && context->device && context->allocator,
 		"Render", "CreateSkyAtmospherePipelines.Preconditions", "missing context");
+
+	bool ok = true;
 	if (!IsSkyAtmosphereEnabled()) {
-		return false;
-	}
-
-	DestroySkyAtmospherePipelines(context, render);
-
-	const std::vector<char> vertexShaderCode = ReadShaderFile(kSkyAtmosphereVertexShaderFilename);
-	if (vertexShaderCode.empty()) {
-		runtime::LogRuntimeFailure(
-			"Render", "CreateSkyAtmospherePipelines.ReadVertexShader", "sky_atmosphere.vert.spv not found");
+		ok = false;
+	} else {
 		DestroySkyAtmospherePipelines(context, render);
-		return false;
+
+		const std::vector<char> vertexShaderCode = ReadShaderFile(kSkyAtmosphereVertexShaderFilename);
+		if (vertexShaderCode.empty()) {
+			runtime::LogRuntimeFailure(
+				"Render", "CreateSkyAtmospherePipelines.ReadVertexShader", "sky_atmosphere.vert.spv not found");
+			ok = false;
+		}
+
+		const std::vector<char> fragmentShaderCode = ReadShaderFile(kSkyAtmosphereFragmentShaderFilename);
+		if (fragmentShaderCode.empty()) {
+			runtime::LogRuntimeFailure(
+				"Render", "CreateSkyAtmospherePipelines.ReadFragmentShader", "sky_atmosphere.frag.spv not found");
+			ok = false;
+		}
+
+		if (ok) {
+			VkShaderModuleCreateInfo vertexModuleInfo{};
+			vertexModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			vertexModuleInfo.codeSize = vertexShaderCode.size();
+			vertexModuleInfo.pCode = reinterpret_cast<const uint32_t *>(vertexShaderCode.data());
+			if (vkCreateShaderModule(context->device, &vertexModuleInfo, nullptr, &render->skyAtmosphereVertexShaderModule) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmosphereVertexShaderModule), VK_OBJECT_TYPE_SHADER_MODULE, "SkyAtmosphereVertexShader");
+			}
+		}
+
+		if (ok) {
+			VkShaderModuleCreateInfo fragmentModuleInfo{};
+			fragmentModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			fragmentModuleInfo.codeSize = fragmentShaderCode.size();
+			fragmentModuleInfo.pCode = reinterpret_cast<const uint32_t *>(fragmentShaderCode.data());
+			if (vkCreateShaderModule(context->device, &fragmentModuleInfo, nullptr, &render->skyAtmosphereFragmentShaderModule) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmosphereFragmentShaderModule), VK_OBJECT_TYPE_SHADER_MODULE, "SkyAtmosphereFragmentShader");
+			}
+		}
+
+		if (ok) {
+			const VkResult layoutResult = vkCreateDescriptorSetLayout(
+				context->device,
+				&kSkyAtmosphereDescriptorSetLayoutInfo,
+				nullptr,
+				&render->skyAtmosphereDescriptorSetLayout);
+			if (layoutResult != VK_SUCCESS) {
+				runtime::LogVkFailure("CreateSkyAtmospherePipelines.vkCreateDescriptorSetLayout", layoutResult);
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmosphereDescriptorSetLayout), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "SkyAtmosphereDescriptorSetLayout");
+			}
+		}
+
+		if (ok) {
+			VkDescriptorPoolCreateInfo poolInfo{};
+			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT;
+			poolInfo.poolSizeCount = static_cast<uint32_t>(kSkyAtmosphereDescriptorPoolSizes.size());
+			poolInfo.pPoolSizes = kSkyAtmosphereDescriptorPoolSizes.data();
+			if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->skyAtmosphereDescriptorPool) != VK_SUCCESS) {
+				runtime::LogVkFailure("CreateSkyAtmospherePipelines.vkCreateDescriptorPool", VK_ERROR_OUT_OF_DEVICE_MEMORY);
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmosphereDescriptorPool), VK_OBJECT_TYPE_DESCRIPTOR_POOL, "SkyAtmosphereDescriptorPool");
+			}
+		}
+
+		std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> descriptorSets{};
+		if (ok) {
+			std::array<VkDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT> layouts{};
+			for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+				layouts[i] = render->skyAtmosphereDescriptorSetLayout;
+			}
+			VkDescriptorSetAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocInfo.descriptorPool = render->skyAtmosphereDescriptorPool;
+			allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+			allocInfo.pSetLayouts = layouts.data();
+			if (vkAllocateDescriptorSets(context->device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+				ok = false;
+			}
+		}
+
+		if (ok) {
+			for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+				const bool useLut = render->skyLutPrecomputeEnabled && render->skyViewLutView != VK_NULL_HANDLE;
+				VkDescriptorImageInfo skyViewInfo{};
+				skyViewInfo.sampler = render->skyLutLinearSampler;
+				skyViewInfo.imageView = useLut ? render->skyViewLutView : VK_NULL_HANDLE;
+				skyViewInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+				VkDescriptorImageInfo multiScatteringInfo{};
+				multiScatteringInfo.sampler = render->skyLutLinearSampler;
+				multiScatteringInfo.imageView = useLut ? render->multiScatteringLutView : VK_NULL_HANDLE;
+				multiScatteringInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+				std::array<VkWriteDescriptorSet, 2> writes{};
+				writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writes[0].dstSet = descriptorSets[i];
+				writes[0].dstBinding = 0;
+				writes[0].dstArrayElement = 0;
+				writes[0].descriptorCount = 1;
+				writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writes[0].pImageInfo = &skyViewInfo;
+
+				writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				writes[1].dstSet = descriptorSets[i];
+				writes[1].dstBinding = 1;
+				writes[1].dstArrayElement = 0;
+				writes[1].descriptorCount = 1;
+				writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				writes[1].pImageInfo = &multiScatteringInfo;
+
+				vkUpdateDescriptorSets(context->device, static_cast<uint32_t>(writes.size()), writes.data(), 0u, nullptr);
+			}
+		}
+
+		if (ok) {
+			VkPipelineLayoutCreateInfo layoutInfo{};
+			layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			layoutInfo.setLayoutCount = 1;
+			layoutInfo.pSetLayouts = &render->skyAtmosphereDescriptorSetLayout;
+			layoutInfo.pushConstantRangeCount = 1;
+			VkPushConstantRange pushConstantRange{};
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+			pushConstantRange.offset = 0;
+			pushConstantRange.size = sizeof(SkyAtmospherePushConstants);
+			layoutInfo.pPushConstantRanges = &pushConstantRange;
+			if (vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &render->skyAtmospherePipelineLayout) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmospherePipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "SkyAtmospherePipelineLayout");
+			}
+		}
+
+		if (ok) {
+			const VkPipelineShaderStageCreateInfo vertexStage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_VERTEX_BIT,
+				.module = render->skyAtmosphereVertexShaderModule,
+				.pName = "main",
+			};
+			const VkPipelineShaderStageCreateInfo fragmentStage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+				.module = render->skyAtmosphereFragmentShaderModule,
+				.pName = "main",
+			};
+
+			static constexpr VkPipelineVertexInputStateCreateInfo vertexInputState{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+				.vertexBindingDescriptionCount = 0,
+				.pVertexBindingDescriptions = nullptr,
+				.vertexAttributeDescriptionCount = 0,
+				.pVertexAttributeDescriptions = nullptr,
+			};
+
+			static constexpr VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+				.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+				.primitiveRestartEnable = VK_FALSE,
+			};
+
+			static constexpr VkPipelineViewportStateCreateInfo viewportState{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+				.viewportCount = 1,
+				.pViewports = nullptr,
+				.scissorCount = 1,
+				.pScissors = nullptr,
+			};
+
+			static constexpr VkPipelineRasterizationStateCreateInfo rasterizationState{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+				.polygonMode = VK_POLYGON_MODE_FILL,
+				.cullMode = VK_CULL_MODE_NONE,
+				.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+				.lineWidth = 1.0f,
+			};
+
+			static constexpr VkPipelineMultisampleStateCreateInfo multisampleState{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+				.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+			};
+
+			static constexpr VkPipelineDepthStencilStateCreateInfo depthStencilState{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+				.depthTestEnable = VK_TRUE,
+				.depthWriteEnable = VK_TRUE,
+				.depthCompareOp = VK_COMPARE_OP_ALWAYS,
+				.depthBoundsTestEnable = VK_FALSE,
+				.stencilTestEnable = VK_FALSE,
+			};
+
+			static constexpr VkPipelineColorBlendAttachmentState colorBlendAttachment{
+				.blendEnable = VK_FALSE,
+				.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT,
+			};
+
+			constexpr VkPipelineColorBlendStateCreateInfo colorBlendState{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+				.attachmentCount = 1,
+				.pAttachments = &colorBlendAttachment,
+			};
+
+			static constexpr VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+			static constexpr VkPipelineDynamicStateCreateInfo dynamicState{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+				.dynamicStateCount = static_cast<uint32_t>(std::size(dynamicStates)),
+				.pDynamicStates = dynamicStates,
+			};
+
+			VkFormat colorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+			VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo{};
+			pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+			pipelineRenderingCreateInfo.colorAttachmentCount = 1;
+			pipelineRenderingCreateInfo.pColorAttachmentFormats = &colorFormat;
+			pipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+
+			VkGraphicsPipelineCreateInfo pipelineInfo{};
+			pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+			pipelineInfo.pNext = &pipelineRenderingCreateInfo;
+			pipelineInfo.stageCount = 2;
+			pipelineInfo.pStages = (VkPipelineShaderStageCreateInfo[2]){vertexStage, fragmentStage};
+			pipelineInfo.pVertexInputState = &vertexInputState;
+			pipelineInfo.pInputAssemblyState = &inputAssemblyState;
+			pipelineInfo.pViewportState = &viewportState;
+			pipelineInfo.pRasterizationState = &rasterizationState;
+			pipelineInfo.pMultisampleState = &multisampleState;
+			pipelineInfo.pDepthStencilState = &depthStencilState;
+			pipelineInfo.pColorBlendState = &colorBlendState;
+			pipelineInfo.pDynamicState = &dynamicState;
+			pipelineInfo.layout = render->skyAtmospherePipelineLayout;
+			pipelineInfo.subpass = 0;
+
+			if (vkCreateGraphicsPipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->skyAtmospherePipeline) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmospherePipeline), VK_OBJECT_TYPE_PIPELINE, "SkyAtmospherePipeline");
+			}
+		}
+
+		if (ok) {
+			render->skyAtmospherePipelineEnabled = true;
+		}
 	}
 
-	const std::vector<char> fragmentShaderCode = ReadShaderFile(kSkyAtmosphereFragmentShaderFilename);
-	if (fragmentShaderCode.empty()) {
-		runtime::LogRuntimeFailure(
-			"Render", "CreateSkyAtmospherePipelines.ReadFragmentShader", "sky_atmosphere.frag.spv not found");
+	if (!ok) {
 		DestroySkyAtmospherePipelines(context, render);
-		return false;
 	}
-
-	VkShaderModuleCreateInfo vertexModuleInfo{};
-	vertexModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	vertexModuleInfo.codeSize = vertexShaderCode.size();
-	vertexModuleInfo.pCode = reinterpret_cast<const uint32_t *>(vertexShaderCode.data());
-	if (vkCreateShaderModule(context->device, &vertexModuleInfo, nullptr, &render->skyAtmosphereVertexShaderModule) != VK_SUCCESS) {
-		DestroySkyAtmospherePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmosphereVertexShaderModule), VK_OBJECT_TYPE_SHADER_MODULE, "SkyAtmosphereVertexShader");
-
-	VkShaderModuleCreateInfo fragmentModuleInfo{};
-	fragmentModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	fragmentModuleInfo.codeSize = fragmentShaderCode.size();
-	fragmentModuleInfo.pCode = reinterpret_cast<const uint32_t *>(fragmentShaderCode.data());
-	if (vkCreateShaderModule(context->device, &fragmentModuleInfo, nullptr, &render->skyAtmosphereFragmentShaderModule) != VK_SUCCESS) {
-		DestroySkyAtmospherePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmosphereFragmentShaderModule), VK_OBJECT_TYPE_SHADER_MODULE, "SkyAtmosphereFragmentShader");
-
-	const VkResult layoutResult = vkCreateDescriptorSetLayout(
-		context->device,
-		&kSkyAtmosphereDescriptorSetLayoutInfo,
-		nullptr,
-		&render->skyAtmosphereDescriptorSetLayout);
-	if (layoutResult != VK_SUCCESS) {
-		runtime::LogVkFailure("CreateSkyAtmospherePipelines.vkCreateDescriptorSetLayout", layoutResult);
-		DestroySkyAtmospherePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmosphereDescriptorSetLayout), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "SkyAtmosphereDescriptorSetLayout");
-
-	VkDescriptorPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT;
-	poolInfo.poolSizeCount = static_cast<uint32_t>(kSkyAtmosphereDescriptorPoolSizes.size());
-	poolInfo.pPoolSizes = kSkyAtmosphereDescriptorPoolSizes.data();
-	if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->skyAtmosphereDescriptorPool) != VK_SUCCESS) {
-		runtime::LogVkFailure("CreateSkyAtmospherePipelines.vkCreateDescriptorPool", VK_ERROR_OUT_OF_DEVICE_MEMORY);
-		DestroySkyAtmospherePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmosphereDescriptorPool), VK_OBJECT_TYPE_DESCRIPTOR_POOL, "SkyAtmosphereDescriptorPool");
-
-	std::array<VkDescriptorSetLayout, MAX_FRAMES_IN_FLIGHT> layouts{};
-	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-		layouts[i] = render->skyAtmosphereDescriptorSetLayout;
-	}
-	VkDescriptorSetAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = render->skyAtmosphereDescriptorPool;
-	allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
-	allocInfo.pSetLayouts = layouts.data();
-	std::array<VkDescriptorSet, MAX_FRAMES_IN_FLIGHT> descriptorSets{};
-	if (vkAllocateDescriptorSets(context->device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
-		DestroySkyAtmospherePipelines(context, render);
-		return false;
-	}
-
-	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-		const bool useLut = render->skyLutPrecomputeEnabled && render->skyViewLutView != VK_NULL_HANDLE;
-		VkDescriptorImageInfo skyViewInfo{};
-		skyViewInfo.sampler = render->skyLutLinearSampler;
-		skyViewInfo.imageView = useLut ? render->skyViewLutView : VK_NULL_HANDLE;
-		skyViewInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-		VkDescriptorImageInfo multiScatteringInfo{};
-		multiScatteringInfo.sampler = render->skyLutLinearSampler;
-		multiScatteringInfo.imageView = useLut ? render->multiScatteringLutView : VK_NULL_HANDLE;
-		multiScatteringInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-		std::array<VkWriteDescriptorSet, 2> writes{};
-		writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[0].dstSet = descriptorSets[i];
-		writes[0].dstBinding = 0;
-		writes[0].dstArrayElement = 0;
-		writes[0].descriptorCount = 1;
-		writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		writes[0].pImageInfo = &skyViewInfo;
-
-		writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writes[1].dstSet = descriptorSets[i];
-		writes[1].dstBinding = 1;
-		writes[1].dstArrayElement = 0;
-		writes[1].descriptorCount = 1;
-		writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		writes[1].pImageInfo = &multiScatteringInfo;
-
-		vkUpdateDescriptorSets(context->device, static_cast<uint32_t>(writes.size()), writes.data(), 0u, nullptr);
-	}
-
-	VkPipelineLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutInfo.setLayoutCount = 1;
-	layoutInfo.pSetLayouts = &render->skyAtmosphereDescriptorSetLayout;
-	layoutInfo.pushConstantRangeCount = 1;
-	VkPushConstantRange pushConstantRange{};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(SkyAtmospherePushConstants);
-	layoutInfo.pPushConstantRanges = &pushConstantRange;
-	if (vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &render->skyAtmospherePipelineLayout) != VK_SUCCESS) {
-		DestroySkyAtmospherePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmospherePipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "SkyAtmospherePipelineLayout");
-
-	const VkPipelineShaderStageCreateInfo vertexStage{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.stage = VK_SHADER_STAGE_VERTEX_BIT,
-		.module = render->skyAtmosphereVertexShaderModule,
-		.pName = "main",
-	};
-	const VkPipelineShaderStageCreateInfo fragmentStage{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.module = render->skyAtmosphereFragmentShaderModule,
-		.pName = "main",
-	};
-
-	static constexpr VkPipelineVertexInputStateCreateInfo vertexInputState{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.vertexBindingDescriptionCount = 0,
-		.pVertexBindingDescriptions = nullptr,
-		.vertexAttributeDescriptionCount = 0,
-		.pVertexAttributeDescriptions = nullptr,
-	};
-
-	static constexpr VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-		.primitiveRestartEnable = VK_FALSE,
-	};
-
-	static constexpr VkPipelineViewportStateCreateInfo viewportState{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.pViewports = nullptr,
-		.scissorCount = 1,
-		.pScissors = nullptr,
-	};
-
-	static constexpr VkPipelineRasterizationStateCreateInfo rasterizationState{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_NONE,
-		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		.lineWidth = 1.0f,
-	};
-
-	static constexpr VkPipelineMultisampleStateCreateInfo multisampleState{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-	};
-
-	static constexpr VkPipelineDepthStencilStateCreateInfo depthStencilState{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
-		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_ALWAYS,
-		.depthBoundsTestEnable = VK_FALSE,
-		.stencilTestEnable = VK_FALSE,
-	};
-
-	static constexpr VkPipelineColorBlendAttachmentState colorBlendAttachment{
-		.blendEnable = VK_FALSE,
-		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT,
-	};
-
-	constexpr VkPipelineColorBlendStateCreateInfo colorBlendState{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.attachmentCount = 1,
-		.pAttachments = &colorBlendAttachment,
-	};
-
-	static constexpr VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-	static constexpr VkPipelineDynamicStateCreateInfo dynamicState{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = static_cast<uint32_t>(std::size(dynamicStates)),
-		.pDynamicStates = dynamicStates,
-	};
-
-	VkFormat colorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-	VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo{};
-	pipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-	pipelineRenderingCreateInfo.colorAttachmentCount = 1;
-	pipelineRenderingCreateInfo.pColorAttachmentFormats = &colorFormat;
-	pipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
-
-	VkGraphicsPipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.pNext = &pipelineRenderingCreateInfo;
-	pipelineInfo.stageCount = 2;
-	pipelineInfo.pStages = (VkPipelineShaderStageCreateInfo[2]){vertexStage, fragmentStage};
-	pipelineInfo.pVertexInputState = &vertexInputState;
-	pipelineInfo.pInputAssemblyState = &inputAssemblyState;
-	pipelineInfo.pViewportState = &viewportState;
-	pipelineInfo.pRasterizationState = &rasterizationState;
-	pipelineInfo.pMultisampleState = &multisampleState;
-	pipelineInfo.pDepthStencilState = &depthStencilState;
-	pipelineInfo.pColorBlendState = &colorBlendState;
-	pipelineInfo.pDynamicState = &dynamicState;
-	pipelineInfo.layout = render->skyAtmospherePipelineLayout;
-	pipelineInfo.subpass = 0;
-
-	if (vkCreateGraphicsPipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->skyAtmospherePipeline) != VK_SUCCESS) {
-		DestroySkyAtmospherePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->skyAtmospherePipeline), VK_OBJECT_TYPE_PIPELINE, "SkyAtmospherePipeline");
-
-	render->skyAtmospherePipelineEnabled = true;
-	return true;
+	return ok;
 }
 
 bool RecordSkyAtmospherePass(

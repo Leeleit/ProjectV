@@ -2,18 +2,9 @@
 
 #include "render/SceneResources.hpp"
 #include "render/LodDownsampleGpuConsume.hpp"
-#include "render/VoxelMeshingPushConstants.hpp"
-#include "core/RuntimeDiagnostics.hpp"
-#include "debug/Profiling.hpp"
-#include "render/vulkan/VulkanDebug.hpp"
-#include "render/vulkan/VulkanGraphicsPipeline.hpp"
-#include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
-#include "voxel/NanoVdb.hpp"
+
 #include "voxel/VoxelMaterials.hpp"
 #include "voxel/VoxelWorld.hpp"
-#include <algorithm>
-#include <array>
-#include <span>
 
 constexpr uint32_t kVoxelMaterialsPerWord = 4u;
 

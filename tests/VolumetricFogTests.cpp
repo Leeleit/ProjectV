@@ -103,7 +103,7 @@ void TestRecordVolumetricFogAccumulationPassRejectsBadFrameIndex(TestContext &co
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

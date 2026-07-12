@@ -99,7 +99,7 @@ void TestRecordSkyAtmospherePassRejectsZeroExtent(TestContext &context)
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

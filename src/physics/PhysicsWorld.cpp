@@ -1,5 +1,21 @@
 #include "physics/PhysicsWorld_Internal.hpp"
 
+#include "core/RuntimeDiagnostics.hpp"
+#include "physics/PhysicsWorld.hpp"
+
+#pragma warning(push, 0)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyLock.h>
+#include <Jolt/Physics/Body/MotionType.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+#pragma clang diagnostic pop
+#pragma warning(pop)
+
 namespace {
 
 void DestroyStaticWorldBody(PhysicsState &physics)
@@ -30,12 +46,12 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 		return false;
 	}
 
-	const auto it = physics.chunkStaticBodies.find(chunkIndex);
-	if (it != physics.chunkStaticBodies.end()) {
+	const auto existingIt = physics.chunkStaticBodies.find(chunkIndex);
+	if (existingIt != physics.chunkStaticBodies.end()) {
 		JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
-		bodyInterface.RemoveBody(it->second);
-		bodyInterface.DestroyBody(it->second);
-		physics.chunkStaticBodies.erase(it);
+		bodyInterface.RemoveBody(existingIt->second);
+		bodyInterface.DestroyBody(existingIt->second);
+		physics.chunkStaticBodies.erase(existingIt);
 	}
 	physics.chunkMergedBoxes.erase(chunkIndex);
 
@@ -68,7 +84,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 				static_cast<float>(minX) + halfX,
 				static_cast<float>(minY) + halfY,
 				static_cast<float>(minZ) + halfZ);
-			const JPH::RefConst<JPH::BoxShape> boxShape = new JPH::BoxShape(halfExtent);
+			const JPH::RefConst boxShape = new JPH::BoxShape(halfExtent);
 			compoundSettings.AddShape(
 				center,
 				JPH::Quat::sIdentity(),
@@ -78,7 +94,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 							   static_cast<size_t>(spanZ);
 		}
 	} else {
-		const JPH::RefConst<JPH::BoxShape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
+		const JPH::RefConst voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
 		for (int z = chunk.min.z; z < chunk.maxExclusive.z; ++z) {
 			for (int y = chunk.min.y; y < chunk.maxExclusive.y; ++y) {
 				for (int x = chunk.min.x; x < chunk.maxExclusive.x; ++x) {
@@ -100,67 +116,71 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 		}
 	}
 
+	bool success = false;
 	if (solidVoxelCount == 0u) {
 		physics.chunkMergedBoxes.erase(chunkIndex);
-		return true;
+		success = true;
+	} else {
+		const JPH::ShapeSettings::ShapeResult shapeResult = compoundSettings.Create(physics.tempAllocator);
+		if (shapeResult.IsValid()) {
+			const JPH::RefConst chunkShape = shapeResult.Get();
+			const JPH::BodyCreationSettings chunkBodySettings(
+				chunkShape,
+				JPH::RVec3::sZero(),
+				JPH::Quat::sIdentity(),
+				JPH::EMotionType::Static,
+				PhysicsLayers::Static);
+
+			JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
+			const JPH::BodyID bodyId = bodyInterface.CreateAndAddBody(chunkBodySettings, JPH::EActivation::DontActivate);
+			if (!bodyId.IsInvalid()) {
+				physics.chunkStaticBodies[chunkIndex] = bodyId;
+				success = true;
+			} else {
+				runtime::LogRuntimeFailure(
+					"Physics",
+					"BuildChunkStaticCollisionBody.CreateAndAddBody",
+					"CreateAndAddBody returned an invalid body id");
+				success = false;
+			}
+		} else {
+			runtime::LogRuntimeFailure(
+				"Physics",
+				"BuildChunkStaticCollisionBody.Create",
+				shapeResult.GetError());
+			success = false;
+		}
 	}
 
-	const JPH::ShapeSettings::ShapeResult shapeResult = compoundSettings.Create(physics.tempAllocator);
-	if (!shapeResult.IsValid()) {
-		runtime::LogRuntimeFailure(
-			"Physics",
-			"BuildChunkStaticCollisionBody.Create",
-			shapeResult.GetError());
-		return false;
-	}
-
-	const JPH::RefConst<JPH::Shape> chunkShape = shapeResult.Get();
-	const JPH::BodyCreationSettings chunkBodySettings(
-		chunkShape,
-		JPH::RVec3::sZero(),
-		JPH::Quat::sIdentity(),
-		JPH::EMotionType::Static,
-		PhysicsLayers::Static);
-
-	JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
-	const JPH::BodyID bodyId = bodyInterface.CreateAndAddBody(chunkBodySettings, JPH::EActivation::DontActivate);
-	if (!bodyId.IsInvalid()) {
-		physics.chunkStaticBodies[chunkIndex] = bodyId;
-		return true;
-	}
-
-	runtime::LogRuntimeFailure(
-		"Physics",
-		"BuildChunkStaticCollisionBody.CreateAndAddBody",
-		"CreateAndAddBody returned an invalid body id");
-	return false;
+	return success;
 }
 
 void DestroyChunkStaticBody(PhysicsState &physics, const uint32_t chunkIndex)
 {
+	bool removed = false;
 	const auto it = physics.chunkStaticBodies.find(chunkIndex);
-	if (it == physics.chunkStaticBodies.end()) {
-		return;
+	if (it != physics.chunkStaticBodies.end()) {
+		JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
+		bodyInterface.RemoveBody(it->second);
+		bodyInterface.DestroyBody(it->second);
+		physics.chunkStaticBodies.erase(it);
+		removed = true;
 	}
-	JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
-	bodyInterface.RemoveBody(it->second);
-	bodyInterface.DestroyBody(it->second);
-	physics.chunkStaticBodies.erase(it);
-	physics.chunkMergedBoxes.erase(chunkIndex);
+	if (removed) {
+		physics.chunkMergedBoxes.erase(chunkIndex);
+	}
 }
 
 void DestroyAllChunkStaticBodies(PhysicsState &physics)
 {
-	if (!physics.chunkStaticBodies.empty()) {
-		JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
-		for (const auto &pair : physics.chunkStaticBodies) {
-			const JPH::BodyID bodyId = pair.second;
-			bodyInterface.RemoveBody(bodyId);
-			bodyInterface.DestroyBody(bodyId);
-		}
-		physics.chunkStaticBodies.clear();
-		physics.chunkMergedBoxes.clear();
+	JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
+	for (auto it = physics.chunkStaticBodies.begin(); it != physics.chunkStaticBodies.end(); ++it) {
+		const JPH::BodyID bodyId = it->second;
+		bodyInterface.RemoveBody(bodyId);
+		bodyInterface.DestroyBody(bodyId);
 	}
+	physics.chunkStaticBodies.clear();
+	physics.chunkMergedBoxes.clear();
 }
 
 bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWorld &world)
@@ -169,43 +189,38 @@ bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWor
 	PV_PROFILE_ZONE_N("RebuildStaticWorldBodyFromChunkShapes");
 	DestroyStaticWorldBody(physics);
 
-	if (!physics.chunkMergedBoxes.empty()) {
-		JPH::StaticCompoundShapeSettings compoundSettings;
-		for (const auto &pair : physics.chunkMergedBoxes) {
-			const auto &boxes = pair.second;
-			for (const auto &[minX, minY, minZ, maxX, maxY, maxZ] : boxes) {
-				const int spanX = maxX - minX;
-				const int spanY = maxY - minY;
-				const int spanZ = maxZ - minZ;
-				if (spanX <= 0 || spanY <= 0 || spanZ <= 0) {
-					continue;
-				}
-				const float halfX = static_cast<float>(spanX) * 0.5f;
-				const float halfY = static_cast<float>(spanY) * 0.5f;
-				const float halfZ = static_cast<float>(spanZ) * 0.5f;
-				const JPH::Vec3 halfExtent(halfX, halfY, halfZ);
-				const JPH::Vec3 center(
-					static_cast<float>(minX) + halfX,
-					static_cast<float>(minY) + halfY,
-					static_cast<float>(minZ) + halfZ);
-				const JPH::RefConst<JPH::BoxShape> boxShape = new JPH::BoxShape(halfExtent);
-				compoundSettings.AddShape(
-					center,
-					JPH::Quat::sIdentity(),
-					boxShape.GetPtr());
+	JPH::StaticCompoundShapeSettings compoundSettings;
+	for (auto it = physics.chunkMergedBoxes.begin(); it != physics.chunkMergedBoxes.end(); ++it) {
+		const auto &boxes = it->second;
+		for (const auto &[minX, minY, minZ, maxX, maxY, maxZ] : boxes) {
+			const int spanX = maxX - minX;
+			const int spanY = maxY - minY;
+			const int spanZ = maxZ - minZ;
+			if (spanX <= 0 || spanY <= 0 || spanZ <= 0) {
+				continue;
 			}
+			const float halfX = static_cast<float>(spanX) * 0.5f;
+			const float halfY = static_cast<float>(spanY) * 0.5f;
+			const float halfZ = static_cast<float>(spanZ) * 0.5f;
+			const JPH::Vec3 halfExtent(halfX, halfY, halfZ);
+			const JPH::Vec3 center(
+				static_cast<float>(minX) + halfX,
+				static_cast<float>(minY) + halfY,
+				static_cast<float>(minZ) + halfZ);
+			const JPH::RefConst boxShape = new JPH::BoxShape(halfExtent);
+			compoundSettings.AddShape(
+				center,
+				JPH::Quat::sIdentity(),
+				boxShape.GetPtr());
 		}
+	}
 
-		if (!compoundSettings.mSubShapes.empty()) {
-			const JPH::ShapeSettings::ShapeResult shapeResult = compoundSettings.Create(physics.tempAllocator);
-			if (!shapeResult.IsValid()) {
-				runtime::LogRuntimeFailure(
-					"Physics",
-					"RebuildStaticWorldBodyFromChunkShapes.Create",
-					shapeResult.GetError());
-				return false;
-			}
-
+	bool success = false;
+	if (compoundSettings.mSubShapes.empty()) {
+		success = true;
+	} else {
+		const JPH::ShapeSettings::ShapeResult shapeResult = compoundSettings.Create(physics.tempAllocator);
+		if (shapeResult.IsValid()) {
 			physics.staticWorldShape = shapeResult.Get();
 			const JPH::BodyCreationSettings worldBodySettings(
 				physics.staticWorldShape,
@@ -218,19 +233,25 @@ bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWor
 			const JPH::BodyID bodyId = bodyInterface.CreateAndAddBody(worldBodySettings, JPH::EActivation::DontActivate);
 			if (!bodyId.IsInvalid()) {
 				physics.staticWorldBodyId = bodyId;
-				return true;
+				success = true;
+			} else {
+				runtime::LogRuntimeFailure(
+					"Physics",
+					"RebuildStaticWorldBodyFromChunkShapes.CreateAndAddBody",
+					"CreateAndAddBody returned an invalid body id");
+				physics.staticWorldShape = nullptr;
+				success = false;
 			}
-
+		} else {
 			runtime::LogRuntimeFailure(
 				"Physics",
-				"RebuildStaticWorldBodyFromChunkShapes.CreateAndAddBody",
-				"CreateAndAddBody returned an invalid body id");
-			physics.staticWorldShape = nullptr;
-			return false;
+				"RebuildStaticWorldBodyFromChunkShapes.Create",
+				shapeResult.GetError());
+			success = false;
 		}
 	}
 
-	return true;
+	return success;
 }
 
 void QueueChunkRebuildRequest(PhysicsState *physics, const uint32_t chunkIndex)
@@ -248,18 +269,16 @@ uint32_t ProcessChunkRebuildQueue(PhysicsState *physics, const VoxelWorld *world
 	if (physics && world && !physics->pendingChunkRebuilds.empty()) {
 		std::vector<uint32_t> pending;
 		pending.swap(physics->pendingChunkRebuilds);
-		std::sort(pending.begin(), pending.end());
-		pending.erase(std::unique(pending.begin(), pending.end()), pending.end());
+		std::ranges::sort(pending);
+		pending.erase(std::ranges::unique(pending).begin(), pending.end());
 
 		for (const uint32_t chunkIndex : pending) {
-			if (chunkIndex >= world->chunks.size()) {
-				continue;
-			}
-			if (BuildChunkStaticCollisionBody(*physics, *world, chunkIndex)) {
+			if (chunkIndex < world->chunks.size() &&
+				BuildChunkStaticCollisionBody(*physics, *world, chunkIndex)) {
 				++rebuiltCount;
 			}
 		}
-		if (rebuiltCount > 0) {
+		if (rebuiltCount > 0u) {
 			physics->physicsSystem.OptimizeBroadPhase();
 		}
 	}

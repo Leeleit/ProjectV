@@ -1,6 +1,7 @@
 #include "app/InputReplay.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include "app/InputActions.hpp"
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -16,7 +17,7 @@ constexpr int kInputReplayVersion = 3;
 
 std::filesystem::path GetInputReplayDirectoryPath()
 {
-	if (const char *overrideDirectory = SDL_getenv("PROJECTV_INPUT_REPLAY_DIR");
+	if (const char *overrideDirectory = projectv::core::GetEnvVar("PROJECTV_INPUT_REPLAY_DIR");
 		overrideDirectory && *overrideDirectory) {
 		return overrideDirectory;
 	}
@@ -32,7 +33,7 @@ std::filesystem::path GetInputReplayDirectoryPath()
 
 std::filesystem::path GetResolvedInputReplayPath()
 {
-	if (const char *overridePath = SDL_getenv("PROJECTV_INPUT_REPLAY_PATH");
+	if (const char *overridePath = projectv::core::GetEnvVar("PROJECTV_INPUT_REPLAY_PATH");
 		overridePath && *overridePath) {
 		return overridePath;
 	}
@@ -42,7 +43,7 @@ std::filesystem::path GetResolvedInputReplayPath()
 
 std::filesystem::path GetResolvedInputReplaySnapshotPath()
 {
-	if (const char *overridePath = SDL_getenv("PROJECTV_INPUT_REPLAY_SNAPSHOT_PATH");
+	if (const char *overridePath = projectv::core::GetEnvVar("PROJECTV_INPUT_REPLAY_SNAPSHOT_PATH");
 		overridePath && *overridePath) {
 		return overridePath;
 	}
@@ -119,97 +120,102 @@ bool WriteReplayCapture(std::ostream &stream, const InputReplayCapture &capture)
 
 bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 {
+	bool ok = true;
 	if (!outCapture) {
 		runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.OutCapture", "outCapture is null");
-		return false;
+		ok = false;
 	}
 
 	std::string magic;
 	int version = 0;
-	if (!(stream >> magic >> version) ||
-		magic != kInputReplayMagic ||
-		(version != 1 && version != 2 && version != kInputReplayVersion)) {
+	if (ok && (!(stream >> magic >> version) ||
+			   magic != kInputReplayMagic ||
+			   (version != 1 && version != 2 && version != kInputReplayVersion))) {
 		runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Header", "invalid replay header");
-		return false;
+		ok = false;
 	}
 
 	InputReplayCapture capture{};
 	size_t expectedFrameCount = 0;
-	std::string key;
-	while (stream >> key) {
-		if (key == "snapshot_path") {
-			std::string snapshotPathString;
-			stream >> std::quoted(snapshotPathString);
-			capture.snapshotPath = std::filesystem::path(snapshotPathString);
-		} else if (key == "camera_pos") {
-			stream >> capture.initialCamera.position[0] >> capture.initialCamera.position[1] >> capture.initialCamera.position[2];
-		} else if (key == "camera_angles") {
-			stream >> capture.initialCamera.yawRadians >> capture.initialCamera.pitchRadians;
-		} else if (key == "camera_move") {
-			stream >> capture.initialCamera.moveSpeed >> capture.initialCamera.mouseSensitivity >> capture.initialCamera.verticalFovRadians >> capture.initialCamera.nearPlane >> capture.initialCamera.farPlane;
-		} else if (key == "camera_control_mode") {
-			int controlMode = 0;
-			stream >> controlMode;
-			capture.initialCamera.controlMode = static_cast<CameraState::ControlMode>(controlMode);
-		} else if (key == "interaction") {
-			int placementMaterial = 0;
-			int editorTool = 0;
-			stream >> placementMaterial >> capture.initialInteraction.maxInteractionDistance >> editorTool;
-			capture.initialInteraction.placementMaterial = static_cast<VoxelMaterial>(placementMaterial);
-			capture.initialInteraction.editorTool = static_cast<DebugEditorTool>(editorTool);
-		} else if (key == "walk") {
-			std::string walkLine;
-			std::getline(stream >> std::ws, walkLine);
-			std::istringstream walkStream(walkLine);
-			int walkAirControlMode = 0;
-			int autoJumpEnabled = version == 1 ? 1 : 0;
-			int autoJumpDelayEnabled = 0;
-			walkStream >> walkAirControlMode;
-			if (version == 1) {
-				walkStream >> autoJumpDelayEnabled;
+	if (ok) {
+		std::string key;
+		while (ok && stream >> key) {
+			if (key == "snapshot_path") {
+				std::string snapshotPathString;
+				stream >> std::quoted(snapshotPathString);
+				capture.snapshotPath = std::filesystem::path(snapshotPathString);
+			} else if (key == "camera_pos") {
+				stream >> capture.initialCamera.position[0] >> capture.initialCamera.position[1] >> capture.initialCamera.position[2];
+			} else if (key == "camera_angles") {
+				stream >> capture.initialCamera.yawRadians >> capture.initialCamera.pitchRadians;
+			} else if (key == "camera_move") {
+				stream >> capture.initialCamera.moveSpeed >> capture.initialCamera.mouseSensitivity >> capture.initialCamera.verticalFovRadians >> capture.initialCamera.nearPlane >> capture.initialCamera.farPlane;
+			} else if (key == "camera_control_mode") {
+				int controlMode = 0;
+				stream >> controlMode;
+				capture.initialCamera.controlMode = static_cast<CameraState::ControlMode>(controlMode);
+			} else if (key == "interaction") {
+				int placementMaterial = 0;
+				int editorTool = 0;
+				stream >> placementMaterial >> capture.initialInteraction.maxInteractionDistance >> editorTool;
+				capture.initialInteraction.placementMaterial = static_cast<VoxelMaterial>(placementMaterial);
+				capture.initialInteraction.editorTool = static_cast<DebugEditorTool>(editorTool);
+			} else if (key == "walk") {
+				std::string walkLine;
+				std::getline(stream >> std::ws, walkLine);
+				std::istringstream walkStream(walkLine);
+				int walkAirControlMode = 0;
+				int autoJumpEnabled = version == 1 ? 1 : 0;
+				int autoJumpDelayEnabled = 0;
+				walkStream >> walkAirControlMode;
+				if (version == 1) {
+					walkStream >> autoJumpDelayEnabled;
+				} else {
+					walkStream >> autoJumpEnabled >> autoJumpDelayEnabled;
+				}
+				capture.walkAirControlMode = static_cast<WalkAirControlMode>(walkAirControlMode);
+				capture.walkAutoJumpEnabled = autoJumpEnabled != 0;
+				capture.walkAutoJumpDelayEnabled = autoJumpDelayEnabled != 0;
+			} else if (key == "frame_count") {
+				stream >> expectedFrameCount;
+				capture.frames.reserve(expectedFrameCount);
+			} else if (key == "frame") {
+				InputReplayFrame frame{};
+				int removePressed = 0;
+				int placePressed = 0;
+				stream >> frame.deltaSeconds >> frame.mouseDeltaX >> frame.mouseDeltaY >> frame.actionDownMask >> frame.actionPressedMask >> removePressed >> placePressed;
+				frame.removePressed = removePressed != 0;
+				frame.placePressed = placePressed != 0;
+				capture.frames.push_back(frame);
 			} else {
-				walkStream >> autoJumpEnabled >> autoJumpDelayEnabled;
+				runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Token", key);
+				ok = false;
 			}
-			capture.walkAirControlMode = static_cast<WalkAirControlMode>(walkAirControlMode);
-			capture.walkAutoJumpEnabled = autoJumpEnabled != 0;
-			capture.walkAutoJumpDelayEnabled = autoJumpDelayEnabled != 0;
-		} else if (key == "frame_count") {
-			stream >> expectedFrameCount;
-			capture.frames.reserve(expectedFrameCount);
-		} else if (key == "frame") {
-			InputReplayFrame frame{};
-			int removePressed = 0;
-			int placePressed = 0;
-			stream >> frame.deltaSeconds >> frame.mouseDeltaX >> frame.mouseDeltaY >> frame.actionDownMask >> frame.actionPressedMask >> removePressed >> placePressed;
-			frame.removePressed = removePressed != 0;
-			frame.placePressed = placePressed != 0;
-			capture.frames.push_back(frame);
-		} else {
-			runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Token", key);
-			return false;
+
+			if (ok && !stream.good() && !stream.eof()) {
+				runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Parse", "failed to parse replay payload");
+				ok = false;
+			}
 		}
 
-		if (!stream.good() && !stream.eof()) {
-			runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Parse", "failed to parse replay payload");
-			return false;
+		if (ok && !stream.eof()) {
+			runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Stream", "unexpected stream state");
+			ok = false;
+		}
+		if (ok && capture.snapshotPath.empty()) {
+			runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.SnapshotPath", "snapshot path is empty");
+			ok = false;
+		}
+		if (ok && expectedFrameCount != 0 && expectedFrameCount != capture.frames.size()) {
+			runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.FrameCount", "frame count mismatch");
+			ok = false;
 		}
 	}
 
-	if (!stream.eof()) {
-		runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Stream", "unexpected stream state");
-		return false;
+	if (ok) {
+		*outCapture = std::move(capture);
 	}
-	if (capture.snapshotPath.empty()) {
-		runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.SnapshotPath", "snapshot path is empty");
-		return false;
-	}
-	if (expectedFrameCount != 0 && expectedFrameCount != capture.frames.size()) {
-		runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.FrameCount", "frame count mismatch");
-		return false;
-	}
-
-	*outCapture = std::move(capture);
-	return true;
+	return ok;
 }
 } // namespace
 
@@ -344,13 +350,8 @@ void RecordInputReplayFrame(
 	});
 }
 
-bool LoadLatestInputReplay(InputState *input)
+bool LoadLatestInputReplay(InputState &input)
 {
-	if (!input) {
-		runtime::LogRuntimeFailure("InputReplay", "LoadLatestInputReplay.Input", "input is null");
-		return false;
-	}
-
 	InputReplayCapture capture{};
 	const std::string replayPath = GetInputReplayPath();
 	const bool loaded = LoadInputReplayCapture(replayPath, &capture);
@@ -360,12 +361,12 @@ bool LoadLatestInputReplay(InputState *input)
 			"LoadLatestInputReplay.Load",
 			replayPath);
 	} else {
-		input->replay.capture = std::move(capture);
-		input->replay.replayPath = std::filesystem::path(replayPath);
-		input->replay.captureAvailable = true;
-		input->replay.playbackRequested = true;
-		input->replay.playbackActive = false;
-		input->replay.playbackFrameIndex = 0;
+		input.replay.capture = std::move(capture);
+		input.replay.replayPath = std::filesystem::path(replayPath);
+		input.replay.captureAvailable = true;
+		input.replay.playbackRequested = true;
+		input.replay.playbackActive = false;
+		input.replay.playbackFrameIndex = 0;
 	}
 	return loaded;
 }

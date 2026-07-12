@@ -22,20 +22,8 @@ struct Xorshift32 {
 	}
 	uint8_t NextMaterial()
 	{
-		const uint32_t r = Next() % 10u;
-		if (r < 4u) {
-			return 0u;
-		}
-		if (r < 6u) {
-			return 3u;
-		}
-		if (r < 8u) {
-			return 4u;
-		}
-		if (r == 8u) {
-			return 1u;
-		}
-		return 2u;
+		static constexpr uint8_t materials[10] = {0u, 0u, 0u, 0u, 3u, 3u, 4u, 4u, 1u, 2u};
+		return materials[Next() % 10u];
 	}
 };
 
@@ -43,6 +31,9 @@ std::vector<uint8_t> MakeRandomChunk(const int size)
 {
 	Xorshift32 rng;
 	std::vector<uint8_t> voxels(static_cast<size_t>(size) * static_cast<size_t>(size) * static_cast<size_t>(size));
+	if (voxels.empty()) {
+		return voxels;
+	}
 	for (auto &v : voxels) {
 		v = rng.NextMaterial();
 	}
@@ -75,7 +66,7 @@ void BM_GreedyMeshRandom8(benchmark::State &state)
 {
 	const auto voxels = MakeRandomChunk(8);
 	const auto input = MakeInput(voxels, 8);
-	for ([[maybe_unused]] auto _ : state) {
+	while (state.KeepRunning()) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}
@@ -86,7 +77,7 @@ void BM_GreedyMeshRandom16(benchmark::State &state)
 {
 	const auto voxels = MakeRandomChunk(16);
 	const auto input = MakeInput(voxels, 16);
-	for ([[maybe_unused]] auto _ : state) {
+	while (state.KeepRunning()) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}
@@ -97,7 +88,7 @@ void BM_GreedyMeshRandom32(benchmark::State &state)
 {
 	const auto voxels = MakeRandomChunk(32);
 	const auto input = MakeInput(voxels, 32);
-	for ([[maybe_unused]] auto _ : state) {
+	while (state.KeepRunning()) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}
@@ -108,7 +99,7 @@ void BM_GreedyMeshSolid8(benchmark::State &state)
 {
 	const std::vector<uint8_t> voxels(static_cast<size_t>(8) * 8 * 8, 3u);
 	const auto input = MakeInput(voxels, 8);
-	for ([[maybe_unused]] auto _ : state) {
+	while (state.KeepRunning()) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}
@@ -119,7 +110,7 @@ void BM_GreedyMeshSolid32(benchmark::State &state)
 {
 	const std::vector<uint8_t> voxels(static_cast<size_t>(32) * 32 * 32, 3u);
 	const auto input = MakeInput(voxels, 32);
-	for ([[maybe_unused]] auto _ : state) {
+	while (state.KeepRunning()) {
 		auto mesh = GenerateCpuGreedyMesh(input);
 		benchmark::DoNotOptimize(mesh);
 	}

@@ -1,5 +1,8 @@
 #include "render/RendererInternal.hpp"
 
+#include "debug/Profiling.hpp"
+#include "debug/ProfilingGpu.hpp"
+
 DebugOverlayPushConstants BuildBoxOverlayPushConstants(
 	const FrameRenderData &frameRenderData,
 	const DebugOverlayBox &box)

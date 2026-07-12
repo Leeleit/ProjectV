@@ -13,7 +13,6 @@
 
 namespace {
 
-
 VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int depth)
 {
 	constexpr int chunkSize = 4;
@@ -37,8 +36,8 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
 	}
 	world.chunks.assign(
 		static_cast<size_t>(world.chunkCountX) *
-		static_cast<size_t>(world.chunkCountY) *
-		static_cast<size_t>(world.chunkCountZ),
+			static_cast<size_t>(world.chunkCountY) *
+			static_cast<size_t>(world.chunkCountZ),
 		VoxelChunk{});
 	for (int chunkZ = 0; chunkZ < world.chunkCountZ; ++chunkZ) {
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
@@ -66,12 +65,10 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
 size_t CountFluid(const VoxelWorld &world)
 {
 	const auto snapshot = BuildFlatVoxelSnapshot(world);
-	return static_cast<size_t>(std::count(
-		snapshot.begin(), snapshot.end(),
-		static_cast<uint8_t>(VoxelMaterial::Fluid)));
+	return static_cast<size_t>(std::ranges::count(snapshot,
+												  static_cast<uint8_t>(VoxelMaterial::Fluid)));
 }
-}
-
+} // namespace
 
 void TestFluidCASingleCellFallsOneCellPerTick(TestContext &context)
 {
@@ -123,7 +120,6 @@ void TestFluidCARestingOnFloorStaysPut(TestContext &context)
 	EXPECT_TRUE(context, world.stats.fluidVoxelCount >= 1u);
 }
 
-
 void TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
@@ -141,7 +137,6 @@ void TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks(TestContext &contex
 		EXPECT_TRUE(context, world.stats.fluidVoxelCount >= 1u);
 	}
 }
-
 
 void TestFluidCAFluidAtY0IsStable(TestContext &context)
 {
@@ -186,13 +181,11 @@ void TestFluidCASpreadsToCardinalNeighbour(TestContext &context)
 	const bool spreadToXMinus = GetVoxelMaterial(world, {1, 1, 2}) == VoxelMaterial::Fluid;
 	const bool spreadToZPlus = GetVoxelMaterial(world, {2, 1, 3}) == VoxelMaterial::Fluid;
 	const bool spreadToZMinus = GetVoxelMaterial(world, {2, 1, 1}) == VoxelMaterial::Fluid;
-	const int spreadCount = static_cast<int>(spreadToXPlus) + static_cast<int>(spreadToXMinus)
-		+ static_cast<int>(spreadToZPlus) + static_cast<int>(spreadToZMinus);
+	const int spreadCount = static_cast<int>(spreadToXPlus) + static_cast<int>(spreadToXMinus) + static_cast<int>(spreadToZPlus) + static_cast<int>(spreadToZMinus);
 	EXPECT_EQ(context, 1, spreadCount);
 
 	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
 }
-
 
 void TestFluidCASpreadIsDeterministic(TestContext &context)
 {
@@ -210,7 +203,6 @@ void TestFluidCASpreadIsDeterministic(TestContext &context)
 	EXPECT_TRUE(context, first == second);
 }
 
-
 void TestFluidCAEmptyWorldShortCircuits(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
@@ -219,7 +211,6 @@ void TestFluidCAEmptyWorldShortCircuits(TestContext &context)
 	EXPECT_EQ(context, 0u, UpdateFluidCA(world));
 	EXPECT_EQ(context, 0u, world.stats.fluidVoxelCount);
 }
-
 
 void TestFluidCADeterministicAcrossRuns(TestContext &context)
 {
@@ -283,7 +274,6 @@ void TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb(TestContext &
 	(void)initialAabbMaxExclusive;
 }
 
-
 void TestFluidCALongColumnAtWorldFloorSpreadsOut(TestContext &context)
 {
 	constexpr int kColumnHeight = 4;
@@ -299,7 +289,6 @@ void TestFluidCALongColumnAtWorldFloorSpreadsOut(TestContext &context)
 			static_cast<uint32_t>(kColumnHeight),
 			world.stats.fluidVoxelCount);
 	}
-
 
 	size_t y0FluidCount = 0;
 	for (int x = 0; x < 4; ++x) {
@@ -346,7 +335,6 @@ void TestFluidCAColumnDrainsViaSpreadPlatformStaysIntact(TestContext &context)
 	EXPECT_EQ(context, static_cast<size_t>(16), y0FloorIntact);
 }
 
-
 void TestFluidCAFreshWorldHasNoFluidAndStaysEmpty(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
@@ -357,7 +345,6 @@ void TestFluidCAFreshWorldHasNoFluidAndStaysEmpty(TestContext &context)
 	}
 	EXPECT_TRUE(context, snapshot == BuildFlatVoxelSnapshot(world));
 }
-
 
 void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 {
@@ -386,8 +373,8 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 	}
 	world.chunks.assign(
 		static_cast<size_t>(world.chunkCountX) *
-		static_cast<size_t>(world.chunkCountY) *
-		static_cast<size_t>(world.chunkCountZ),
+			static_cast<size_t>(world.chunkCountY) *
+			static_cast<size_t>(world.chunkCountZ),
 		VoxelChunk{});
 	for (int chunkZ = 0; chunkZ < world.chunkCountZ; ++chunkZ) {
 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
@@ -409,7 +396,6 @@ void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
 			}
 		}
 	}
-
 
 	constexpr int centerY = 8;
 	constexpr int radius = 6;
@@ -497,7 +483,6 @@ void TestFluidCAFluidDoesNotMoveOnPause(TestContext &context)
 	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
 }
 
-
 void TestFluidCAFluidMovesOnUnpause(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
@@ -515,7 +500,6 @@ void TestFluidCAFluidMovesOnUnpause(TestContext &context)
 	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {2, 1, 2}));
 	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(world, {2, 0, 2}));
 }
-
 
 void TestFluidCAFluidRateRespectsTimeScale(TestContext &context)
 {
@@ -537,14 +521,12 @@ void TestFluidCAFluidRateRespectsTimeScale(TestContext &context)
 		const uint32_t after = world.stats.fluidVoxelCount;
 		(void)before;
 		(void)after;
-
 	}
 
 	totalMoves = 0u;
 	(void)totalMoves;
 	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
 }
-
 
 void TestFluidCAFluidRateAboveBase(TestContext &context)
 {
@@ -580,7 +562,6 @@ void TestFluidCAFluidRateAboveBase(TestContext &context)
 	EXPECT_TRUE(context, tickCount >= 38 && tickCount <= 42);
 }
 
-
 void TestFluidCAFluidRateAtDefault(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
@@ -613,7 +594,6 @@ void TestFluidCAFluidRateAtDefault(TestContext &context)
 	EXPECT_TRUE(context, tickCount >= 18 && tickCount <= 22);
 }
 
-
 void TestFluidCAFluidTimeScaleZeroStops(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
@@ -642,7 +622,6 @@ void TestFluidCAFluidTimeScaleZeroStops(TestContext &context)
 	EXPECT_TRUE(context, before == after);
 }
 
-
 void TestFluidCAFluidFrameStepWithTimeScaleZero(TestContext &context)
 {
 	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
@@ -669,7 +648,6 @@ void TestFluidCAFluidFrameStepWithTimeScaleZero(TestContext &context)
 	EXPECT_TRUE(context, before == after);
 	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
 }
-
 
 void TestFluidCAFluidRateConfigurable(TestContext &context)
 {
@@ -736,9 +714,8 @@ void TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(TestContext &cont
 		world->stats.fluidVoxelCount);
 
 	const auto initialSnapshot = BuildFlatVoxelSnapshot(*world);
-	const size_t initialFluid = static_cast<size_t>(std::count(
-		initialSnapshot.begin(), initialSnapshot.end(),
-		static_cast<uint8_t>(VoxelMaterial::Fluid)));
+	const size_t initialFluid = static_cast<size_t>(std::ranges::count(initialSnapshot,
+																	   static_cast<uint8_t>(VoxelMaterial::Fluid)));
 	const Int3 initialFluidAabbMin = world->fluidCAAabbMin;
 	const Int3 initialFluidAabbMax = world->fluidCAAabbMaxExclusive;
 
@@ -755,9 +732,8 @@ void TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(TestContext &cont
 		"[FluidCA] replay: 300 ticks, totalMoved=%u, fluid preserved=%zu/%zu, AABB grew: y[%d..%d) -> y[%d..%d)\n",
 		totalMoved,
 		initialFluid,
-		static_cast<size_t>(std::count(
-			finalSnapshot.begin(), finalSnapshot.end(),
-			static_cast<uint8_t>(VoxelMaterial::Fluid))),
+		static_cast<size_t>(std::ranges::count(finalSnapshot,
+											   static_cast<uint8_t>(VoxelMaterial::Fluid))),
 		initialFluidAabbMin.y,
 		initialFluidAabbMax.y,
 		world->fluidCAAabbMin.y,
@@ -773,11 +749,21 @@ void TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(TestContext &cont
 				const VoxelMaterial m = GetVoxelMaterial(*world, {x, y, z});
 				char c = '.';
 				switch (m) {
-				case VoxelMaterial::Air: c = '.'; break;
-				case VoxelMaterial::Glass: c = 'G'; break;
-				case VoxelMaterial::Fluid: c = '~'; break;
-				case VoxelMaterial::FloorWhite: c = '#'; break;
-				case VoxelMaterial::FloorGray: c = '%'; break;
+				case VoxelMaterial::Air:
+					c = '.';
+					break;
+				case VoxelMaterial::Glass:
+					c = 'G';
+					break;
+				case VoxelMaterial::Fluid:
+					c = '~';
+					break;
+				case VoxelMaterial::FloorWhite:
+					c = '#';
+					break;
+				case VoxelMaterial::FloorGray:
+					c = '%';
+					break;
 				}
 				std::fputc(c, stderr);
 			}

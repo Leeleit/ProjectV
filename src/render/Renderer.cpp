@@ -1,5 +1,6 @@
 import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
+#include "volk.h"
 #include "render/RendererInternal.hpp"
 
 

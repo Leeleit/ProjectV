@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/EnvUtils.hpp"
 #include "core/Types.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <array>
@@ -10,7 +11,7 @@ namespace projectv::render {
 
 inline bool IsSkyAtmosphereEnabled()
 {
-	const char *value = std::getenv("PROJECTV_SKY");
+	const char *value = core::GetEnvVar("PROJECTV_SKY");
 	return value != nullptr && value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
 }
 

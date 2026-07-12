@@ -245,9 +245,9 @@ void MirrorAudioStatsToDebugStats(
 		stats.audioMusicVolume = 0.0f;
 		stats.audioMusicPlaylistSize = 0;
 		stats.audioMusicCurrentIndex = 0;
-		std::fill(stats.audioMusicTrackName.begin(), stats.audioMusicTrackName.end(), '\0');
-		std::fill(stats.audioMusicArtist.begin(), stats.audioMusicArtist.end(), '\0');
-		std::fill(stats.audioMusicTitle.begin(), stats.audioMusicTitle.end(), '\0');
+		stats.audioMusicTrackName.fill('\0');
+		stats.audioMusicArtist.fill('\0');
+		stats.audioMusicTitle.fill('\0');
 		stats.audioMusicPositionSec = 0.0f;
 		stats.audioMusicDurationSec = 0.0f;
 		return;
@@ -259,21 +259,21 @@ void MirrorAudioStatsToDebugStats(
 	stats.audioMusicPlaylistSize = static_cast<uint32_t>(audio->playlistSize());
 	stats.audioMusicCurrentIndex = static_cast<uint32_t>(audio->currentIndex());
 	const std::string &trackName = audio->currentTrackName();
-	std::fill(stats.audioMusicTrackName.begin(), stats.audioMusicTrackName.end(), '\0');
+	stats.audioMusicTrackName.fill('\0');
 	const size_t copyLen = std::min(trackName.size(),
 									stats.audioMusicTrackName.size() - 1);
-	std::copy_n(trackName.begin(), copyLen, stats.audioMusicTrackName.begin());
+	std::memcpy(stats.audioMusicTrackName.data(), trackName.data(), copyLen);
 	const std::string &artist = audio->currentArtist();
-	std::fill(stats.audioMusicArtist.begin(), stats.audioMusicArtist.end(), '\0');
+	stats.audioMusicArtist.fill('\0');
 	const size_t artistCopyLen = std::min(artist.size(),
 										  stats.audioMusicArtist.size() - 1);
-	std::copy_n(artist.begin(), artistCopyLen, stats.audioMusicArtist.begin());
+	std::memcpy(stats.audioMusicArtist.data(), artist.data(), artistCopyLen);
 
 	const std::string &title = audio->currentTitle();
-	std::fill(stats.audioMusicTitle.begin(), stats.audioMusicTitle.end(), '\0');
+	stats.audioMusicTitle.fill('\0');
 	const size_t titleCopyLen = std::min(title.size(),
 										 stats.audioMusicTitle.size() - 1);
-	std::copy_n(title.begin(), titleCopyLen, stats.audioMusicTitle.begin());
+	std::memcpy(stats.audioMusicTitle.data(), title.data(), titleCopyLen);
 
 	stats.audioMusicPositionSec = audio->positionSeconds();
 	stats.audioMusicDurationSec = audio->durationSeconds();

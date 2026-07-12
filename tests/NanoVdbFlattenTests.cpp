@@ -77,7 +77,7 @@ void TestFlattenPopulatedTree(TestContext &context)
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

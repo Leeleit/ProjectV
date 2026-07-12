@@ -1,5 +1,9 @@
 #include "render/SceneResourcesInternal.hpp"
 
+#include "debug/Profiling.hpp"
+
+#include <cassert>
+
 void InitializeSceneChunkDescriptorsAndVoxelPayloadLayout(
 	const VoxelWorld &world,
 	RenderState &render)

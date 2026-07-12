@@ -11,8 +11,6 @@
 // Forward paths that referenced kSunShadowCascadeCount are now 1-cascade
 // (no cascades) since CSM is gone.
 
-#include <cstdint> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
-
 enum class TransparentShadowPolicy : uint8_t {
 	GlassIgnoredFluidCasts = 0,
 };

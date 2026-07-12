@@ -46,6 +46,7 @@ class AudioEngine;
 void DestroyEcsState(EcsState *ecs);
 void DestroyPhysicsState(PhysicsState *physics); // NOLINT(readability-redundant-declaration): shared with PhysicsWorld.hpp
 void DestroyAudioEngine(projectv::audio::AudioEngine *engine);
+
 using EcsStatePtr = std::unique_ptr<EcsState, void (*)(EcsState *)>;
 using PhysicsStatePtr = std::unique_ptr<PhysicsState, void (*)(PhysicsState *)>;
 using AudioEnginePtr = std::unique_ptr<projectv::audio::AudioEngine,

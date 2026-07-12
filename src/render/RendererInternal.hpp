@@ -1,27 +1,8 @@
 #pragma once
 
-#include "volk.h"
-
-#include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
-#include "render/Renderer.hpp"
-#include "render/vulkan/VulkanResult.hpp"
 
-#include "debug/Profiling.hpp"
-#include "debug/ProfilingGpu.hpp"
-#include "render/ScreenshotCapture.hpp"
-#include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
-#include "render/vulkan/VulkanFluidCaPipeline.hpp"
-#include "render/vulkan/VulkanWorldGenPipeline.hpp"
-#include "render/vulkan/VulkanAsyncCompute.hpp"
-#include "render/SkyAtmosphere.hpp"
-#include "render/Cloudscape.hpp"
-#include "render/RayTracedShadows.hpp"
-#include "render/RtxGiProbes.hpp"
-#include "voxel/VoxelMaterials.hpp"
-
-#include "fmt/format.h"
 
 #include <SDL3/SDL.h>
 

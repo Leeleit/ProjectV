@@ -62,7 +62,6 @@ int main()
 	}
 	std::printf("[OK] identity: pass-through of position/near/far\n");
 
-
 	{
 		const CameraState camera = MakeIdentityCamera();
 		constexpr VkExtent2D extent{1280u, 720u};
@@ -85,7 +84,6 @@ int main()
 	}
 	std::printf("[OK] identity: projection matrix coefficients\n");
 
-
 	{
 		CameraState camera = MakeIdentityCamera();
 		camera.position = projectv::math::Vec3{5.0f, -3.0f, 12.0f, 0.0f};
@@ -98,12 +96,11 @@ int main()
 		Expect(std::abs(pc.cameraPosition[1] + 3.0f) <= kEpsilon, "translated: pos.y");
 		Expect(std::abs(pc.cameraPosition[2] - 12.0f) <= kEpsilon, "translated: pos.z");
 		const float lenSq = pc.cameraForward[0] * pc.cameraForward[0] +
-			pc.cameraForward[1] * pc.cameraForward[1] +
-			pc.cameraForward[2] * pc.cameraForward[2];
+							pc.cameraForward[1] * pc.cameraForward[1] +
+							pc.cameraForward[2] * pc.cameraForward[2];
 		Expect(std::abs(lenSq - 1.0f) <= kEpsilon, "translated: cameraForward is unit length");
 	}
 	std::printf("[OK] translated: position+forward correct, forward unit-length\n");
-
 
 	{
 		const CameraState camera = MakeIdentityCamera();
@@ -111,10 +108,9 @@ int main()
 		const GraphicsPushConstants pc =
 			BuildGraphicsPushConstants(camera, extent);
 		Expect(std::isfinite(pc.viewProjection.c[0][0]),
-			"tiny-extent: VP m00 is finite");
+			   "tiny-extent: VP m00 is finite");
 	}
 	std::printf("[OK] tiny extent: no inf propagation\n");
-
 
 	{
 		const CameraState camera = MakeIdentityCamera();
@@ -122,7 +118,7 @@ int main()
 		const GraphicsPushConstants pc =
 			BuildGraphicsPushConstants(camera, extent);
 		Expect(std::isfinite(pc.viewProjection.c[0][0]),
-			"zero-height: VP m00 is finite (no inf)");
+			   "zero-height: VP m00 is finite (no inf)");
 		Expect(
 			std::abs(pc.viewProjection.c[0][0] -
 					 1.0f / (1.0f * std::tan(camera.verticalFovRadians * 0.5f))) <= kEpsilon,

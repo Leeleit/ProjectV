@@ -42,8 +42,8 @@ VoxelWorld MakeTestWorld()
 	}
 	world.chunks.assign(
 		static_cast<size_t>(world.chunkCountX) *
-		static_cast<size_t>(world.chunkCountY) *
-		static_cast<size_t>(world.chunkCountZ),
+			static_cast<size_t>(world.chunkCountY) *
+			static_cast<size_t>(world.chunkCountZ),
 		VoxelChunk{});
 	return world;
 }
@@ -109,8 +109,8 @@ void TestSingleVoxelEmitsSingleUnitBox(TestContext &context)
 		context.Fail(__LINE__, "Single voxel must produce exactly one merged box");
 	}
 	if (!boxes.empty() && (boxes[0].minX != 3 || boxes[0].maxX != 4 ||
-		boxes[0].minY != 3 || boxes[0].maxY != 4 ||
-		boxes[0].minZ != 3 || boxes[0].maxZ != 4)) {
+						   boxes[0].minY != 3 || boxes[0].maxY != 4 ||
+						   boxes[0].minZ != 3 || boxes[0].maxZ != 4)) {
 		context.Fail(__LINE__, "Single voxel box must be unit extents at the source voxel");
 	}
 }
@@ -135,8 +135,8 @@ void TestFullChunkEmitsSingleBox(TestContext &context)
 		context.Fail(__LINE__, "Fully solid chunk must merge into one box");
 	}
 	if (!boxes.empty() && (boxes[0].minX != 0 || boxes[0].maxX != 8 ||
-		boxes[0].minY != 0 || boxes[0].maxY != 8 ||
-		boxes[0].minZ != 0 || boxes[0].maxZ != 8)) {
+						   boxes[0].minY != 0 || boxes[0].maxY != 8 ||
+						   boxes[0].minZ != 0 || boxes[0].maxZ != 8)) {
 		context.Fail(__LINE__, "Full chunk box must span the entire chunk bounds");
 	}
 }
@@ -373,7 +373,7 @@ void TestInvertedBoundsReturnZero(TestContext &context)
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

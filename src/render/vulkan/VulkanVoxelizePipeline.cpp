@@ -1,5 +1,6 @@
 #include "render/vulkan/VulkanVoxelizePipeline.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
@@ -184,7 +185,7 @@ namespace projectv::render {
 
 bool IsVctGpuPipelineRequested()
 {
-	const char *value = std::getenv("PROJECTV_VCT_GPU");
+	const char *value = core::GetEnvVar("PROJECTV_VCT_GPU");
 	if (value == nullptr) {
 		return false;
 	}
@@ -266,105 +267,128 @@ bool CreateVoxelizePipelines(VulkanContextState *context, RenderState *render)
 	PV_CHECK_OR_RETURN(
 		context && render && context->device && context->allocator,
 		"Render", "CreateVoxelizePipelines.Preconditions", "missing context");
+
+	bool ok = true;
+	bool creationAttempted = false;
 	if (!IsVctGpuPipelineRequested()) {
-		return false;
-	}
-
-	DestroyVoxelizePipelines(context, render);
-
-	if (!CreateVoxelizeClipmapImage(context, render)) {
-		return false;
-	}
-
-	const std::vector<char> shaderCode = ReadShaderFile(kVoxelizeShaderFilename);
-	if (shaderCode.empty()) {
-		runtime::LogRuntimeFailure(
-			"Render", "CreateVoxelizePipelines.ReadShaderFile", "voxelize.comp.spv not found");
+		ok = false;
+	} else {
 		DestroyVoxelizePipelines(context, render);
-		return false;
+		creationAttempted = true;
+
+		if (!CreateVoxelizeClipmapImage(context, render)) {
+			ok = false;
+		}
+
+		std::vector<char> shaderCode;
+		if (ok) {
+			shaderCode = ReadShaderFile(kVoxelizeShaderFilename);
+			if (shaderCode.empty()) {
+				runtime::LogRuntimeFailure(
+					"Render", "CreateVoxelizePipelines.ReadShaderFile", "voxelize.comp.spv not found");
+				ok = false;
+			}
+		}
+
+		if (ok) {
+			VkShaderModuleCreateInfo moduleInfo{};
+			moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			moduleInfo.codeSize = shaderCode.size();
+			moduleInfo.pCode = reinterpret_cast<const uint32_t *>(shaderCode.data());
+			if (vkCreateShaderModule(context->device, &moduleInfo, nullptr, &render->vctVoxelizeShaderModule) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizeShaderModule), VK_OBJECT_TYPE_SHADER_MODULE, "VoxelizeShaderModule");
+			}
+		}
+
+		if (ok) {
+			const VkResult layoutResult = vkCreateDescriptorSetLayout(
+				context->device, &kVoxelizeDescriptorSetLayoutInfo, nullptr, &render->vctVoxelizeDescriptorSetLayout);
+			if (layoutResult != VK_SUCCESS) {
+				runtime::LogVkFailure("CreateVoxelizePipelines.vkCreateDescriptorSetLayout", layoutResult);
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizeDescriptorSetLayout), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "VoxelizeDescriptorSetLayout");
+			}
+		}
+
+		if (ok) {
+			VkPushConstantRange pushConstantRange{};
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			pushConstantRange.offset = 0;
+			pushConstantRange.size = sizeof(VoxelizePushConstants);
+
+			VkPipelineLayoutCreateInfo layoutInfo{};
+			layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			layoutInfo.setLayoutCount = 1;
+			layoutInfo.pSetLayouts = &render->vctVoxelizeDescriptorSetLayout;
+			layoutInfo.pushConstantRangeCount = 1;
+			layoutInfo.pPushConstantRanges = &pushConstantRange;
+			if (vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &render->vctVoxelizePipelineLayout) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizePipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "VoxelizePipelineLayout");
+			}
+		}
+
+		if (ok) {
+			const VkPipelineShaderStageCreateInfo stage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.pNext = nullptr,
+				.flags = 0,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+				.module = render->vctVoxelizeShaderModule,
+				.pName = "main",
+				.pSpecializationInfo = nullptr,
+			};
+
+			VkComputePipelineCreateInfo pipelineInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .stage = stage};
+			pipelineInfo.layout = render->vctVoxelizePipelineLayout;
+			if (vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->vctVoxelizePipeline) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizePipeline), VK_OBJECT_TYPE_PIPELINE, "VoxelizePipeline");
+			}
+		}
+
+		if (ok) {
+			VkDescriptorPoolCreateInfo poolInfo{};
+			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			poolInfo.maxSets = kVoxelizeDescriptorSetCount;
+			poolInfo.poolSizeCount = static_cast<uint32_t>(kVoxelizeDescriptorPoolSizes.size());
+			poolInfo.pPoolSizes = kVoxelizeDescriptorPoolSizes.data();
+			if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->vctVoxelizeDescriptorPool) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizeDescriptorPool), VK_OBJECT_TYPE_DESCRIPTOR_POOL, "VoxelizeDescriptorPool");
+			}
+		}
+
+		if (ok) {
+			std::array<VkDescriptorSetLayout, kVoxelizeDescriptorSetCount> layouts{};
+			for (uint32_t i = 0; i < kVoxelizeDescriptorSetCount; ++i) {
+				layouts[i] = render->vctVoxelizeDescriptorSetLayout;
+			}
+			VkDescriptorSetAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocInfo.descriptorPool = render->vctVoxelizeDescriptorPool;
+			allocInfo.descriptorSetCount = kVoxelizeDescriptorSetCount;
+			allocInfo.pSetLayouts = layouts.data();
+			if (vkAllocateDescriptorSets(context->device, &allocInfo, render->vctVoxelizeDescriptorSets.data()) != VK_SUCCESS) {
+				ok = false;
+			}
+		}
+
+		if (ok) {
+			render->vctClipmapEnabled = true;
+		}
 	}
 
-	VkShaderModuleCreateInfo moduleInfo{};
-	moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	moduleInfo.codeSize = shaderCode.size();
-	moduleInfo.pCode = reinterpret_cast<const uint32_t *>(shaderCode.data());
-	if (vkCreateShaderModule(context->device, &moduleInfo, nullptr, &render->vctVoxelizeShaderModule) != VK_SUCCESS) {
+	if (!ok && creationAttempted) {
 		DestroyVoxelizePipelines(context, render);
-		return false;
 	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizeShaderModule), VK_OBJECT_TYPE_SHADER_MODULE, "VoxelizeShaderModule");
-
-	const VkResult layoutResult = vkCreateDescriptorSetLayout(
-		context->device, &kVoxelizeDescriptorSetLayoutInfo, nullptr, &render->vctVoxelizeDescriptorSetLayout);
-	if (layoutResult != VK_SUCCESS) {
-		runtime::LogVkFailure("CreateVoxelizePipelines.vkCreateDescriptorSetLayout", layoutResult);
-		DestroyVoxelizePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizeDescriptorSetLayout), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "VoxelizeDescriptorSetLayout");
-
-	VkPushConstantRange pushConstantRange{};
-	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(VoxelizePushConstants);
-
-	VkPipelineLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutInfo.setLayoutCount = 1;
-	layoutInfo.pSetLayouts = &render->vctVoxelizeDescriptorSetLayout;
-	layoutInfo.pushConstantRangeCount = 1;
-	layoutInfo.pPushConstantRanges = &pushConstantRange;
-	if (vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &render->vctVoxelizePipelineLayout) != VK_SUCCESS) {
-		DestroyVoxelizePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizePipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "VoxelizePipelineLayout");
-
-	const VkPipelineShaderStageCreateInfo stage{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-		.module = render->vctVoxelizeShaderModule,
-		.pName = "main",
-		.pSpecializationInfo = nullptr,
-	};
-
-	VkComputePipelineCreateInfo pipelineInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .stage = stage};
-	pipelineInfo.layout = render->vctVoxelizePipelineLayout;
-	if (vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->vctVoxelizePipeline) != VK_SUCCESS) {
-		DestroyVoxelizePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizePipeline), VK_OBJECT_TYPE_PIPELINE, "VoxelizePipeline");
-
-	VkDescriptorPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.maxSets = kVoxelizeDescriptorSetCount;
-	poolInfo.poolSizeCount = static_cast<uint32_t>(kVoxelizeDescriptorPoolSizes.size());
-	poolInfo.pPoolSizes = kVoxelizeDescriptorPoolSizes.data();
-	if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->vctVoxelizeDescriptorPool) != VK_SUCCESS) {
-		DestroyVoxelizePipelines(context, render);
-		return false;
-	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->vctVoxelizeDescriptorPool), VK_OBJECT_TYPE_DESCRIPTOR_POOL, "VoxelizeDescriptorPool");
-
-	std::array<VkDescriptorSetLayout, kVoxelizeDescriptorSetCount> layouts{};
-	for (uint32_t i = 0; i < kVoxelizeDescriptorSetCount; ++i) {
-		layouts[i] = render->vctVoxelizeDescriptorSetLayout;
-	}
-	VkDescriptorSetAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = render->vctVoxelizeDescriptorPool;
-	allocInfo.descriptorSetCount = kVoxelizeDescriptorSetCount;
-	allocInfo.pSetLayouts = layouts.data();
-	if (vkAllocateDescriptorSets(context->device, &allocInfo, render->vctVoxelizeDescriptorSets.data()) != VK_SUCCESS) {
-		DestroyVoxelizePipelines(context, render);
-		return false;
-	}
-
-	render->vctClipmapEnabled = true;
-	return true;
+	return ok;
 }
 
 bool RefreshVoxelizeResourceBindings(

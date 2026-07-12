@@ -5,6 +5,8 @@
 #include "fmt/format.h"
 
 #include <algorithm>
+// ReSharper disable once CppUnusedIncludeDirective
+#include <cctype>
 #include <functional>
 #include <stop_token>
 
@@ -34,8 +36,9 @@ void ParseArtistTitle(const std::string &filename,
 	std::string stem = filename;
 	if (stem.size() >= 4) {
 		std::string ext = stem.substr(stem.size() - 4);
-		std::ranges::transform(ext, ext.begin(),
-							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		for (char &c : ext) {
+			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		}
 		if (ext == ".mp3") {
 			stem = stem.substr(0, stem.size() - 4);
 		}
@@ -164,8 +167,9 @@ size_t AudioEngine::scanPlaylist()
 		}
 		const auto &path = entry.path();
 		std::string ext = path.extension().string();
-		std::ranges::transform(ext, ext.begin(),
-							   [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		for (char &c : ext) {
+			c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		}
 		if (ext != ".mp3") {
 			continue;
 		}

@@ -6,6 +6,7 @@
 #include "render/vulkan/VulkanDebug.hpp"
 #include "voxel/VoxelWorld.hpp"
 
+#include <array>
 #include <vector>
 
 namespace projectv::render {
@@ -21,39 +22,6 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 	PV_CHECK_OR_RETURN(
 		context && context->device != VK_NULL_HANDLE,
 		"Render", "CreateWorldGenPipelines.Preconditions", "missing context");
-	if (!IsWorldGenGpuPipelineRequested()) {
-		return false;
-	}
-
-	DestroyWorldGenPipelines(context, render);
-
-	const std::vector<char> shaderCode = ReadShaderFile("world_gen.comp.spv");
-	if (shaderCode.empty()) {
-		runtime::LogRuntimeFailure(
-			"Render",
-			"CreateWorldGenPipelines.ReadShaderFile",
-			"world_gen.comp.spv not found or empty");
-		return false;
-	}
-
-	VkShaderModuleCreateInfo shaderInfo{};
-	shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderInfo.codeSize = static_cast<uint32_t>(shaderCode.size());
-	shaderInfo.pCode = reinterpret_cast<const uint32_t *>(shaderCode.data());
-	if (vkCreateShaderModule(context->device, &shaderInfo, nullptr, &render->worldGenShaderModule) != VK_SUCCESS) {
-		return false;
-	}
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->worldGenShaderModule),
-		VK_OBJECT_TYPE_SHADER_MODULE,
-		"WorldGenShaderModule");
-
-	static constexpr VkPushConstantRange pushConstantRange{
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-		.offset = 0u,
-		.size = sizeof(WorldGenPushConstants),
-	};
 
 	static constexpr std::array<VkDescriptorSetLayoutBinding, 1> bindings{{
 		{
@@ -65,68 +33,110 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 		},
 	}};
 
-	VkDescriptorSetLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
-	if (vkCreateDescriptorSetLayout(context->device, &layoutInfo, nullptr, &render->worldGenDescriptorSetLayout) != VK_SUCCESS) {
-		vkDestroyShaderModule(context->device, render->worldGenShaderModule, nullptr);
-		render->worldGenShaderModule = VK_NULL_HANDLE;
-		return false;
-	}
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->worldGenDescriptorSetLayout),
-		VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
-		"WorldGenDescriptorSetLayout");
+	bool ok = true;
+	bool creationAttempted = false;
+	if (!IsWorldGenGpuPipelineRequested()) {
+		ok = false;
+	} else {
+		DestroyWorldGenPipelines(context, render);
+		creationAttempted = true;
+		static constexpr VkPushConstantRange pushConstantRange{
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.offset = 0u,
+			.size = sizeof(WorldGenPushConstants),
+		};
 
-	VkPipelineLayoutCreateInfo layoutCreateInfo{};
-	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	layoutCreateInfo.setLayoutCount = 1u;
-	layoutCreateInfo.pSetLayouts = &render->worldGenDescriptorSetLayout;
-	layoutCreateInfo.pushConstantRangeCount = 1u;
-	layoutCreateInfo.pPushConstantRanges = &pushConstantRange;
-	if (vkCreatePipelineLayout(context->device, &layoutCreateInfo, nullptr, &render->worldGenPipelineLayout) != VK_SUCCESS) {
-		vkDestroyDescriptorSetLayout(context->device, render->worldGenDescriptorSetLayout, nullptr);
-		render->worldGenDescriptorSetLayout = VK_NULL_HANDLE;
-		vkDestroyShaderModule(context->device, render->worldGenShaderModule, nullptr);
-		render->worldGenShaderModule = VK_NULL_HANDLE;
-		return false;
-	}
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->worldGenPipelineLayout),
-		VK_OBJECT_TYPE_PIPELINE_LAYOUT,
-		"WorldGenPipelineLayout");
+		const std::vector<char> shaderCode = ReadShaderFile("world_gen.comp.spv");
+		if (shaderCode.empty()) {
+			runtime::LogRuntimeFailure(
+				"Render",
+				"CreateWorldGenPipelines.ReadShaderFile",
+				"world_gen.comp.spv not found or empty");
+			ok = false;
+		}
 
-	const VkPipelineShaderStageCreateInfo stage{
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-		.module = render->worldGenShaderModule,
-		.pName = "main",
-	};
-	const VkComputePipelineCreateInfo pipelineInfo{
-		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-		.stage = stage,
-		.layout = render->worldGenPipelineLayout,
-	};
-	if (vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->worldGenPipeline) != VK_SUCCESS) {
-		vkDestroyPipelineLayout(context->device, render->worldGenPipelineLayout, nullptr);
-		render->worldGenPipelineLayout = VK_NULL_HANDLE;
-		vkDestroyDescriptorSetLayout(context->device, render->worldGenDescriptorSetLayout, nullptr);
-		render->worldGenDescriptorSetLayout = VK_NULL_HANDLE;
-		vkDestroyShaderModule(context->device, render->worldGenShaderModule, nullptr);
-		render->worldGenShaderModule = VK_NULL_HANDLE;
-		return false;
-	}
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(render->worldGenPipeline),
-		VK_OBJECT_TYPE_PIPELINE,
-		"WorldGenPipeline");
+		if (ok) {
+			VkShaderModuleCreateInfo shaderInfo{};
+			shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			shaderInfo.codeSize = static_cast<uint32_t>(shaderCode.size());
+			shaderInfo.pCode = reinterpret_cast<const uint32_t *>(shaderCode.data());
+			if (vkCreateShaderModule(context->device, &shaderInfo, nullptr, &render->worldGenShaderModule) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(
+					*context,
+					reinterpret_cast<uint64_t>(render->worldGenShaderModule),
+					VK_OBJECT_TYPE_SHADER_MODULE,
+					"WorldGenShaderModule");
+			}
+		}
 
-	render->worldGenPipelineEnabled = true;
-	return true;
+		if (ok) {
+			VkDescriptorSetLayoutCreateInfo layoutInfo{};
+			layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+			layoutInfo.pBindings = bindings.data();
+			if (vkCreateDescriptorSetLayout(context->device, &layoutInfo, nullptr, &render->worldGenDescriptorSetLayout) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(
+					*context,
+					reinterpret_cast<uint64_t>(render->worldGenDescriptorSetLayout),
+					VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+					"WorldGenDescriptorSetLayout");
+			}
+		}
+
+		if (ok) {
+			VkPipelineLayoutCreateInfo layoutCreateInfo{};
+			layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			layoutCreateInfo.setLayoutCount = 1u;
+			layoutCreateInfo.pSetLayouts = &render->worldGenDescriptorSetLayout;
+			layoutCreateInfo.pushConstantRangeCount = 1u;
+			layoutCreateInfo.pPushConstantRanges = &pushConstantRange;
+			if (vkCreatePipelineLayout(context->device, &layoutCreateInfo, nullptr, &render->worldGenPipelineLayout) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(
+					*context,
+					reinterpret_cast<uint64_t>(render->worldGenPipelineLayout),
+					VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+					"WorldGenPipelineLayout");
+			}
+		}
+
+		if (ok) {
+			const VkPipelineShaderStageCreateInfo stage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+				.module = render->worldGenShaderModule,
+				.pName = "main",
+			};
+			const VkComputePipelineCreateInfo pipelineInfo{
+				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+				.stage = stage,
+				.layout = render->worldGenPipelineLayout,
+			};
+			if (vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->worldGenPipeline) != VK_SUCCESS) {
+				ok = false;
+			} else {
+				SetVulkanObjectName(
+					*context,
+					reinterpret_cast<uint64_t>(render->worldGenPipeline),
+					VK_OBJECT_TYPE_PIPELINE,
+					"WorldGenPipeline");
+			}
+		}
+
+		if (ok) {
+			render->worldGenPipelineEnabled = true;
+		}
+	}
+
+	if (!ok && creationAttempted) {
+		DestroyWorldGenPipelines(context, render);
+	}
+	return ok;
 }
 
 void DestroyWorldGenPipelines(VulkanContextState *context, RenderState *render)

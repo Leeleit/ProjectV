@@ -1,12 +1,11 @@
 #include "voxel/ChunkStreamer.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+#include "core/EnvUtils.hpp"
 
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <deque>
 #include <filesystem>
 #include <fstream>
@@ -20,7 +19,7 @@ namespace {
 
 bool IsChunkStreamingEnabledFromEnvironment()
 {
-	const char *value = std::getenv("PROJECTV_CHUNK_STREAMING");
+	const char *value = core::GetEnvVar("PROJECTV_CHUNK_STREAMING");
 	if (value == nullptr) {
 		return true;
 	}
@@ -71,11 +70,11 @@ constexpr auto kWorkerIdleSleep = std::chrono::milliseconds(5);
 
 std::string GetChunkStreamerCachePathFromEnvironment()
 {
-	const char *value = std::getenv("PROJECTV_CHUNK_PATH");
+	const char *value = core::GetEnvVar("PROJECTV_CHUNK_PATH");
 	if (value != nullptr && value[0] != '\0') {
 		return std::string(value);
 	}
-	const char *buildDir = std::getenv("PROJECTV_CMAKE_BUILD_DIR");
+	const char *buildDir = core::GetEnvVar("PROJECTV_CMAKE_BUILD_DIR");
 	if (buildDir != nullptr && buildDir[0] != '\0') {
 		return std::string(buildDir) + "/cache/chunks";
 	}

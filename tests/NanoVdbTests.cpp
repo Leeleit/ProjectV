@@ -9,26 +9,26 @@ namespace {
 int g_assertionCount = 0;
 int g_failureCount = 0;
 
-#define EXPECT_TRUE(condition, message)                                                \
+#define EXPECT_TRUE(condition, message)                                                 \
 	do {                                                                                \
 		++g_assertionCount;                                                             \
 		if (!(condition)) {                                                             \
 			++g_failureCount;                                                           \
 			std::fprintf(stderr, "%s:%d: EXPECT_TRUE failed: %s\n", __FILE__, __LINE__, \
-				(message));                                                             \
+						 (message));                                                    \
 		}                                                                               \
 	} while (false)
 
-#define EXPECT_EQ(a, b, message)                                                                  \
-	do {                                                                                          \
-		++g_assertionCount;                                                                       \
-		auto lhsValue = (a);                                                                       \
-		auto rhsValue = (b);                                                                       \
-		if (!(lhsValue == rhsValue)) {                                                             \
-			++g_failureCount;                                                                     \
-			std::fprintf(stderr, "%s:%d: EXPECT_EQ failed: %s (lhs=%lld rhs=%lld)\n", __FILE__,    \
-				__LINE__, (message), static_cast<long long>(lhsValue), static_cast<long long>(rhsValue)); \
-		}                                                                                         \
+#define EXPECT_EQ(a, b, message)                                                                                   \
+	do {                                                                                                           \
+		++g_assertionCount;                                                                                        \
+		auto lhsValue = (a);                                                                                       \
+		auto rhsValue = (b);                                                                                       \
+		if (!(lhsValue == rhsValue)) {                                                                             \
+			++g_failureCount;                                                                                      \
+			std::fprintf(stderr, "%s:%d: EXPECT_EQ failed: %s (lhs=%lld rhs=%lld)\n", __FILE__,                    \
+						 __LINE__, (message), static_cast<long long>(lhsValue), static_cast<long long>(rhsValue)); \
+		}                                                                                                          \
 	} while (false)
 
 void TestEmptyChunkFlattens()
@@ -88,9 +88,12 @@ void TestMultipleVoxelsFlatten()
 		for (uint32_t y = 0; y < 8u; ++y) {
 			for (uint32_t x = 0; x < 8u; ++x) {
 				uint8_t expected = 0u;
-				if (x == 0u && y == 0u && z == 0u) expected = 1u;
-				else if (x == 7u && y == 7u && z == 7u) expected = 5u;
-				else if (x == 3u && y == 5u && z == 2u) expected = 3u;
+				if (x == 0u && y == 0u && z == 0u)
+					expected = 1u;
+				else if (x == 7u && y == 7u && z == 7u)
+					expected = 5u;
+				else if (x == 3u && y == 5u && z == 2u)
+					expected = 3u;
 				const uint8_t actual = projectv::voxel::nanovdb::ReadNanoVdbVoxelMaterial(
 					result,
 					0u,
@@ -112,8 +115,22 @@ void TestMultipleVoxelsFlatten()
 void TestMaterialLookupApplied()
 {
 	const uint8_t lookup[16] = {
-		0, 7, 14, 21, 28, 35, 42, 49,
-		56, 63, 70, 77, 84, 91, 98, 105,
+		0,
+		7,
+		14,
+		21,
+		28,
+		35,
+		42,
+		49,
+		56,
+		63,
+		70,
+		77,
+		84,
+		91,
+		98,
+		105,
 	};
 	projectv::voxel::Sparse64Tree tree(8, 8, 8);
 	tree.SetCell(1, 1, 1, 5u);
@@ -154,7 +171,7 @@ void TestHomogeneousLeafFlagSet()
 	EXPECT_TRUE(anyHomogeneous, "at least one leaf has homogeneousFlag set");
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {
@@ -165,7 +182,7 @@ int main()
 	TestHomogeneousLeafFlagSet();
 
 	std::fprintf(stderr, "NanoVdb tests: %d assertions, %d failures\n",
-		g_assertionCount,
-		g_failureCount);
+				 g_assertionCount,
+				 g_failureCount);
 	return g_failureCount == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

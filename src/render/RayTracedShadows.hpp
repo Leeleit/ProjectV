@@ -2,7 +2,6 @@
 
 #include <array> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include <atomic>
-#include <cstdint>
 #include <mutex>
 #include <vector>
 
@@ -89,7 +88,7 @@ class RayTracedShadows {
 		VkCommandPool commandPool);
 
 	[[nodiscard]] static VkDeviceSize ComputeBlasBuildScratchSize(
-		const uint32_t primitiveCount) noexcept;
+		uint32_t primitiveCount) noexcept;
 
 	[[nodiscard]] bool BuildChunkBlas(
 		VkCommandBuffer commandBuffer,

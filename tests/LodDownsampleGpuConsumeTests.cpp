@@ -104,15 +104,15 @@ void TestEncodeDecodeChunkLodMetadataRoundtrip(TestContext &context)
 			projectv::render::DecodeChunkLodMetadata(encoded, outLod, outExtent);
 			if (outLod != lod) {
 				std::fprintf(stderr, "lod=%u extent=%u encoded=0x%x outLod=%u\n",
-					static_cast<unsigned>(lod), static_cast<unsigned>(extent), encoded,
-					static_cast<unsigned>(outLod));
+							 static_cast<unsigned>(lod), static_cast<unsigned>(extent), encoded,
+							 static_cast<unsigned>(outLod));
 				context.Fail(__LINE__, "DecodeChunkLodMetadata lod roundtrip");
 				return;
 			}
 			if (outExtent != extent) {
 				std::fprintf(stderr, "lod=%u extent=%u encoded=0x%x outExtent=%u\n",
-					static_cast<unsigned>(lod), static_cast<unsigned>(extent), encoded,
-					static_cast<unsigned>(outExtent));
+							 static_cast<unsigned>(lod), static_cast<unsigned>(extent), encoded,
+							 static_cast<unsigned>(outExtent));
 				context.Fail(__LINE__, "DecodeChunkLodMetadata extent roundtrip");
 				return;
 			}
@@ -166,7 +166,7 @@ void TestBuildLodPayloadWordsHandlesNullSafely(TestContext &context)
 	projectv::render::BuildLodPayloadWordsFromDownsampled(reinterpret_cast<const uint8_t *>("\x01\x02"), 2u, nullptr);
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

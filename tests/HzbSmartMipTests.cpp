@@ -85,10 +85,14 @@ uint32_t ComputePerChunkMipLevelsFromAabbs(
 					const float ndcY = clipY / clipW;
 					const float uvX = ndcX * 0.5f + 0.5f;
 					const float uvY = ndcY * 0.5f + 0.5f;
-					if (uvX < minX) minX = uvX;
-					if (uvY < minY) minY = uvY;
-					if (uvX > maxX) maxX = uvX;
-					if (uvY > maxY) maxY = uvY;
+					if (uvX < minX)
+						minX = uvX;
+					if (uvY < minY)
+						minY = uvY;
+					if (uvX > maxX)
+						maxX = uvX;
+					if (uvY > maxY)
+						maxY = uvY;
 				}
 			}
 		}
@@ -100,7 +104,7 @@ uint32_t ComputePerChunkMipLevelsFromAabbs(
 				projectedYTexels,
 				maxMipLevel);
 		}
-		next_chunk:;
+	next_chunk:;
 	}
 	return static_cast<uint32_t>(count);
 }
@@ -187,10 +191,22 @@ void TestComputePerChunkMipLevelsFromAabbs(SmartMipTestContext &test)
 	centers.push_back({0.5f, 0.5f, -1.0f, 0.0f});
 	halfExtents.push_back({0.01f, 0.01f, 0.01f, 0.01f});
 	constexpr std::array viewProjection = {
-		1.0f, 0.0f, 0.0f, 0.0f,
-		0.0f, 1.0f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		0.0f, 0.0f, 0.0f, 1.0f,
+		1.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		1.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		1.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		0.0f,
+		1.0f,
 	};
 	std::vector<uint32_t> outMipLevels;
 	const uint32_t count = ComputePerChunkMipLevelsFromAabbs(
@@ -265,10 +281,14 @@ void TestWritePerChunkMipAndBlendWidthsToBufferPackedLayout(SmartMipTestContext 
 {
 	constexpr uint32_t chunkCount = 4u;
 	constexpr uint32_t source[chunkCount * 2u] = {
-		0u, 0u,
-		2u, 3u,
-		5u, 8u,
-		1u, 1u,
+		0u,
+		0u,
+		2u,
+		3u,
+		5u,
+		8u,
+		1u,
+		1u,
 	};
 	uint32_t buffer[chunkCount * 2u] = {};
 	WritePerChunkMipAndBlendWidthsToBuffer(buffer, source, chunkCount);
@@ -301,7 +321,7 @@ void TestWritePerChunkMipAndBlendWidthsToBufferZeroChunkCount(SmartMipTestContex
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

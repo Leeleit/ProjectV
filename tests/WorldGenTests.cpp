@@ -58,8 +58,8 @@ void TestWorldGenPushConstantContract(WorldGenTestContext &test)
 	static_assert(sizeof(projectv::render::WorldGenPushConstants) == 64u, "WorldGenPushConstants must remain 64 bytes (4 vec4 + 1 uint + 3 reserved)");
 	constexpr projectv::render::WorldGenPushConstants defaults{};
 	static_assert(defaults.chunkOriginAndChunkSize[0] == 0u && defaults.chunkOriginAndChunkSize[1] == 0u &&
-				  defaults.chunkOriginAndChunkSize[2] == 0u && defaults.chunkOriginAndChunkSize[3] == 0u,
-		"default chunkOriginAndChunkSize must be zero-initialized");
+					  defaults.chunkOriginAndChunkSize[2] == 0u && defaults.chunkOriginAndChunkSize[3] == 0u,
+				  "default chunkOriginAndChunkSize must be zero-initialized");
 	static_assert(defaults.seed == 0u, "default seed must be zero");
 }
 
@@ -93,7 +93,7 @@ void TestWorldGenSeedTickVariability(WorldGenTestContext &test)
 	static_assert(derivedSeedA != derivedSeedB, "Conversion to uint32 must preserve tick difference for typical tick range");
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

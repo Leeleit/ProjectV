@@ -20,7 +20,7 @@ bool StopInputReplayRecording(InputState *input);
 void RecordInputReplayFrame(
 	InputState *input,
 	float deltaSeconds);
-bool LoadLatestInputReplay(InputState *input);
+bool LoadLatestInputReplay(InputState &input);
 void ApplyInputReplayFrame(
 	InputState *input,
 	const InputReplayFrame &frame);

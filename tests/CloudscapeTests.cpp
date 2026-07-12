@@ -96,7 +96,7 @@ void TestRecordCloudscapeRaymarchPassRejectsZeroExtent(TestContext &context)
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

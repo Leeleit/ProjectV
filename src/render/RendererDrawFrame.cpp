@@ -1,6 +1,22 @@
 #include "render/RendererInternal.hpp"
 #include "render/SceneResources.hpp"
 
+#include "core/RuntimeDiagnostics.hpp"
+#include "debug/Profiling.hpp"
+#include "debug/ProfilingGpu.hpp"
+#include "fmt/format.h"
+#include "render/HizCulling.hpp"
+#include "render/RayTracedShadows.hpp"
+#include "render/RtxGiProbes.hpp"
+#include "render/vulkan/VulkanAsyncCompute.hpp"
+#include "render/vulkan/VulkanFluidCaPipeline.hpp"
+#include "render/vulkan/VulkanInit.hpp"
+#include "render/vulkan/VulkanResult.hpp"
+#include "render/vulkan/VulkanWorldGenPipeline.hpp"
+#include "voxel/VoxelWorld.hpp"
+
+#include <algorithm>
+
 SDL_AppResult DrawFrame(
 	AppState *state,
 	PlatformState *platform,

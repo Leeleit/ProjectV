@@ -3,7 +3,6 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <string>
 #include <string_view>
 #include <vector>
 
@@ -201,7 +200,7 @@ void TestIsLodDownsampleEnabledEnv(TestContext &context)
 	unsetenv("PROJECTV_LOD_DOWNSAMPLE");
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

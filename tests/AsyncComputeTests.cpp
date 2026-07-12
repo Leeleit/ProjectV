@@ -140,7 +140,7 @@ void TestRecordHzbAsyncCullPassRejectsEmptySceneFrameResources(TestContext &cont
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

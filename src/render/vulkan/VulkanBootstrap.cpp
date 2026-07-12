@@ -10,6 +10,8 @@
 
 #define VK_KHR_swapchain_maintenance1 1
 #define VK_EXT_dynamic_rendering_unused_attachments 1
+#include "core/EnvUtils.hpp"
+
 #include <vulkan/vulkan.h>
 
 #include <array>
@@ -59,7 +61,7 @@ uint32_t ParseVulkanApiVersionString(const std::string_view raw)
 
 uint32_t GetMinVulkanApiVersion()
 {
-	const char *overrideValue = std::getenv("PROJECTV_MIN_VULKAN_API_VERSION");
+	const char *overrideValue = projectv::core::GetEnvVar("PROJECTV_MIN_VULKAN_API_VERSION");
 	if (overrideValue == nullptr) {
 		return kDefaultMinVulkanApiVersion;
 	}
@@ -196,10 +198,6 @@ bool HasDeviceExtension(
 	const VkPhysicalDevice physicalDevice,
 	const char *extensionName)
 {
-	if (!extensionName) [[unlikely]] {
-		return false;
-	}
-
 	uint32_t extensionCount = 0;
 	const VkResult enumerateExtensionCountResult =
 		vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr);
@@ -813,7 +811,7 @@ bool InitializeVulkanBase(
 	if (selected.supportsDynamicRenderingUnusedAttachments) {
 		deviceExtensions.push_back(kOptionalDynamicRenderingUnusedAttachmentsExtension);
 	}
-	const bool meshShaderRequested = std::getenv("PROJECTV_MESH_SHADER_PIPELINE") != nullptr;
+	const bool meshShaderRequested = projectv::core::GetEnvVar("PROJECTV_MESH_SHADER_PIPELINE") != nullptr;
 	if (meshShaderRequested && selected.supportsMeshShader) {
 		deviceExtensions.push_back(kMeshShaderExtension);
 	}

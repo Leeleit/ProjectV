@@ -15,29 +15,32 @@ using projectv::core::StringID;
 int g_testsPassed = 0;
 int g_testsFailed = 0;
 
-#define VERIFY(expr) do { \
-	if (expr) { \
-		++g_testsPassed; \
-	} else { \
-		++g_testsFailed; \
-		std::fprintf(stderr, "FAIL %s:%d  %s\n", __FILE__, __LINE__, #expr); \
-	} \
-} while (0)
+#define VERIFY(expr)                                                             \
+	do {                                                                         \
+		if (expr) {                                                              \
+			++g_testsPassed;                                                     \
+		} else {                                                                 \
+			++g_testsFailed;                                                     \
+			std::fprintf(stderr, "FAIL %s:%d  %s\n", __FILE__, __LINE__, #expr); \
+		}                                                                        \
+	} while (0)
 
-#define VERIFY_EQ(a, b) do { \
-	const auto _a = (a); \
-	const auto _b = (b); \
-	if (_a == _b) { \
-		++g_testsPassed; \
-	} else { \
-		++g_testsFailed; \
-		std::fprintf(stderr, "FAIL %s:%d  %s == %s  (got %lld vs %lld)\n", \
-			__FILE__, __LINE__, #a, #b, \
-			static_cast<long long>(_a), static_cast<long long>(_b)); \
-	} \
-} while (0)
+#define VERIFY_EQ(a, b)                                                           \
+	do {                                                                          \
+		const auto _a = (a);                                                      \
+		const auto _b = (b);                                                      \
+		if (_a == _b) {                                                           \
+			++g_testsPassed;                                                      \
+		} else {                                                                  \
+			++g_testsFailed;                                                      \
+			std::fprintf(stderr, "FAIL %s:%d  %s == %s  (got %lld vs %lld)\n",    \
+						 __FILE__, __LINE__, #a, #b,                              \
+						 static_cast<long long>(_a), static_cast<long long>(_b)); \
+		}                                                                         \
+	} while (0)
 
-void VerifyLayout() {
+void VerifyLayout()
+{
 	VERIFY(sizeof(StringID) == 16);
 	VERIFY(alignof(StringID) == 16);
 	VERIFY(std::is_trivially_copyable_v<StringID>);
@@ -47,7 +50,8 @@ void VerifyLayout() {
 	VERIFY_EQ(kDefault.length, 0U);
 }
 
-void VerifyConstexprLiteralCtor() {
+void VerifyConstexprLiteralCtor()
+{
 
 	constexpr StringID kFoobar{"foobar"};
 	VERIFY_EQ(kFoobar.hash, 0x85944171f73967e8ULL);
@@ -61,7 +65,8 @@ void VerifyConstexprLiteralCtor() {
 	VERIFY_EQ(kA.length, 1U);
 }
 
-void VerifyRuntimeStringViewCtor() {
+void VerifyRuntimeStringViewCtor()
+{
 
 	constexpr std::string_view runtimeView{"rock_diffuse"};
 	constexpr StringID runtimeID{runtimeView};
@@ -77,7 +82,8 @@ void VerifyRuntimeStringViewCtor() {
 	VERIFY_EQ(partial.length, 5U);
 }
 
-void VerifyFnv1aKnownVectors() {
+void VerifyFnv1aKnownVectors()
+{
 
 	constexpr StringID emptyStr{std::string_view{""}};
 	VERIFY_EQ(emptyStr.hash, 0xcbf29ce484222325ULL);
@@ -87,7 +93,8 @@ void VerifyFnv1aKnownVectors() {
 	VERIFY_EQ(foobarStr.hash, 0x85944171f73967e8ULL);
 }
 
-void VerifyEqualityAndOrdering() {
+void VerifyEqualityAndOrdering()
+{
 	constexpr StringID a{"alpha"};
 	constexpr StringID a2{"alpha"};
 	constexpr StringID b{"beta"};
@@ -102,7 +109,8 @@ void VerifyEqualityAndOrdering() {
 	VERIFY(!(a < a2));
 }
 
-void VerifyStdHashSpecialisation() {
+void VerifyStdHashSpecialisation()
+{
 
 	constexpr StringID a{"hashable_id"};
 	constexpr StringID a2{"hashable_id"};
@@ -119,7 +127,8 @@ void VerifyStdHashSpecialisation() {
 	VERIFY(it == m.end());
 }
 
-void VerifyToViewReverseMapping() {
+void VerifyToViewReverseMapping()
+{
 
 	constexpr std::array kTable{"rock_diffuse", "metal_rusty", "wood_oak"};
 	constexpr StringID rock{"rock_diffuse"};
@@ -136,7 +145,8 @@ void VerifyToViewReverseMapping() {
 	VERIFY(StringID::toView(kDefault, kTable) == nullptr);
 }
 
-void VerifyEmptyString() {
+void VerifyEmptyString()
+{
 	constexpr StringID emptyLit{""};
 	VERIFY(emptyLit == StringID{std::string_view{""}});
 	VERIFY_EQ(emptyLit.length, 0U);
@@ -150,7 +160,8 @@ void VerifyEmptyString() {
 
 } // namespace
 
-int main() {
+int main()
+{
 	VerifyLayout();
 	VerifyConstexprLiteralCtor();
 	VerifyRuntimeStringViewCtor();
@@ -160,6 +171,6 @@ int main() {
 	VerifyToViewReverseMapping();
 	VerifyEmptyString();
 	std::printf("ProjectVStringIdTests: %d/%d passed (%d failed)\n",
-		g_testsPassed, g_testsPassed + g_testsFailed, g_testsFailed);
+				g_testsPassed, g_testsPassed + g_testsFailed, g_testsFailed);
 	return g_testsFailed == 0 ? 0 : 1;
 }

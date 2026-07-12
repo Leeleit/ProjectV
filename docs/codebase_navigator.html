@@ -1016,6 +1016,8 @@
     </style>
 </head>
 <body>
+<div class="module-card file-checkbox checkmark difficulty-badge easy lines-badge timeline-step-btn timeline-step-card step-num-badge timeline-code-tag timeline-viz stage-badge stage-desc stage-check-item check-item-details quiz-answer-btn incorrect answer-idx"
+     style="display:none"></div>
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <aside>
@@ -1769,24 +1771,45 @@
             document.getElementById('quiz-start').style.display = 'flex';
         }
     </script>
-    <template id="class-guard">
+<div aria-hidden="true" id="class-guard" style="display:none">
+    <div class="module-card"></div>
+    <div class="module-card"></div>
         <div class="module-card"></div>
         <label class="file-checkbox"><span class="checkmark"></span></label>
+    <span class="checkmark"></span>
+    <span class="checkmark"></span>
+    <span class="checkmark"></span>
+    <span class="checkmark"></span>
+    <span class="checkmark"></span>
+    <span class="checkmark"></span>
         <span class="difficulty-badge easy"></span>
-        <span class="difficulty-badge medium"></span>
-        <span class="difficulty-badge hard"></span>
+    <span class="difficulty-badge"></span>
+    <span class="difficulty-badge"></span>
+    <span class="difficulty-badge"></span>
+    <span class="difficulty-badge"></span>
         <span class="lines-badge"></span>
         <button class="timeline-step-btn"></button>
+    <button class="timeline-step-btn"></button>
+    <button class="timeline-step-btn"></button>
+    <button class="timeline-step-btn"></button>
+    <button class="timeline-step-btn"></button>
         <div class="timeline-step-card"></div>
         <span class="step-num-badge"></span>
         <a class="timeline-code-tag"></a>
+    <a class="timeline-code-tag"></a>
         <pre class="timeline-viz"></pre>
         <span class="stage-badge"></span>
         <p class="stage-desc"></p>
         <div class="stage-check-item"></div>
+    <div class="stage-check-item"></div>
         <div class="check-item-details"></div>
         <button class="quiz-answer-btn correct"><span class="answer-idx"></span></button>
+    <button class="quiz-answer-btn"></button>
+    <button class="quiz-answer-btn"></button>
         <button class="quiz-answer-btn incorrect"><span class="answer-idx"></span></button>
-    </template>
+    <span class="answer-idx"></span>
+    <span class="answer-idx"></span>
+    <span class="answer-idx"></span>
+</div>
 </body>
 </html>

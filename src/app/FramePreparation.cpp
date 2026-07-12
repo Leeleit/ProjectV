@@ -180,13 +180,15 @@ bool PrepareFrameRenderData(
 
 	if (world->voxelWorld) {
 		static projectv::app::ModelGravigunState gravigunState;
-		TickModelGravigun(
-			&gravigunState,
-			*world->voxelWorld,
-			*camera,
-			swapchain->extent,
-			render,
-			input);
+		if (input != nullptr) {
+			TickModelGravigun(
+				gravigunState,
+				*world->voxelWorld,
+				*camera,
+				swapchain->extent,
+				*render,
+				*input);
+		}
 	}
 
 	SceneFrameResources &sceneFrameResources = render->sceneFrameResources[frameIndex];

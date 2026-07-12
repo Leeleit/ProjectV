@@ -301,7 +301,7 @@ void TestByteExactParityVsFlat(TestContext &context)
 	if (mismatches > 0) {
 		char buf[256]{};
 		std::snprintf(buf, sizeof(buf), "byte-exact parity: %d mismatches; first at (%d,%d,%d) flat=%d tree=%d",
-			mismatches, firstMismatchX, firstMismatchY, firstMismatchZ, firstMismatchFlat, firstMismatchTree);
+					  mismatches, firstMismatchX, firstMismatchY, firstMismatchZ, firstMismatchFlat, firstMismatchTree);
 		context.Fail(__LINE__, buf);
 	}
 }
@@ -332,7 +332,7 @@ void TestFullSweepParity(TestContext &context)
 				if (flat[idx] != tree.GetCell(x, y, z)) {
 					char buf[128]{};
 					std::snprintf(buf, sizeof(buf), "full-sweep mismatch at (%d,%d,%d) flat=%d tree=%d",
-						x, y, z, flat[idx], tree.GetCell(x, y, z));
+								  x, y, z, flat[idx], tree.GetCell(x, y, z));
 					context.Fail(__LINE__, buf);
 				}
 			}
@@ -371,7 +371,7 @@ void TestOverwriteParity(TestContext &context)
 				if (flat[idx] != tree.GetCell(x, y, z)) {
 					char buf[128]{};
 					std::snprintf(buf, sizeof(buf), "overwrite mismatch at (%d,%d,%d) flat=%d tree=%d",
-						x, y, z, flat[idx], tree.GetCell(x, y, z));
+								  x, y, z, flat[idx], tree.GetCell(x, y, z));
 					context.Fail(__LINE__, buf);
 				}
 			}
@@ -484,7 +484,8 @@ void TestHomogeneousExpansionOnSingleEdit(TestContext &context)
 	for (int z = 0; z < 4; ++z) {
 		for (int y = 0; y < 4; ++y) {
 			for (int x = 0; x < 4; ++x) {
-				if (x == 1 && y == 1 && z == 1) continue;
+				if (x == 1 && y == 1 && z == 1)
+					continue;
 				ExpectEqualI(context, 1, tree.GetCell(x, y, z), __LINE__, "other cells still material 1");
 			}
 		}

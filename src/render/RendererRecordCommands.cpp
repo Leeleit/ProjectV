@@ -1,5 +1,12 @@
 #include "render/RendererInternal.hpp"
 
+#include "debug/Profiling.hpp"
+#include "debug/ProfilingGpu.hpp"
+#include "render/Cloudscape.hpp"
+#include "render/HizCulling.hpp"
+#include "render/RayTracedShadows.hpp"
+#include "render/SkyAtmosphere.hpp"
+
 void RecordVoxelMeshingCommands(
 	RenderState &render,
 	const FrameRenderData &frameRenderData,

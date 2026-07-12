@@ -1,5 +1,20 @@
 #include "physics/walk/WalkInternals.hpp"
 #include "physics/PhysicsWorld_Internal.hpp"
+#include "physics/PhysicsWorld.hpp"
+
+#include "app/InputActions.hpp"
+#include "core/RuntimeDiagnostics.hpp"
+
+#include <algorithm>
+#include <limits>
+
+#pragma warning(push, 0)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#pragma clang diagnostic pop
+#pragma warning(pop)
 
 int GetWalkSneakSupportVoxelY(const WalkSneakSupportRegion &region)
 {

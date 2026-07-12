@@ -1,7 +1,5 @@
 #pragma once
 
-#include "volk.h"
-
 #include <vector>
 
 struct VulkanContextState;

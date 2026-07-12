@@ -1,7 +1,7 @@
 #include "voxel/VoxelLodDownsample.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+#include "core/EnvUtils.hpp"
 
 #include <algorithm>
-#include <cstdlib>
 #include <vector>
 
 namespace projectv::voxel {
@@ -123,7 +123,7 @@ uint32_t RunLodDownsampleJobs(VoxelWorld &world)
 
 bool IsLodDownsampleEnabled()
 {
-	if (const char *value = std::getenv("PROJECTV_LOD_DOWNSAMPLE")) {
+	if (const char *value = core::GetEnvVar("PROJECTV_LOD_DOWNSAMPLE")) {
 		return value[0] != '\0' && value[0] != '0';
 	}
 	return false;

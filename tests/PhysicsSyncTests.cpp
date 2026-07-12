@@ -47,13 +47,11 @@ std::unique_ptr<VoxelWorld> MakeFlatWorld(const VoxelWorldConfig &config)
 	world->min = Int3{
 		-halfFloor - config.padding,
 		config.floorY,
-		-halfFloor - config.padding
-	};
+		-halfFloor - config.padding};
 	world->maxExclusive = Int3{
 		halfFloor + config.padding,
 		config.worldTopY + config.padding,
-		halfFloor + config.padding
-	};
+		halfFloor + config.padding};
 	world->width = world->maxExclusive.x - world->min.x;
 	world->height = world->maxExclusive.y - world->min.y;
 	world->depth = world->maxExclusive.z - world->min.z;
@@ -62,8 +60,8 @@ std::unique_ptr<VoxelWorld> MakeFlatWorld(const VoxelWorldConfig &config)
 	world->chunkCountY = (world->height + config.chunkSize - 1) / config.chunkSize;
 	world->chunkCountZ = (world->depth + config.chunkSize - 1) / config.chunkSize;
 	const size_t chunkCount = static_cast<size_t>(world->chunkCountX) *
-		static_cast<size_t>(world->chunkCountY) *
-		static_cast<size_t>(world->chunkCountZ);
+							  static_cast<size_t>(world->chunkCountY) *
+							  static_cast<size_t>(world->chunkCountZ);
 	world->chunks.resize(chunkCount);
 	for (int chunkZ = 0; chunkZ < world->chunkCountZ; ++chunkZ) {
 		for (int chunkY = 0; chunkY < world->chunkCountY; ++chunkY) {
@@ -73,13 +71,11 @@ std::unique_ptr<VoxelWorld> MakeFlatWorld(const VoxelWorldConfig &config)
 				chunk.min = Int3{
 					world->min.x + chunkX * world->chunkSize,
 					world->min.y + chunkY * world->chunkSize,
-					world->min.z + chunkZ * world->chunkSize
-				};
+					world->min.z + chunkZ * world->chunkSize};
 				chunk.maxExclusive = Int3{
 					std::min(chunk.min.x + world->chunkSize, world->maxExclusive.x),
 					std::min(chunk.min.y + world->chunkSize, world->maxExclusive.y),
-					std::min(chunk.min.z + world->chunkSize, world->maxExclusive.z)
-				};
+					std::min(chunk.min.z + world->chunkSize, world->maxExclusive.z)};
 				chunk.isStatic = true;
 			}
 		}
@@ -87,8 +83,8 @@ std::unique_ptr<VoxelWorld> MakeFlatWorld(const VoxelWorldConfig &config)
 	for (int z = -halfFloor; z < halfFloor; ++z) {
 		for (int x = -halfFloor; x < halfFloor; ++x) {
 			SetVoxelMaterial(*world, {x, config.floorY, z},
-				(x + z & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray,
-				nullptr);
+							 (x + z & 1) == 0 ? VoxelMaterial::FloorWhite : VoxelMaterial::FloorGray,
+							 nullptr);
 		}
 	}
 	return world;
@@ -194,8 +190,8 @@ void TestFluidAirTransitionDoesNotBumpEditVersion(TestContext &context)
 	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Fluid, nullptr);
 	if (world->editVersion != versionBefore) {
 		std::fprintf(stderr, "editVersion before=%llu after=%llu\n",
-			static_cast<unsigned long long>(versionBefore),
-			static_cast<unsigned long long>(world->editVersion));
+					 static_cast<unsigned long long>(versionBefore),
+					 static_cast<unsigned long long>(world->editVersion));
 		context.Fail(__LINE__, "Air->Fluid transition must NOT bump editVersion");
 	}
 
@@ -203,8 +199,8 @@ void TestFluidAirTransitionDoesNotBumpEditVersion(TestContext &context)
 	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Air, nullptr);
 	if (world->editVersion != versionAfterPlace) {
 		std::fprintf(stderr, "editVersion before=%llu after=%llu\n",
-			static_cast<unsigned long long>(versionAfterPlace),
-			static_cast<unsigned long long>(world->editVersion));
+					 static_cast<unsigned long long>(versionAfterPlace),
+					 static_cast<unsigned long long>(world->editVersion));
 		context.Fail(__LINE__, "Fluid->Air transition must NOT bump editVersion");
 	}
 	context.Pass();
@@ -337,7 +333,7 @@ void TestFluidCABumpOnSmallFlatWorldStaysFast(TestContext &context)
 	const auto t1 = std::chrono::steady_clock::now();
 	const double totalMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
 	std::printf("TestFluidCABumpOnSmallFlatWorldStaysFast: %u ticks in %.2f ms (%.3f ms/tick)\n",
-		kTickCount, totalMs, totalMs / static_cast<double>(kTickCount));
+				kTickCount, totalMs, totalMs / static_cast<double>(kTickCount));
 	DestroyPhysicsState(physics);
 	context.Pass();
 }
@@ -345,8 +341,8 @@ void TestFluidCABumpOnSmallFlatWorldStaysFast(TestContext &context)
 void TestGetPhysicsBroadphaseStatsNullReturnsZeroed(TestContext &context)
 {
 	const auto [totalBodies, maxBodies, staticBodies, dynamicBodies, activeDynamicBodies,
-		kinematicBodies, activeKinematicBodies, pendingChunkRebuilds, chunkStaticBodies,
-		chunkMergedBoxesEntries] = GetPhysicsBroadphaseStats(nullptr);
+				kinematicBodies, activeKinematicBodies, pendingChunkRebuilds, chunkStaticBodies,
+				chunkMergedBoxesEntries] = GetPhysicsBroadphaseStats(nullptr);
 	if (totalBodies != 0u || maxBodies != 0u || staticBodies != 0u ||
 		dynamicBodies != 0u || activeDynamicBodies != 0u ||
 		kinematicBodies != 0u || activeKinematicBodies != 0u ||
@@ -390,9 +386,9 @@ void TestFluidCAPerTickCostOnFlatBenchSizedWorld(TestContext &context)
 	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Fluid, nullptr);
 	const uint64_t editVersionBefore = world->editVersion;
 	std::printf("TestFluidCAPerTickCostOnFlatBenchSizedWorld: chunks=%zu editVersionBefore=%llu fluidVoxels=%u\n",
-		world->chunks.size(),
-		static_cast<unsigned long long>(editVersionBefore),
-		world->stats.fluidVoxelCount);
+				world->chunks.size(),
+				static_cast<unsigned long long>(editVersionBefore),
+				world->stats.fluidVoxelCount);
 
 	constexpr uint32_t kTickCount = 20u;
 	double totalMs = 0.0;
@@ -404,11 +400,11 @@ void TestFluidCAPerTickCostOnFlatBenchSizedWorld(TestContext &context)
 		totalMs += ms;
 	}
 	std::printf("TestFluidCAPerTickCostOnFlatBenchSizedWorld: %u ticks in %.2f ms (%.3f ms/tick avg) -- simulates ~1 sec @ 20Hz\n",
-		kTickCount, totalMs, totalMs / static_cast<double>(kTickCount));
+				kTickCount, totalMs, totalMs / static_cast<double>(kTickCount));
 	context.Pass();
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

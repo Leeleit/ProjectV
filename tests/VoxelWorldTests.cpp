@@ -55,6 +55,11 @@ bool ColorsMatch(
 	return true;
 }
 
+int SimulationFrameCount(const int frames)
+{
+	return std::max(frames, 0);
+}
+
 bool ColorsMatch(
 	const projectv::math::Vec4 &expected,
 	const projectv::math::Vec4 &actual)
@@ -675,7 +680,7 @@ void TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(TestContext &conte
 
 	EXPECT_EQ(context, static_cast<uint32_t>(8), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(8), world.pendingChunkRebuildIndices.size());
-	std::sort(world.pendingChunkRebuildIndices.begin(), world.pendingChunkRebuildIndices.end());
+	std::ranges::sort(world.pendingChunkRebuildIndices);
 	for (size_t chunkIndex = 0; chunkIndex < 8; ++chunkIndex) {
 		EXPECT_EQ(context, chunkIndex, world.pendingChunkRebuildIndices[chunkIndex]);
 	}
@@ -689,7 +694,7 @@ void TestSetVoxelMaterialMarksOnlyFaceSharingNeighborChunksDirty(TestContext &co
 
 	EXPECT_EQ(context, static_cast<uint32_t>(2), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(2), world.pendingChunkRebuildIndices.size());
-	std::sort(world.pendingChunkRebuildIndices.begin(), world.pendingChunkRebuildIndices.end());
+	std::ranges::sort(world.pendingChunkRebuildIndices);
 	EXPECT_EQ(context, static_cast<size_t>(0), world.pendingChunkRebuildIndices[0]);
 	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices[1]);
 }
@@ -2616,7 +2621,9 @@ bool RunVoxelLabReapproachCase(
 	}
 
 	camera.yawRadians = postYawRadians;
-	for (int step = 0; step < 24; ++step) {
+	bool failed = false;
+	const int kMaxSteps = SimulationFrameCount(24);
+	for (int step = 0; step < kMaxSteps && !failed; ++step) {
 		const float previousPositionX = camera.position[0];
 		const float previousPositionZ = camera.position[2];
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
@@ -2646,11 +2653,11 @@ bool RunVoxelLabReapproachCase(
 				static_cast<unsigned>(info.supportState),
 				info.footSupportScore);
 			context.Fail(__LINE__, buffer);
-			return false;
+			failed = true;
 		}
 	}
 
-	return true;
+	return !failed;
 }
 
 void TestVoxelLabWalkJumpReapproachDoesNotMagnetSnapBackToSameTopPlane(TestContext &context)
@@ -3518,7 +3525,7 @@ struct WallJumpTestResult {
 WallJumpTestResult RunSneakGlassColumnWallSlideCase(TestContext &context, const bool withWall)
 {
 	constexpr float kPi = 3.1415926535f;
-	constexpr int kSimulationFrames = 60;
+	const int kSimulationFrames = SimulationFrameCount(60);
 	VoxelWorld world = withWall ? MakeWalkGlassColumnWallTestWorld() : MakeWalkTestWorld();
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
@@ -3676,7 +3683,8 @@ WallCaseTestResult RunHeldJumpGlassColumnCase(TestContext &context, const float 
 	result.startX = startX;
 	result.maxFeetY = GetPhysicsWalkDebugInfo(physics.get()).feetPosition[1];
 	result.maxCameraY = camera.position[1];
-	for (int step = 0; step < 120; ++step) {
+	const int kSimulationFrames = SimulationFrameCount(120);
+	for (int step = 0; step < kSimulationFrames; ++step) {
 		const PhysicsWalkDebugInfo infoBeforeTick = GetPhysicsWalkDebugInfo(physics.get());
 		const bool hasWallTopSupportWindow =
 			infoBeforeTick.supportState != PhysicsWalkSupportDebugState::Air &&
@@ -3904,7 +3912,8 @@ JumpTestResult RunAirborneRetryJumpCase(TestContext &context, const bool pressSe
 	JumpTestResult result{};
 	result.maxFeetY = GetPhysicsWalkDebugInfo(physics.get()).feetPosition[1];
 	int retryJumpPressCount = 0;
-	for (int step = 0; step < 40; ++step) {
+	const int kSimulationFrames = SimulationFrameCount(40);
+	for (int step = 0; step < kSimulationFrames; ++step) {
 		const PhysicsWalkDebugInfo infoBeforeTick = GetPhysicsWalkDebugInfo(physics.get());
 		const bool canRetryAirborneJump =
 			pressSecondJump &&
@@ -3985,7 +3994,8 @@ WallCatchTestResult RunHeldJumpForeignWallTopCase(TestContext &context, const fl
 	WallCatchTestResult result{};
 	result.startX = startX;
 	result.maxFeetY = GetPhysicsWalkDebugInfo(physics.get()).feetPosition[1];
-	for (int step = 0; step < 120; ++step) {
+	const int kSimulationFrames = SimulationFrameCount(120);
+	for (int step = 0; step < kSimulationFrames; ++step) {
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
 		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
 		result.maxFeetY = std::max(result.maxFeetY, info.feetPosition[1]);
@@ -4057,7 +4067,7 @@ struct AutoJumpTestResult {
 AutoJumpTestResult RunAutoJumpDelayCase(TestContext &context, const bool delayEnabled)
 {
 	constexpr float kPi = 3.1415926535f;
-	constexpr int kSimulationFrames = 120;
+	const int kSimulationFrames = SimulationFrameCount(120);
 	const VoxelWorld world = MakeWalkPositiveSingleBlockTestWorld();
 
 	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
@@ -4733,7 +4743,8 @@ JumpAirCaseTestResult RunMinecraftAirSteeringCase(TestContext &context, const bo
 		SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_A);
 	}
 
-	for (int step = 0; step < 12; ++step) {
+	const int kSimulationFrames = SimulationFrameCount(12);
+	for (int step = 0; step < kSimulationFrames; ++step) {
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
 	}
 
@@ -6662,9 +6673,9 @@ void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
 	EXPECT_TRUE(context, basicVertices[0].positionNdc[1] < 0.0f);
 	EXPECT_TRUE(context, detailedVertexCount > basicVertexCount);
 
-constexpr projectv::math::Vec4 helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
-constexpr projectv::math::Vec4 statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
-constexpr projectv::math::Vec4 textColor{0.95f, 0.97f, 0.98f, 0.96f};
+	constexpr projectv::math::Vec4 helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
+	constexpr projectv::math::Vec4 statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
+	constexpr projectv::math::Vec4 textColor{0.95f, 0.97f, 0.98f, 0.96f};
 	float statsPanelMaxX = -1.0f;
 	float helperPanelMaxX = -1.0f;
 	float textMaxX = -1.0f;

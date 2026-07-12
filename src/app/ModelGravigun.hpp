@@ -13,12 +13,12 @@ struct ModelGravigunState {
 };
 
 void TickModelGravigun(
-	ModelGravigunState *state,
+	ModelGravigunState &state,
 	const VoxelWorld &world,
 	const CameraState &camera,
 	VkExtent2D extent,
-	RenderState *render,
-	InputState *input);
+	RenderState &render,
+	InputState &input);
 
 } // namespace projectv::app
 

@@ -222,7 +222,7 @@ void TestComputeGrownNanoVdbCapacityLargerRequired(TestContext &context)
 	static_assert(grown >= 1500u, "Grown capacity must include 1.5x growth factor");
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

@@ -81,7 +81,7 @@ void TestFluidCaPushConstantsPropagation(TestContext &context)
 	ExpectEqualUInt(context, 42u, pc.chunkCountAndFlags[0], __LINE__, "chunkCountAndFlags[0] = active chunks");
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

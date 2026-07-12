@@ -15,6 +15,7 @@ import projectv.string_id;
 #include "asset/ModelManifestLoader.hpp"
 #include "audio/AudioEngine.hpp"
 #include "audio/MusicDirectoryPath.hpp"
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/Types.hpp"
 #include "debug/Profiling.hpp"
@@ -58,7 +59,7 @@ int RebuildAllShadersFromDisk()
 {
 	int reloadedCount = 0;
 
-	const char *buildDir = std::getenv("PROJECTV_BUILD_DIR");
+	const char *buildDir = projectv::core::GetEnvVar("PROJECTV_BUILD_DIR");
 	if (buildDir == nullptr) {
 		buildDir = PROJECTV_CMAKE_BUILD_DIR;
 	}
@@ -255,7 +256,7 @@ bool StartLastInputReplayPlayback(AppState *state)
 	PV_PROFILE_ZONE_N("StartLastInputReplayPlayback");
 	PV_CHECK_OR_RETURN(state != nullptr, "App", "StartLastInputReplayPlayback.Preconditions", "AppState is null");
 
-	if (!LoadLatestInputReplay(&state->input())) {
+	if (!LoadLatestInputReplay(state->input())) {
 		return false;
 	}
 	if (!state->input().replay.captureAvailable) {

@@ -11,7 +11,6 @@ import projectv.math;
 #include "voxel/VoxelMaterials.hpp"
 
 #include <array>
-#include <cstddef>
 #include <filesystem>
 #include <vector>
 
