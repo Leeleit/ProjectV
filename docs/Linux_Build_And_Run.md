@@ -94,3 +94,16 @@ ctest --preset linux-clang-debug-tests
 
 ### Автоматический захват кадров (LookDev)
 Для автоматического тестирования качества освещения и теней скрипт запускает движок, позиционирует камеру, переключает отладочные режимы рендеринга и сохраняет скриншоты в BMP с JSON-файлами метаданных в директорию `runtime/captures/`.
+
+---
+
+## Связанные документы
+
+- [Documentation Index](README.md) — карта всех руководств
+- [ArchitectureGuide](ArchitectureGuide.md) — общая архитектура движка
+- [RTX Renderer Architecture](RTX_Renderer_Architecture.md) — архитектура RTX-рендеринга
+- [Physics & Movement Guide](Physics_And_Movement_Guide.md)
+- [BuildAndRun (Windows)](BuildAndRun.md)
+- [Debugging](Debugging.md)
+- [Profiling](Profiling.md)
+

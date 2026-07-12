@@ -253,6 +253,7 @@ Compute meshing, graphics passes, overlay и HUD собираются здесь
 
 ## Связанные документы
 
+- [Documentation Index](README.md) — карта всех руководств
 - [Linux Build & Run Guide](Linux_Build_And_Run.md) (Основное руководство по Linux)
 - [RTX Renderer Architecture](RTX_Renderer_Architecture.md) (Архитектура RTX-рендеринга)
 - [Physics & Movement Guide](Physics_And_Movement_Guide.md) (Физика и перемещение Jolt)

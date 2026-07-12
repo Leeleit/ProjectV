@@ -1,6 +1,6 @@
 # ProjectV Debugging
 
-Дата фиксации: `2026-04-21`
+Дата фиксации: `2026-04-21` (Обновлено: `2026-07-12`)
 
 Этот документ описывает текущий debugging/tooling path в `ProjectV`: HUD, runtime diagnostics, Tracy, smoke scripts и
 failure probes.
@@ -12,11 +12,9 @@ failure probes.
 - in-app HUD;
 - runtime diagnostics с единым форматом логов;
 - Tracy CPU/GPU instrumentation;
-- automated runtime smoke;
+- automated runtime smoke (Linux и Windows);
 - automated failure probes;
 - unit tests на critical world/interaction/physics glue.
-
-Это и есть текущий “первый честный” debugging contour.
 
 ## HUD
 
@@ -36,36 +34,55 @@ HUD рисуется внутри приложения отдельным debug 
 - локальные voxel coords / hit normal;
 - target/placement chunk summary;
 - mutation anchor / preview box;
-- текущий control mode.
+- текущий control mode;
+- параметры освещения и exposure (в detailed mode).
 
 HUD verbosity contract:
 
 - `G` toggles `normal / detailed` HUD;
-- normal HUD keeps only high-level control/sandbox facts;
-- detailed HUD keeps low-level walk/selection/chunk/mutation/replay telemetry and the green placement preview.
+- `F1` toggles весь debug UI on/off: HUD, selection/inspect highlight, chunk overlays и crosshair.
 
-Полезные hotkeys:
+## Полезные hotkeys
 
-- двойной `Space` — quick toggle `creative / walk`
-- `F1` — весь debug UI on/off: HUD, selection/inspect highlight, chunk overlays и crosshair
-- `F2` — cycle placement material
-- `F3` — reset camera
-- `F4` — cycle `creative / spectator / walk`
-- `F5` — cycle builtin scene preset в рантайме
-- `F6` — сохранить current world snapshot
-- `F7` — загрузить world snapshot
-- `F8` — cycle editor tool: `OFF -> PAINT -> ERASE -> FILL -> INSPECT`
-- `F9` — toggle `chunk bounds`
-- `F10` — toggle `dirty chunk overlay`
-- `F11` — toggle `walk` air-control mode (`MinecraftLike / Realistic`)
-- `J` — toggle one-block auto-jump on/off (`off` by default)
-- `F12` — toggle one-block auto-jump micro-delay on/off when auto-jump is enabled
-- `R` — записать latest input replay вместе со snapshot
-- `Y` — проиграть latest input replay
-- `X` — toggle mutation anchor для box paint/erase helper
-- `M` — pick material из текущего hit voxel в placement material
-- `P` — pause
-- `Tab` — relative mouse mode
+Основные клавиши рантайма (актуальные binding'и живут в `src/app/InputActions.cpp`):
+
+- `W/A/S/D` — перемещение;
+- `Space` — вверх / двойное нажатие toggles `creative ↔ walk`;
+- `Shift` — вниз / sneak в walk mode;
+- `Ctrl` — speed boost;
+- `Alt` — speed slow;
+- `Tab` — relative mouse mode;
+- `P` — pause;
+- `F1` — весь debug UI on/off;
+- `F2` — cycle placement material;
+- `F3` — reset camera;
+- `F4` — cycle `creative / spectator / walk`;
+- `F5` — cycle builtin scene preset (`VoxelLab`, `FlatBenchmark`, `TransparencyStress`, `ChunkGrid`, `MeshingStress`);
+- `F6` — сохранить current world snapshot;
+- `F7` — загрузить world snapshot;
+- `F8` — cycle editor tool: `OFF -> PAINT -> ERASE -> FILL -> INSPECT`;
+- `F9` — toggle `chunk bounds`;
+- `F10` — toggle `dirty chunk overlay`;
+- `F11` — toggle `walk` air-control mode (`MinecraftLike / Realistic`);
+- `F12` — toggle one-block auto-jump micro-delay when auto-jump is enabled;
+- `J` — toggle one-block auto-jump on/off;
+- `R` — записать latest input replay вместе со snapshot;
+- `Y` — проиграть latest input replay;
+- `X` — toggle mutation anchor для box paint/erase helper;
+- `M` — pick material из текущего hit voxel в placement material;
+- `F` — pick model (model gravigun);
+- `Z` — toggle cursor hit normal display;
+- `C` — capture screenshot (.bmp + sidecar);
+- `B` — cycle lighting debug view;
+- `N` — cycle tone-map operator;
+- `H/K` — decrease/increase lighting exposure;
+- `V` — reset lighting debug controls to baseline preset;
+- `Q/E` — music play/pause / stop;
+- `7/8` — music volume down/up;
+- `9/0` — next/previous music track;
+- `[ / ]` — decrease/increase time scale;
+- `\` — step single frame when paused;
+- `` ` `` — reset time scale.
 
 Editor-tool contract:
 
@@ -106,14 +123,20 @@ Anchor contract:
 
 ## Smoke scripts
 
-### Runtime smoke
+### Runtime smoke (Linux)
+
+```bash
+./tools/linux/Invoke-ProjectVRuntimeSmoke.sh
+```
+
+### Runtime smoke (Windows)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVRuntimeSmoke.ps1
 ```
 
-Это developer-only GUI smoke: он остаётся официальным targeted lifecycle check, но не считается CI/headless contour и
-не является обязательным DoD после каждого изменения.
+Это developer-only GUI smoke: targeted lifecycle check, не универсальный DoD. Используйте его после изменений в
+Vulkan/bootstrap/swapchain/window lifecycle/present/screenshot sync или при риске device-lost/hang.
 
 Проверяет:
 
@@ -123,20 +146,18 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVRuntimeSmo
 - maximize/restore;
 - graceful shutdown.
 
-Использовать его стоит после изменений в Vulkan/bootstrap/swapchain/window lifecycle/present/screenshot sync или при
-риске device-lost/hang. Для lighting/material/shader tuning он даёт слабый сигнал; там важнее build/tests,
-scripted captures, sidecar metadata и визуальное сравнение.
+Для lighting/material/shader tuning основной сигнал — build/tests, scripted captures, sidecar metadata и визуальное
+сравнение.
 
-For shadow work, sidecar metadata now includes the active CSM split plan plus per-cascade view ranges, ortho extents,
-world-space texel size, and the current split-blend width (`shadow_cascade_blend` / `_offset`).
-The runtime `CSM` debug view visualizes which cascade the final shader selected for each visible receiver and where the
-transition band starts blending into the next cascade. Sidecars now also include
-`shadow_cascade_caster_light_ranges`, and detailed HUD prints the same per-cascade `CD` ranges.
-Caster-depth coverage changes are no longer hidden inside CPU fit math.
-Sidecar metadata also includes `transparent_shadow_policy`; the current mainline value is
-`GLASS_IGNORED_FLUID_CASTS`.
+## Failure probes
 
-### Failure probes
+### Linux
+
+```bash
+./tools/linux/Invoke-ProjectVFailureProbes.sh
+```
+
+### Windows
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVFailureProbes.ps1
@@ -144,10 +165,10 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVFailurePro
 
 Проверяет:
 
-- controlled failure на missing shader blob;
-- controlled failure на intentional incomplete init.
+- controlled failure на missing shader blob (`PROJECTV_SHADER_BASE_DIR`);
+- controlled failure на intentional incomplete init (`PROJECTV_FAIL_INIT_STAGE`).
 
-## Failure injection knobs
+### Failure injection knobs
 
 Сейчас поддерживаются две главные env-based probe ручки:
 
@@ -178,55 +199,19 @@ GPU зоны размечаются через:
 
 - `PV_PROFILE_GPU_ZONE(...)`
 
-Основные plot'ы конфигурируются в [Profiling.hpp](../src/debug/Profiling.hpp) и сейчас считаются фиксированным benchmark metrics pack:
-
-- `Frame Delta (ms)`
-- `Simulation Accumulator (ms)`
-- `Simulation Steps`
-- `Dirty Chunks`
-- `Active Chunks`
-- `Rebuilt Chunks`
-- `Repacked Chunk Voxels`
-- `Scene Triangles`
-- `Generated Opaque Faces`
-- `Generated Transparent Faces`
-- `Meshing Dirty Chunks`
-- `Uploaded Chunk Descriptors`
-- `Uploaded Voxel Payload Chunks`
-- `Upload Descriptor Bytes`
-- `Upload Chunk Voxel Bytes`
-- `Walk Support State`
-- `Walk Support Score`
-- `Walk Feet Y`
-- `Walk Velocity Y`
-- `Walk Sneak Active`
-- `Walk Jump Lock`
-- `Walk Cached Sneak Support`
-- `Walk Feet Inside Sneak Cache`
-- `Walk Edge Grace`
-- `Walk Ground Takeoff Grace`
-- `Walk Sneak Support Grace`
-- `Walk Ledge Release Grace`
-- `Walk Ground Return Anchor`
-- `Walk Auto Jump Delay`
-- `Walk Auto Jump Delay Frames`
-
-Отдельная practical methodology и baseline scene presets описаны в [Profiling](Profiling.md).
+Основные plot'ы конфигурируются в [Profiling.hpp](../src/debug/Profiling.hpp) и считаются фиксированным benchmark
+metrics pack.
 
 ### Как смотреть Tracy
 
 1. Собери и запусти `ProjectV`.
-2. Если нужен bundled profiler UI, используй preset `windows-clang-debug-tracy-profiler` и отдельно собери target `tracy-profiler.exe`.
+2. Если нужен bundled profiler UI, используй preset `windows-clang-debug-tracy-profiler` /
+   `linux-clang-debug-tracy-profiler` (если доступен) и отдельно собери target `tracy-profiler`.
 3. Запусти profiler и подключись к приложению.
 4. Смотри:
    - CPU zones вокруг `UpdateApp`, `TickWalkCharacter`, `UpdateWalkGroundSupport`, `PrepareFrameRenderData`, `DrawFrame`;
    - GPU zones для `Voxel Meshing`, `Opaque Pass`, `Transparent Pass`, `Debug Overlay`, `Debug HUD`;
    - plot'ы по dirty chunks, face counts, upload bytes и `walk` state drift.
-
-### Важная оговорка
-
-Обычный `windows-clang-debug` уже инструментирован Tracy по умолчанию. Специальный Tracy preset нужен в основном для
-bundled profiler UI, а не для самого факта instrumentation.
 
 ## Что использовать для каких проблем
 
@@ -262,9 +247,9 @@ bundled profiler UI, а не для самого факта instrumentation.
 ## Полезные файлы
 
 - [voxel_mvp_smoke_checklist.md](voxel_mvp_smoke_checklist.md)
-- [Linux Build & Run Guide](Linux_Build_And_Run.md) (Основное руководство по Linux)
-- [RTX Renderer Architecture](RTX_Renderer_Architecture.md) (Архитектура RTX-рендеринга)
-- [Physics & Movement Guide](Physics_And_Movement_Guide.md) (Физика и перемещение Jolt)
+- [Linux Build & Run Guide](Linux_Build_And_Run.md)
+- [RTX Renderer Architecture](RTX_Renderer_Architecture.md)
+- [Physics & Movement Guide](Physics_And_Movement_Guide.md)
 - [BuildAndRun (Windows)](BuildAndRun.md)
 - [Profiling](Profiling.md)
 - [RenderArchitecture (Historical)](RenderArchitecture.md)

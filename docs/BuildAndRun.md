@@ -157,7 +157,7 @@ Smoke проверяет:
 powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVRuntimeSmoke.ps1 `
   -ExePath build\windows-clang-debug\bin\ProjectV.exe `
   -CaptureDir build\windows-clang-debug\lookdev-captures\$(Get-Date -Format yyyy-MM-dd) `
-  -Views 'FINAL SHDW CSM CTSH AOCC LOCL' `
+  -Views 'FINAL SHDW CTSH AOCC LOCL' `
   -CameraPosition '-25 19 25' `
   -CameraLook '0.62 -0.48 -0.62' `
   -WarmupFrames 30 -IntervalFrames 2 -QuitAfterCapture
@@ -272,6 +272,8 @@ cmake --build build/windows-clang-debug-tracy-profiler --target ProjectV tracy-p
 
 ## Связанные документы
 
+- [Documentation Index](README.md) — карта всех руководств
+- [Linux Build & Run Guide](Linux_Build_And_Run.md) (Основное руководство по Linux)
 - [ArchitectureGuide](ArchitectureGuide.md)
 - [Debugging](Debugging.md)
 - [Profiling](Profiling.md)

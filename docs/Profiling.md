@@ -1,9 +1,9 @@
 # ProjectV Profiling
 
-Дата фиксации: `2026-04-07`
+Дата фиксации: `2026-04-07` (Обновлено: `2026-07-12`)
 
-Этот документ фиксирует текущий practical profiling path в `ProjectV`: какие baseline-сцены использовать, какие Tracy plot'ы считаются
-основным metrics pack и как воспроизводить perf-замеры без «магии в голове».
+Этот документ фиксирует текущий practical profiling path в `ProjectV`: какие baseline-сцены использовать, какие Tracy
+plot'ы считаются основным metrics pack и как воспроизводить perf-замеры без «магии в голове».
 
 ## Что считать текущим profiling baseline
 
@@ -34,13 +34,21 @@ Scene preset выбирается через runtime env var `PROJECTV_SCENE_PRE
 
 - `VoxelLab` — повседневный default baseline: mixed opaque + transparent + fluid scene, полезен для общего regression-check.
 - `FlatBenchmark` — почти плоская сцена без стекла и жидкости; хороший baseline для camera/update/render cost без stress-case geometry.
-- `TransparencyStress` — dense набор стеклянных колонн; нужен для transparent pass и face-count pressure на прозрачной геометрии.
+- `TransparencyStress` — dense набор стеклянных колонн; нужен для transparent pass и face-count pressure.
 - `ChunkGrid` — world-wide chunk markers; полезен для active chunk coverage, upload path и chunk-oriented debug.
 - `MeshingStress` — 3D checker volume; нужен для worst-case-ish meshing, face generation и upload churn.
 
 ## Как запускать нужную сцену
 
-Пример для PowerShell:
+### Linux
+
+```bash
+export PROJECTV_SCENE_PRESET=MeshingStress
+./build/linux-clang-debug/bin/ProjectV
+unset PROJECTV_SCENE_PRESET
+```
+
+### Windows
 
 ```powershell
 $env:PROJECTV_SCENE_PRESET = "MeshingStress"
@@ -48,9 +56,15 @@ build/windows-clang-debug/bin/ProjectV.exe
 Remove-Item Env:PROJECTV_SCENE_PRESET
 ```
 
-Если нужна не просто instrumentation, а bundled Tracy profiler UI:
+Если нужен bundled Tracy profiler UI:
+
+```bash
+# Linux
+./tools/linux/build-tracy-linux.sh
+```
 
 ```powershell
+# Windows
 cmake --preset windows-clang-debug-tracy-profiler
 cmake --build build/windows-clang-debug-tracy-profiler --target ProjectV tracy-profiler.exe
 $env:PROJECTV_SCENE_PRESET = "TransparencyStress"
@@ -99,9 +113,22 @@ Remove-Item Env:PROJECTV_SCENE_PRESET
 - `Walk Sneak Support Grace`
 - `Walk Ledge Release Grace`
 - `Walk Ground Return Anchor`
+- `VCT Voxelize Chunks`
+- `VCT Mip Chain Mips`
+- `VCT Active Mip`
+- `Sky Atmosphere Pass`
+- `Volumetric Fog Pass`
+- `Cloudscape Pass`
+- `Sky LUT Precompute (ms)`
+- `Physics Sync Full Rebuild`
+- `Physics Sync Incremental`
+- `Physics Sync Skipped`
+- `Fluid CA Cells Read`
+- `Fluid CA Cells Moved`
+- `Fluid Edit Version Bumps Suppressed`
 
-Это покрывает ровно тот minimum pack, который сейчас нужен по `TODO`: frame time, chunk rebuild count, repacked voxel count,
-generated opaque/transparent faces, visibility pressure, upload sizes и live `walk` state drift.
+Это покрывает frame time, chunk rebuild count, repacked voxel count, generated opaque/transparent faces, visibility
+pressure, upload sizes, live `walk` state drift и отдельные render feature counters.
 
 ## Recommended measurement methodology
 
@@ -139,7 +166,7 @@ generated opaque/transparent faces, visibility pressure, upload sizes и live `w
 
 - `Frame Delta (ms)`
 - CPU zones вокруг `UpdateApp`, `PrepareFrameRenderData`, `DrawFrame`
-- GPU zones для `Opaque Pass`, `Transparent Pass`, `Debug HUD`
+- GPU zones для `Opaque Pass`, `Transparent Pass`, `Debug HUD`, `RTX Shadow Pass`, `DDGI Probe Update`
 
 ### Transparent pass pressure
 
@@ -170,21 +197,34 @@ generated opaque/transparent faces, visibility pressure, upload sizes и live `w
 - `Upload Descriptor Bytes`
 - `Upload Chunk Voxel Bytes`
 
+### Physics/walk pressure
+
+Используй:
+
+- `VoxelLab` с активным `walk` mode
+
+Смотри:
+
+- `Walk Support Score`
+- `Walk Velocity Y`
+- CPU zones вокруг `TickWalkCharacter`, `UpdateWalkGroundSupport`
+
 ## Важные оговорки текущего этапа
 
 - Это ещё не automated benchmark suite.
 - Scene presets пока builtin и code-driven, а не save/load/data-driven assets.
 - HUD сам по себе стоит CPU/GPU времени, поэтому для честного renderer baseline его лучше выключать.
-- `windows-clang-debug` и `windows-clang-debug-ci` уже instrumented Tracy по умолчанию; специальный Tracy preset нужен в
-  основном для bundled profiler UI.
+- Debug build (`linux-clang-debug` / `windows-clang-debug`) уже instrumented Tracy по умолчанию; специальный Tracy
+  preset нужен в основном для bundled profiler UI.
+- Современный рендерер использует RTX-only path; non-RTX GPU не стартует.
 
 ## Связанные документы
 
-- [Linux Build & Run Guide](Linux_Build_And_Run.md) (Основное руководство по Linux)
-- [RTX Renderer Architecture](RTX_Renderer_Architecture.md) (Архитектура RTX-рендеринга)
-- [Physics & Movement Guide](Physics_And_Movement_Guide.md) (Физика и перемещение Jolt)
+- [Linux Build & Run Guide](Linux_Build_And_Run.md)
+- [RTX Renderer Architecture](RTX_Renderer_Architecture.md)
+- [Physics & Movement Guide](Physics_And_Movement_Guide.md)
 - [BuildAndRun (Windows)](BuildAndRun.md)
 - [Debugging](Debugging.md)
 - [VoxelWorld (Historical)](VoxelWorld.md)
-- [README](../README.md)
+- [Documentation Index](README.md)
 - [TODO](../TODO.md)

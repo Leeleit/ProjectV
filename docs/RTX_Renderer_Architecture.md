@@ -216,3 +216,15 @@ CAS sharpen, motion vectors (`R16G16`), 4 SPIR-V variants.
 * DLSS SR доступен на Linux с драйвером 525.72+ (текущий: 610.43.02).
 * DLSS-G/Frame Generation — Windows-only, не в scope.
 * Замена blit pass на DLSS/DLAA upsample + AA.
+
+---
+
+## Связанные документы
+
+- [Documentation Index](README.md) — карта всех руководств
+- [CODEBASE_GUIDE.md](CODEBASE_GUIDE.md) — полный разбор файлов и алгоритмов
+- [ArchitectureGuide](ArchitectureGuide.md) — общая архитектура движка
+- [Linux Build & Run Guide](Linux_Build_And_Run.md)
+- [Physics & Movement Guide](Physics_And_Movement_Guide.md)
+- [RenderArchitecture (Historical)](RenderArchitecture.md)
+

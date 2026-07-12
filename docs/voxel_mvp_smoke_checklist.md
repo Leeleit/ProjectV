@@ -86,3 +86,12 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVFailurePro
 - единый стиль runtime error logging во всех init/runtime путях за пределами уже покрытого bootstrap/render/pipeline path;
 - минимальные debug asserts/check macros в остальных runtime-модулях;
 - интеграция smoke/failure probes в автоматический контур.
+
+---
+
+## Связанные документы
+
+- [Documentation Index](README.md) — карта всех руководств
+- [Debugging](Debugging.md)
+- [BuildAndRun (Windows)](BuildAndRun.md)
+

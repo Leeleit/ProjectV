@@ -287,12 +287,13 @@ src/
 
 ## Связанные документы
 
+- [Documentation Index](README.md) — карта всех руководств
 - [Build And Run](BuildAndRun.md)
 - [Architecture Guide](ArchitectureGuide.md)
 - [Render Architecture](RenderArchitecture.md)
 - [VoxelWorld](VoxelWorld.md)
 - [Debugging](Debugging.md)
 - [Profiling](Profiling.md)
-- [README](../README.md)
+- [Documentation Index](README.md)
 - [Voxel MVP Smoke Checklist](voxel_mvp_smoke_checklist.md)
 - [TODO](../TODO.md)

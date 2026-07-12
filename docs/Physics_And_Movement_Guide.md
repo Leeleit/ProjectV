@@ -62,3 +62,15 @@
 1.  **Сканирование чанка:** Алгоритм обходит заполненные твердые воксели (`FloorWhite`, `FloorGray`, `Glass`) внутри чанка.
 2.  **Объединение (Greedy Merge):** Смежные блоки с одинаковыми физическими свойствами группируются по осям $X$, $Y$ и $Z$ в единые параллелепипеды (AABB).
 3.  **Результат:** Количество физических тел снижается примерно в **35 раз**. Jolt Physics работает с крупными объединенными коробками вместо тысяч кубических вокселей.
+
+---
+
+## Связанные документы
+
+- [Documentation Index](README.md) — карта всех руководств
+- [ArchitectureGuide](ArchitectureGuide.md) — общая архитектура движка
+- [CODEBASE_GUIDE.md](CODEBASE_GUIDE.md) — полный разбор файлов и алгоритмов
+- [VoxelWorld (Historical)](VoxelWorld.md)
+- [Debugging](Debugging.md)
+- [Profiling](Profiling.md)
+

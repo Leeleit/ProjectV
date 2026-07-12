@@ -110,7 +110,7 @@ sequenceDiagram
 *   [AppUpdateHelpers.cpp](file:///home/le1t/Projects/ProjectV/src/app/AppUpdateHelpers.cpp) / [AppUpdateHelpers.hpp](file:///home/le1t/Projects/ProjectV/src/app/AppUpdateHelpers.hpp) *(Easy · ~86 строк)*
     *   **Роль:** Дополнительные хелперы для обновления свободной камеры и сброса состояний при смене режимов.
 *   [Camera.cpp](file:///home/le1t/Projects/ProjectV/src/app/Camera.cpp) / [Camera.hpp](file:///home/le1t/Projects/ProjectV/src/app/Camera.hpp) *(Medium · ~240 строк)*
-    *   **Роль:** Логика камеры. Вычисляет матрицы вида (`view`) и проекции (`projection`), обрабатывает джиттер проекции для алгоритма сглаживания (TAA).
+    * **Роль:** Логика камеры. Вычисляет матрицы вида (`view`) и проекции (`projection`).
 *   [FramePreparation.cpp](file:///home/le1t/Projects/ProjectV/src/app/FramePreparation.cpp) / [FramePreparation.hpp](file:///home/le1t/Projects/ProjectV/src/app/FramePreparation.hpp) *(Medium · ~280 строк)*
     *   **Роль:** Подготовка данных кадра перед рендерингом. Сборка HUD текста, рамки выделения блока и расчет параметров HZB-куллинга для чанков.
 *   [InputActions.cpp](file:///home/le1t/Projects/ProjectV/src/app/InputActions.cpp) / [InputActions.hpp](file:///home/le1t/Projects/ProjectV/src/app/InputActions.hpp) *(Easy · ~250 строк)*
@@ -249,7 +249,8 @@ sequenceDiagram
     *   **Роль:** Основной фрагментный шейдер отрисовки вокселей.
     *   **Алгоритмы:** Содержит расчет PBR BRDF, сэмплирование DDGI-зондов глобального освещения, чтение маски RTX-теней, расчет отражений на воде и рефракции через NanoVDB трассировку.
 *   [voxel.vert](file:///home/le1t/Projects/ProjectV/src/shaders/voxel.vert) *(Easy · ~150 строк)*
-    *   **Роль:** Вершинный шейдер вокселей. Распаковывает компактную 16-байтовую структуру `PackedFace` в вершины полигонов, применяет субпиксельный джиттер TAA.
+    * **Роль:** Вершинный шейдер вокселей. Распаковывает компактную 16-байтовую структуру `PackedFace` в вершины
+      полигонов.
 *   [voxel_mesh.comp](file:///home/le1t/Projects/ProjectV/src/shaders/voxel_mesh.comp) *(Hard · ~584 строки)*
     *   **Роль:** Вычислительный шейдер GPU Greedy Mesher. Сканирует чанк по 6 осям и склеивает грани блоков.
 *   [probe_update.comp](file:///home/le1t/Projects/ProjectV/src/shaders/probe_update.comp) *(Hard · ~720 строк)*
@@ -278,7 +279,8 @@ sequenceDiagram
 4.  Вывод записывается в буфер `opaqueIndirectBuffer`. Отрисовка происходит через indirect-команды без пересылок на CPU.
 
 ### 4.3 Аппаратные RTX тени
-Для замены медленных каскадных теней (CSM) с их артефактами (Peter Panning) внедрены аппаратные лучи:
+
+Вместо удалённых каскадных карт теней (CSM) в mainline используются аппаратные лучи:
 *   Для каждого чанка на GPU создается `VkAccelerationStructureKHR` типа BLAS.
 *   Все BLAS объединяются в TLAS сцены.
 *   Шейдер `voxel_rtx_shadow.rgen` трассирует лучи солнца.
@@ -378,9 +380,9 @@ Default = sync (inline) path.
 | **Tone Mapping**      | ACES Approx (default) / Reinhard / Linear                      | `lighting.glsl`                 |
 | **Color Grading**     | White point, contrast, saturation, lift                        | luma-saturation S-curve         |
 
-**ToneMapOperator enum:** `Linear=0, Reinhard=1, AcesApprox=2`. **LightingDebugView (13 values):**
-`Final → Ambient → Direct → Local → Shadow → Contact → Occlusion → Fog → Taa → VctDiffuse →
-VctSpecular → VolumetricFog → VolumetricTransmittance`.
+**ToneMapOperator enum:** `Linear=0, Reinhard=1, AcesApprox=2`. **LightingDebugView (14 values):**
+`Final → Ambient → Direct → Local → Shadow → Contact → Occlusion → Fog → DiffuseGI → SpecularGI →
+RtxSpecular → VolumetricFog → VolumetricTransmittance → GreedyMeshing`.
 
 ### 4.8 Mesh Shaders (Pattern C, feature-flagged)
 
@@ -434,8 +436,8 @@ VctSpecular → VolumetricFog → VolumetricTransmittance`.
 | `DebugHudVertex`              | 32 B   | 2             |
 | `ChunkCullingParameters`      | 64 B   | 4             |
 
-**Shader mirrors:** `voxel.frag:32-52`, `taa_resolve.frag:10-28`, `voxel_mesh.comp:57-75`,
-`model.frag`, `probe_update.comp:32-52`.
+**Shader mirrors:** `voxel.frag:32-52`, `voxel_mesh.comp:57-75`, `model.frag`,
+`probe_update.comp:32-52`.
 
 Любое изменение в `VoxelSceneLighting` требует mirror update во всех шейдерах —
 compile-time catches (static_assert + GLSL compile error).
@@ -556,3 +558,17 @@ color-space mismatch (linear HDR current frame + LDR history). Заменён н
 10. **Асинхронность:** Изучите `VulkanAsyncCompute.cpp` и timeline semaphore pairing.
 11. **C++20 модули:** Просмотрите `Math.ixx`, `StringId.ixx`, `Probe.ixx`, `Types.ixx`, `EcsWorld.ixx`.
 12. **Полный порядок кадра:** Повторно откройте `RendererDrawFrame.cpp` — 12-step pipeline.
+
+---
+
+## Связанные документы
+
+- [Documentation Index](README.md) — карта всех руководств
+- [ArchitectureGuide](ArchitectureGuide.md) — общая архитектура движка
+- [RTX Renderer Architecture](RTX_Renderer_Architecture.md) — современная RTX-only архитектура
+- [Linux Build & Run Guide](Linux_Build_And_Run.md)
+- [Physics & Movement Guide](Physics_And_Movement_Guide.md)
+- [Source Layout Guide](source_layout.md)
+- [Debugging](Debugging.md)
+- [Profiling](Profiling.md)
+
