@@ -33,7 +33,7 @@ jobs:
       - name: Install CMake 3.31
         run: |
           pip3 install --upgrade pip
-          pip3 install cmake==3.31.0
+          pip3 install cmake==3.31.6
           cmake --version
 
       - name: Install LLVM 22 + libc++
