@@ -8,10 +8,10 @@ IMAGE_NAME="projectv-ci"
 VOLUME_NAME="projectv-sccache"
 
 echo "=== Building Docker image ${IMAGE_NAME} ==="
-docker build --network host -t "${IMAGE_NAME}" -f docker/Dockerfile.ci .
+docker build -t "${IMAGE_NAME}" -f docker/Dockerfile.ci .
 
 echo "=== Running CI gate in container ==="
-docker run --rm --network host \
+docker run --rm \
   -v "$(pwd)":/workspace \
   -v "${VOLUME_NAME}":/root/.cache/sccache \
   "${IMAGE_NAME}" \

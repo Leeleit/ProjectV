@@ -60,7 +60,8 @@ RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.
     clang-22 \
     lld-22 \
     libc++-22-dev \
-    libc++abi-22-dev && \
+    libc++abi-22-dev \
+    libunwind-dev && \
     update-alternatives --install /usr/bin/clang clang /usr/bin/clang-22 100 && \
     update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-22 100 && \
     update-alternatives --install /usr/bin/lld lld /usr/bin/lld-22 100 && \
