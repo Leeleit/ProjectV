@@ -18,6 +18,23 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-12 session (post-FX integration and 7.x closure):** Closed the three remaining
+Phase 7 polish items in a single pass:
+- **7.3 tone mapping:** ACES Filmic curve integrated into the voxel shading path; exposure and
+  grading controls wired through `LightingDebugView`.
+- **7.4 post-FX:** Bloom (5-mip downsample chain, threshold/soft knee, additive composite) and
+  aerial perspective (distance-based fog via `params4.xyz`) integrated in `src/render/PostFx.cpp`.
+  Descriptor layout switched to `COMBINED_IMAGE_SAMPLER` to match shader `sampler2D`; 16 sets
+  split across frames (`frameIndex * kSetsPerFrame`) to avoid updating in-flight descriptors;
+  per-mip views created once; depth transitioned to `DEPTH_READ_ONLY_OPTIMAL` before composite;
+  resize path compares `postFxExtent` and recreates resources.
+- **7.1 VCT cones:** Diffuse cone count upgraded to 12 (octahedral parameterization), specular
+  path gated by roughness band; `kVctConeDirectionCount` constant exposed in `voxel.frag`.
+Verification: `ninja -C build/linux-clang-debug ProjectV` green, `ctest` 43/43 pass, runtime smoke
+with `PROJECTV_BLOOM=1`, `PROJECTV_AERIAL_PERSPECTIVE=1`, and combined flags captured all requested
+views and exited cleanly. Only pre-existing Vulkan validation warnings remain (DDGI descriptors
+`rtxGiDistance`/`rtxGiVolume`/`rtxGiIrradiance`, unrelated to this work).
+
 **2026-07-12 session (CI fix):** Fixed `linux-clang-debug-ci` GitHub Actions configure failure by installing SDL3 build dependencies on the `ubuntu-24.04` runner. Added the full SDL3 dev package set (including `libxss-dev`, `libxtst-dev`, `libdecor-0-dev`, `libpipewire-0.3-dev`, etc.) to `.github/workflows/build.yml`. SDL3 was failing with "Unable to find the alsa development library" and "SDL could not find X11 or Wayland development libraries". Additionally created a local Docker CI gate under `docker/` that reproduces the GitHub Actions runner exactly, plus git hooks under `tools/git/` (`pre-commit` for fast local checks, `pre-push` for full Docker CI). Install hooks with `tools/git/install-hooks.sh`. Follow-up: fixed Docker image build by adding `/usr/sbin/clang++` symlink (CMake resolved clang++ to `/usr/sbin/clang++` in headless Ubuntu) and eliminated the network FetchContent clone of `nlohmann_json` by switching `CMakeLists.txt` to the vendored copy in `external/nlohmann_json`; updated hard-coded include paths in `tests/CMakeLists.txt` accordingly. Cached the Vulkan SDK tarball locally (`docker/vulkansdk.tar.xz`, gitignored) and excluded heavy directories from the Docker build context via `.dockerignore`. Removed `--network host` from `docker/run-ci.sh` to prevent sccache client in the container from accidentally connecting to a host-side sccache server. Added `libunwind-dev`, `libc++1`, `libc++abi1`, and `build-essential` to the GitHub Actions LLVM install step to fix google/benchmark's "Failed to determine the source files for the regular expression backend" error on the ubuntu-24.04 runner.
 
 **2026-07-12 session (follow-up #4) — Откачены бесперспективные попытки обойти DFA/RadGlobal.**
@@ -324,11 +341,11 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 ## 2. Active tasks
 
 Per TODO.md active section:
-- ⭐ 7.1 VCT cone density upgrade (12-cone diffuse + 4-cone specular).
 - ❌ 7.2 TAA — полностью удалён из активного кода, перенесён в `legacy/aa/`.
   Рендеринг: прямой `outColor` → `sceneColorTarget` → blit → swapchain.
-- ⭐ 7.3 Lighting exposure + tone mapping (Reinhard → ACES).
-- ⭐ 7.4 Post-processing chain polish (bloom + aerial perspective).
+- ✅ 7.1 VCT cone density upgrade — closed 2026-07-12.
+- ✅ 7.3 Lighting exposure + tone mapping — closed 2026-07-12.
+- ✅ 7.4 Post-processing chain polish (bloom + aerial perspective) — closed 2026-07-12.
 - 🔒 6.2 PIMPL for AppState — DEFERRED PENDING FEASIBILITY.
 - 🔒 2.3 Sparse Virtual Texturing — DEFERRED PENDING FEASIBILITY.
 
@@ -354,7 +371,7 @@ Per TODO.md active section:
 | **Phase 5.7** RTX multi-bounce GI | for specular | ✅ closed (23x) |
 | **Phase 5.2.D refactor** | DDA consolidation, refraction self-intersection fix | ✅ closed (24x) |
 | **Phase 6** Refactoring | 6.1 ECS migration (UpdateApp 355→49 LoC), 6.3 Async Compute | ✅ · 6.2 PIMPL 🔒 deferred-pending |
-| **Phase 7** Rendering polish | 7.1 VCT cones, 7.2 TAA, 7.3 tonemap, 7.4 post-FX | 🔓 all open (post-RTX-shadow) |
+| **Phase 7** Rendering polish | 7.1 VCT cones, 7.2 TAA, 7.3 tonemap, 7.4 post-FX | ✅ all closed (2026-07-12) |
 
 Strategic pivots 2026-06-22 (per TODO.md §2 / §26-32):
 - **CSM bias tuning → RTX-only path forward** (operator decision).

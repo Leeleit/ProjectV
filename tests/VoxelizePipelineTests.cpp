@@ -158,8 +158,23 @@ void TestDebugViewCycle(TestContext &context)
 	if (GetNextLightingDebugView(LightingDebugView::VolumetricTransmittance) != LightingDebugView::GreedyMeshing) {
 		context.Fail(__LINE__, "VolumetricTransmittance -> GreedyMeshing cycle break");
 	}
-	if (GetNextLightingDebugView(LightingDebugView::GreedyMeshing) != LightingDebugView::Final) {
-		context.Fail(__LINE__, "GreedyMeshing -> Final cycle break");
+	if (GetNextLightingDebugView(LightingDebugView::GreedyMeshing) != LightingDebugView::ToneMapOutput) {
+		context.Fail(__LINE__, "GreedyMeshing -> ToneMapOutput cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::ToneMapOutput) != LightingDebugView::ColorGradingOutput) {
+		context.Fail(__LINE__, "ToneMapOutput -> ColorGradingOutput cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::ColorGradingOutput) != LightingDebugView::ExposureCurve) {
+		context.Fail(__LINE__, "ColorGradingOutput -> ExposureCurve cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::ExposureCurve) != LightingDebugView::VctConeCount) {
+		context.Fail(__LINE__, "ExposureCurve -> VctConeCount cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::VctConeCount) != LightingDebugView::VctConeDirections) {
+		context.Fail(__LINE__, "VctConeCount -> VctConeDirections cycle break");
+	}
+	if (GetNextLightingDebugView(LightingDebugView::VctConeDirections) != LightingDebugView::Final) {
+		context.Fail(__LINE__, "VctConeDirections -> Final cycle break");
 	}
 }
 

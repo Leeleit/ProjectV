@@ -1,0 +1,55 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D srcSceneColor;
+layout(set = 0, binding = 1) uniform sampler2D srcDepth;
+layout(set = 0, binding = 2, r11f_g11f_b10f) uniform writeonly image2D dstOutput;
+layout(set = 0, binding = 3) uniform sampler2D srcBloom;
+
+layout(push_constant) uniform PushConstants {
+    vec4 params0; // x=threshold, y=softKnee, z=bloomIntensity, w=aerialEnabled
+    vec4 params1; // x=fogDensity, y=fogMax, z=exposure
+    vec4 params2; // xyz=sunDirection
+    vec4 params3; // xyz=cameraPosition
+    vec4 params4; // xyz=fogColor
+} pushConstants;
+
+layout(constant_id = 0) const float kZNear = 0.1;
+layout(constant_id = 1) const float kZFar = 1000.0;
+
+float LinearizeDepth(float depth)
+{
+    return kZNear * kZFar / max(kZFar - depth * (kZFar - kZNear), 0.0001);
+}
+
+void main()
+{
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 dstSize = imageSize(dstOutput);
+    if (any(greaterThanEqual(coord, dstSize))) {
+        return;
+    }
+
+    const vec2 uv = (vec2(coord) + 0.5) / vec2(dstSize);
+    vec3 color = textureLod(srcSceneColor, uv, 0.0).rgb;
+
+    const bool bloomEnabled = pushConstants.params0.z > 0.0;
+    if (bloomEnabled) {
+        const vec3 bloom = textureLod(srcBloom, uv, 0.0).rgb * pushConstants.params0.z;
+        color += bloom;
+    }
+
+    const bool aerialEnabled = pushConstants.params0.w > 0.5;
+    if (aerialEnabled) {
+        const float depth = textureLod(srcDepth, uv, 0.0).r;
+        const float linearDepth = LinearizeDepth(depth);
+        const float fogDensity = pushConstants.params1.x;
+        const float fogMax = pushConstants.params1.y;
+        const float fogFactor = clamp(1.0 - exp(-linearDepth * fogDensity), 0.0, fogMax);
+        const vec3 fogColor = pushConstants.params4.xyz;
+        color = mix(color, fogColor, fogFactor);
+    }
+
+    imageStore(dstOutput, coord, vec4(color, 1.0));
+}

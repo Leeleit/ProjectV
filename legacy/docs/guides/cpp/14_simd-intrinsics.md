@@ -11,10 +11,12 @@
 AVX-512.
 
 > **Связь с философией:** SIMD — это
-> квинтэссенция [05_optimization-philosophy.md](../../philosophy/03_domain/01_optimization-philosophy.md). "Сначала измерь"
+> квинтэссенция [05_optimization-philosophy.md](../../philosophy/03_domain/01_optimization-philosophy.md). "Сначала
+> измерь"
 > особенно
 > важно здесь: SIMD не всегда быстрее из-за overhead на конвертацию данных. См.
-> также [03_dod-philosophy.md](../../philosophy/02_paradigms/02_dod-philosophy.md) — SoA layout критически важен для SIMD.
+> также [03_dod-philosophy.md](../../philosophy/02_paradigms/02_dod-philosophy.md) — SoA layout критически важен для
+> SIMD.
 
 ---
 

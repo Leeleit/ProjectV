@@ -10,17 +10,17 @@ but it does **not** override the current code or the current root `docs/`.
 ## Section Guide
 
 - `theory/` — `reference`
-  - clean conceptual material around ECS, memory layout, caching, and arenas
+    - clean conceptual material around ECS, memory layout, caching, and arenas
 - `connection/` — `historical`
-  - focused notes on subsystem connections such as logging, memory, profiling
+    - focused notes on subsystem connections such as logging, memory, profiling
 - `future/` — `speculative`
-  - future-facing design notes such as networking, modding, destruction, and non-euclidean concepts
+    - future-facing design notes such as networking, modding, destruction, and non-euclidean concepts
 - `adr/` — `historical`
-  - early architecture decisions with explicit rationale; some are now partly superseded
+    - early architecture decisions with explicit rationale; some are now partly superseded
 - `practice/` — mixed `historical` / `speculative`
-  - implementation sketches, technical specs, and post-MVP design work
+    - implementation sketches, technical specs, and post-MVP design work
 - `academic/` — `historical`
-  - defense/demo documents from the academic phase
+    - defense/demo documents from the academic phase
 
 ## Mainline Warning
 

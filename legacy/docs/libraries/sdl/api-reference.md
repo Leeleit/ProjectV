@@ -224,7 +224,8 @@ typedef enum SDL_AppResult {
 
 ### SDL_Event
 
-Union всех типов событий ([SDL_events.h](../../../../external/SDL/include/SDL3/SDL_events.h)). Общее поле `type` (Uint32)
+Union всех типов событий ([SDL_events.h](../../../../external/SDL/include/SDL3/SDL_events.h)). Общее поле `type` (
+Uint32)
 определяет, какое поле содержит данные. После проверки `event->type` обращайтесь к `event.key`, `event.window`,
 `event.quit` и т.д. Данные события **не сохраняются** после возврата из callback — нельзя хранить указатель на
 `event->key.text` и т.п.

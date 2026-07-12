@@ -4,6 +4,7 @@
 #include "debug/ProfilingGpu.hpp"
 #include "render/Cloudscape.hpp"
 #include "render/HizCulling.hpp"
+#include "render/PostFx.hpp"
 #include "render/RayTracedShadows.hpp"
 #include "render/SkyAtmosphere.hpp"
 
@@ -79,11 +80,10 @@ void RecordGraphicsCommands(
 	RenderState &render,
 	const SwapchainState &swapchain,
 	const FrameRenderData &frameRenderData,
-	const VulkanContextState &context,
+	VulkanContextState &context,
 	const VkCommandBuffer cmd,
 	const uint32_t imageIndex)
 {
-	(void)context;
 	ScopedPassTimer passTimer(render.renderPassTimings.graphicsMs);
 	PV_PROFILE_ZONE_N("RecordGraphicsCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Graphics Pass");
@@ -459,7 +459,60 @@ void RecordGraphicsCommands(
 		vkCmdEndRendering(cmd);
 
 		// Scene color → swapchain blit (replaces former TAA resolve pass)
-		{
+		bool postFxActive = projectv::render::IsPostFxEnabled();
+		if (postFxActive) {
+			postFxActive = projectv::render::CreatePostFxResources(&context, &render, swapchain.extent);
+			if (postFxActive) {
+				projectv::render::RecordPostFxPass(
+					cmd,
+					context,
+					render,
+					render.currentSceneLighting,
+					frameRenderData,
+					swapchain.extent,
+					frameRenderData.frameIndex);
+
+				TransitionImage(
+					cmd,
+					swapchain.images[imageIndex],
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_PIPELINE_STAGE_2_NONE,
+					0,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_WRITE_BIT);
+
+				const VkImageBlit blitRegion{
+					.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
+					.srcOffsets = {{0, 0, 0}, {static_cast<int32_t>(swapchain.extent.width), static_cast<int32_t>(swapchain.extent.height), 1}},
+					.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u},
+					.dstOffsets = {{0, 0, 0}, {static_cast<int32_t>(swapchain.extent.width), static_cast<int32_t>(swapchain.extent.height), 1}},
+				};
+				vkCmdBlitImage(
+					cmd,
+					render.postFxOutputImage,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					swapchain.images[imageIndex],
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					1,
+					&blitRegion,
+					VK_FILTER_LINEAR);
+
+				TransitionImage(
+					cmd,
+					swapchain.images[imageIndex],
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_WRITE_BIT,
+					VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+					VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+			}
+		}
+
+		if (!postFxActive) {
 			TransitionImage(
 				cmd,
 				render.sceneColorImage,

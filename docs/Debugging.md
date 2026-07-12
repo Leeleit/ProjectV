@@ -211,10 +211,10 @@ metrics pack.
    `linux-clang-debug-tracy-profiler` (если доступен) и отдельно собери target `tracy-profiler`.
 3. Запусти profiler и подключись к приложению.
 4. Смотри:
-   - CPU zones вокруг `UpdateApp`, `TickWalkCharacter`, `UpdateWalkGroundSupport`, `PrepareFrameRenderData`,
-     `DrawFrame`;
-   - GPU zones для `Voxel Meshing`, `Opaque Pass`, `Transparent Pass`, `Debug Overlay`, `Debug HUD`;
-   - plot'ы по dirty chunks, face counts, upload bytes и `walk` state drift.
+    - CPU zones вокруг `UpdateApp`, `TickWalkCharacter`, `UpdateWalkGroundSupport`, `PrepareFrameRenderData`,
+      `DrawFrame`;
+    - GPU zones для `Voxel Meshing`, `Opaque Pass`, `Transparent Pass`, `Debug Overlay`, `Debug HUD`;
+    - plot'ы по dirty chunks, face counts, upload bytes и `walk` state drift.
 
 ## Что использовать для каких проблем
 

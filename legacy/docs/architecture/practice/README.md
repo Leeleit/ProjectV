@@ -16,4 +16,5 @@ This folder contains flat legacy practice/spec documents merged into one navigat
 ## Known Theme Split
 
 - engine/render/tooling foundation lives in the lower-numbered files
-- networking, modding, destruction, CA, non-euclidean geometry, and large future systems live in the higher-numbered files
+- networking, modding, destruction, CA, non-euclidean geometry, and large future systems live in the higher-numbered
+  files

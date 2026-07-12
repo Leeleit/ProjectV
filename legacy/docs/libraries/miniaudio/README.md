@@ -92,10 +92,10 @@ flowchart TD
 - **C11** или **C++11** (или новее)
 - **Стандартная библиотека C**
 - **Платформенные зависимости** (линкуются автоматически):
-  - Linux: `-lpthread -lm -ldl` (опционально `-latomic`)
-  - Windows: нет зависимостей
-  - macOS/iOS: `-framework CoreFoundation -framework CoreAudio -framework AudioToolbox`
-  - Android: `-lOpenSLES` (если не используется runtime linking)
+    - Linux: `-lpthread -lm -ldl` (опционально `-latomic`)
+    - Windows: нет зависимостей
+    - macOS/iOS: `-framework CoreFoundation -framework CoreAudio -framework AudioToolbox`
+    - Android: `-lOpenSLES` (если не используется runtime linking)
 
 ### Поддерживаемые платформы и бэкенды
 

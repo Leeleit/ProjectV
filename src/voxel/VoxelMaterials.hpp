@@ -34,6 +34,11 @@ enum class LightingDebugView : uint8_t {
 	VolumetricFog = 11,
 	VolumetricTransmittance = 12,
 	GreedyMeshing = 13,
+	ToneMapOutput = 14,
+	ColorGradingOutput = 15,
+	ExposureCurve = 16,
+	VctConeCount = 17,
+	VctConeDirections = 18,
 };
 
 struct VoxelLightingDebugControls {

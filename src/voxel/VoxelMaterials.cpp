@@ -413,6 +413,16 @@ const char *LightingDebugViewToString(const LightingDebugView debugView)
 		return "VOL_TRN";
 	case LightingDebugView::GreedyMeshing:
 		return "MESH";
+	case LightingDebugView::ToneMapOutput:
+		return "TONEMAP";
+	case LightingDebugView::ColorGradingOutput:
+		return "GRADING";
+	case LightingDebugView::ExposureCurve:
+		return "EXPOSURE";
+	case LightingDebugView::VctConeCount:
+		return "VCT_CNT";
+	case LightingDebugView::VctConeDirections:
+		return "VCT_DIR";
 	case LightingDebugView::Final:
 	default:
 		return "FINAL";
@@ -462,6 +472,16 @@ LightingDebugView GetNextLightingDebugView(const LightingDebugView debugView)
 	case LightingDebugView::VolumetricTransmittance:
 		return LightingDebugView::GreedyMeshing;
 	case LightingDebugView::GreedyMeshing:
+		return LightingDebugView::ToneMapOutput;
+	case LightingDebugView::ToneMapOutput:
+		return LightingDebugView::ColorGradingOutput;
+	case LightingDebugView::ColorGradingOutput:
+		return LightingDebugView::ExposureCurve;
+	case LightingDebugView::ExposureCurve:
+		return LightingDebugView::VctConeCount;
+	case LightingDebugView::VctConeCount:
+		return LightingDebugView::VctConeDirections;
+	case LightingDebugView::VctConeDirections:
 	default:
 		return LightingDebugView::Final;
 	}

@@ -43,6 +43,4 @@
 [submodule "external/nlohmann_json"]
 	path = external/nlohmann_json
 	url = https://github.com/nlohmann/json.git
-[submodule "legacy/aa/external/Streamline"]
-	path = legacy/aa/external/Streamline
-	url = https://github.com/NVIDIA-RTX/Streamline.git
+

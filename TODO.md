@@ -6,6 +6,7 @@ ProjectV — высокопроизводительный интерактивн
 рендеринг (look-dev) и физическое взаимодействие в реальном времени.
 
 **Mainline completed** (snapshot `2026-06-22`, post-18x+):
+
 - SVO на CPU через Sparse64Tree + статическое продвижение чанков
 - Гибридное хранение: SVO → NanoVDB-aligned SSBO на GPU (grow-on-exceed)
 - Greedy meshing (CPU + GPU `voxel_mesh.comp`)
@@ -21,54 +22,63 @@ ProjectV — высокопроизводительный интерактивн
 - Async Compute Queue + Timeline Semaphores (cross-queue HZB + RTX BLAS routing)
 - ECS migration (UpdateApp: 355 → 49 lines)
 - Audio async scan (`std::jthread`)
-- RTX shadows foundation (BLAS dispatch + AABB geometry + rayQueryEXT shaders) — TLAS population in flight (5.2.A/B/C/D milestones)
+- RTX shadows foundation (BLAS dispatch + AABB geometry + rayQueryEXT shaders) — TLAS population in flight (5.2.A/B/C/D
+  milestones)
 
 **Стратегический фокус** (2026-06-22+): **RTX-only path forward**. Hardware target = NVIDIA RTX
 20/30/40/50 series (Turing RT cores или новее). Никаких non-RTX fallback, никаких уступок legacy.
 Стратегический разворот: CSM полностью удаляется (Milestone 5.2.D), VCT diffuse заменяется на DDGI
 probes (Milestone 5.5), остальное освещение мигрирует на RTX ray queries (Milestones 5.4, 5.6, 5.7).
 Причина: CSM bias tuning зашёл в тупик (Peter Panning не решается), RTX даёт ground-truth тени
+
 + AO + GI + specular + refraction на dedicated RT cores с лучшей производительностью чем CSM +
-DDA + VCT в сумме.
+  DDA + VCT в сумме.
 
 **Активные TODO**: см. секцию ниже. История закрытых задач — `CHANGELOG.md` + `agent/workspace.md`.
 
-**Стратегический статус (2026-06-24 update)**: ✅ **DDA Consolidation & Refraction Self-Intersection — CLOSED (resolved, session 24x).** Consolidated three duplicate chunk DDA traversal loops in `voxel.frag` into `TraceVoxelIntersection` using parameter flags `ignoreGlass`, `ignoreFluid`, and `rayFlags`, saving 150+ lines of duplicate code. Fixed the refraction self-intersection bug (glass/fluid columns now render distorted background instead of flat blue), and verified push constants and storage formats. All 37/37 tests passing.
+**Стратегический статус (2026-06-24 update)**: ✅ **DDA Consolidation & Refraction Self-Intersection — CLOSED (resolved,
+session 24x).** Consolidated three duplicate chunk DDA traversal loops in `voxel.frag` into `TraceVoxelIntersection`
+using parameter flags `ignoreGlass`, `ignoreFluid`, and `rayFlags`, saving 150+ lines of duplicate code. Fixed the
+refraction self-intersection bug (glass/fluid columns now render distorted background instead of flat blue), and
+verified push constants and storage formats. All 37/37 tests passing.
 
 ---
 
 ## Active tasks (2026-06-22)
 
-**Сводка:** 0 ⏸ Paused · 2 🔒 Deferred (pending feasibility) · 4 ⭐ Next-priority (7.x post-RTX) ·
-   🔓 1 RTX-only milestone cascade (5.2.D ✅ + 5.4 ✅ + 5.5 🔓 in progress + 5.6, 5.7).
-   **2026-06-22 update:** 5.2.A, 5.2.B, 5.2.C closed in session 19x. 5.2.D (CSM removal) +
-   5.4 (RTX AO) closed in session 20x. 5.5 (DDGI) infrastructure laid down in 20x
-   (RtxGiProbes class + bindings 14-17), probe update compute pass deferred to 5.5+.
-   RTX shadows + RTX AO = default paths. TAA gray-screen bug from CSM removal fixed
-   (SSBO struct misalignment in 4 shaders, see `agent/workspace.md` 20x).
-   **2026-06-22 session 21x fix (this session):** critical bug — `m_config.tlas` was never
-   created when `accelerationStructureHostCommands=0` (gate on `hostCommands` is for build
-   path only, not handle creation). This silently disabled the entire RTX shadow pipeline
-   (`tlas=null` → `rtxPathActive=false` → default `voxel.frag.spv` used → no ray query in
-   fragment shader). Fixed by always creating TLAS handle. Visual confirmation: VoxelLab
-   now shows ground-truth shadows on checker floor + columns. Additional fixes: `BuildDirtyBlases`
-   drain-order bug (counter incremented before enabled check, no BLAS ever built when
-   scratch null), `LookDevCapture` quit not latched, initial BLAS build path for
-   scene-load chunks, `RecordTlasBuild` post-build barrier AS_BUILD→FRAGMENT,
-   `RecordDebugReport` wired into per-frame loop.
+**Сводка:** 0 ⏸ Paused · 2 🔒 Deferred (pending feasibility) · 0 ⭐ Next-priority ·
+🔓 1 RTX-only milestone cascade (5.2.D ✅ + 5.4 ✅ + 5.5 ✅ + 5.6 ✅ + 5.7 ✅).
+**2026-06-22 update:** 5.2.A, 5.2.B, 5.2.C closed in session 19x. 5.2.D (CSM removal) +
+5.4 (RTX AO) closed in session 20x. 5.5 (DDGI) infrastructure laid down in 20x
+(RtxGiProbes class + bindings 14-17), probe update compute pass deferred to 5.5+.
+RTX shadows + RTX AO = default paths. TAA gray-screen bug from CSM removal fixed
+(SSBO struct misalignment in 4 shaders, see `agent/workspace.md` 20x).
+**2026-06-22 session 21x fix (this session):** critical bug — `m_config.tlas` was never
+created when `accelerationStructureHostCommands=0` (gate on `hostCommands` is for build
+path only, not handle creation). This silently disabled the entire RTX shadow pipeline
+(`tlas=null` → `rtxPathActive=false` → default `voxel.frag.spv` used → no ray query in
+fragment shader). Fixed by always creating TLAS handle. Visual confirmation: VoxelLab
+now shows ground-truth shadows on checker floor + columns. Additional fixes: `BuildDirtyBlases`
+drain-order bug (counter incremented before enabled check, no BLAS ever built when
+scratch null), `LookDevCapture` quit not latched, initial BLAS build path for
+scene-load chunks, `RecordTlasBuild` post-build barrier AS_BUILD→FRAGMENT,
+`RecordDebugReport` wired into per-frame loop.
 
 ### Next-priority (7.x post-RTX-shadow milestones — опциональные polish)
 
 Эти задачи не блокируют core RTX-driven rendering path (5.2/5.4-5.7). Имеют смысл после того, как
-Milestone 5.2.D (полное удаление CSM) закроется и RTX shadows proven. Порядок: 7.2 (TAA) → 7.3
-(tone mapping) → 7.4 (post-FX) → 7.1 (VCT cones, может быть заменён DDGI в Milestone 5.5).
+Milestone 5.2.D (полное удаление CSM) закроется и RTX shadows proven. Порядок выполнения
+2026-07-12: 7.3 (tone mapping) → 7.4 (post-FX) → 7.1 (VCT cones). Все три закрыты в этой
+сессии; остались только pre-existing предупреждения валидации DDGI-дескрипторов.
+TAA pipeline удалён из mainline и перенесён в `legacy/aa/` (см. `agent/workspace.md`).
 
-#### ⭐ Задача 7.1. VCT cone density upgrade — Open
+#### ✅ Задача 7.1. VCT cone density upgrade — Closed 2026-07-12
 
 **Цель:** Поднять плотность VCT-трассировки до production quality (текущее: 6-cone diffuse + 1-cone specular).
 Reference: WickedEngine 16-32 cone, Snowdrop 12-24 cone.
 
 **Конкретно:**
+
 - 6 → 12 cone diffuse (Octahedral parameterization или Fibonacci sphere; 2× quality)
 - 1 → 4 cone specular (trade-off: 4× стоимость; gating per-material roughness band)
 - Добавить второй specular cone ring для mipLevel-1..3 (текущий specular path использует только 1 cone)
@@ -78,6 +88,7 @@ Reference: WickedEngine 16-32 cone, Snowdrop 12-24 cone.
 `agent/knowledge.md` (VCT contract).
 
 **DoD:**
+
 - Reference scene `VoxelLab` lighting parity c профессиональным reference render
 - `LightingDebugView` 9 → 11 (новые views: VCT cone count, cone direction visualization)
 - Per-frame cost +20% на VoxelLab — допустимо, GPU-bound остаётся в бюджете
@@ -92,28 +103,20 @@ Reference: WickedEngine 16-32 cone, Snowdrop 12-24 cone.
 **Если когда-нибудь появится non-RTX target** (Steam Deck без RT, mobile port, web port) —
 можно reopen, но в текущем scope не преследуется. RTX-only = RTX-only.
 
-#### ⭐ Задача 7.2. TAA jitter + neighborhood quality — Open
+#### ❌ Задача 7.2. TAA jitter + neighborhood quality — REMOVED 2026-07-12
 
-**Цель:** Sub-pixel jittering TAA + neighborhood clamping для стабильности на низкочастотных сценах.
+**Причина удаления:** TAA pipeline полностью перенесён в `legacy/aa/` (operator decision,
+см. `agent/workspace.md`). Рендер в mainline идёт напрямую: `outColor` → `sceneColorTarget`
+→ blit → swapchain. Возвращение TAA не планируется в текущем scope; будущий antialiasing
+будет решаться через DLSS/DLAA/Streamline (Phase 4 «Ideal AA pipeline»), а не через
+собственный temporal resolve.
 
-**Конкретно:**
-- Halton sequence (2,3) jitter уже есть, проверить distribution
-- YCoCg clamping уже есть, добавить history clamping по per-pixel variance threshold
-- Neighborhood radius per `agent/knowledge.md` — current default 1, попробовать 1.5/2
-- Catmull-Rom 9-tap filter на history sample (vs текущий bilinear)
-
-**Ключевые файлы:** `src/render/TaaResolvePipeline.{hpp,cpp}`, `src/shaders/taa_resolve.frag`,
-`src/render/Renderer.cpp` (TAA on/off toggle).
-
-**DoD:**
-- Visual smoke: стабильность при медленном camera movement (no flicker)
-- Performance: TAA pass <0.5 ms на VoxelLab 1920×1080
-
-#### ⭐ Задача 7.3. Lighting exposure + tone mapping pass — Open
+#### ✅ Задача 7.3. Lighting exposure + tone mapping pass — Closed 2026-07-12
 
 **Цель:** Улучшить tone mapping (сейчас базовый Reinhard) + exposure control UI.
 
 **Конкретно:**
+
 - Reinhard → ACES Filmic (per `2026-06-21-tonemap-color-grading` experiment)
 - Exposure controls (already in place per LightingDebugView) → связать с `CurrentSceneLighting`
 - Auto-exposure based on histogram (опционально)
@@ -123,15 +126,17 @@ Reference: WickedEngine 16-32 cone, Snowdrop 12-24 cone.
 `src/render/ToneMapPass.{hpp,cpp}` (новый файл если отсутствует).
 
 **DoD:**
+
 - Reference VoxelLab смотрится кинематографично (vs текущего flat-ish look)
 - `LightingDebugView` 11 → 14 (добавить ACES, exposure curve, tone map output)
 
-#### ⭐ Задача 7.4. Post-processing chain polish — Open
+#### ✅ Задача 7.4. Post-processing chain polish — Closed 2026-07-12
 
 **Цель:** Внедрить эксперименты `2026-06-21-bloom-post-processing` (closed) и
 `2026-06-21-aerial-perspective` (closed) в mainline.
 
 **Конкретно:**
+
 - Bloom: downsample chain (5 mips), threshold + soft knee, composite additively
 - Aerial perspective: distance-based fog (exp или height-based), separate from existing VolumetricFog
 - Эти эксперименты marked `STATUS=closed` но не integrated в mainline renderer
@@ -141,6 +146,7 @@ Reference: WickedEngine 16-32 cone, Snowdrop 12-24 cone.
 `src/render/BloomPass.{hpp,cpp}` + `src/render/AerialPerspectivePass.{hpp,cpp}`.
 
 **DoD:**
+
 - Bloom visible на bright voxels (glass, fluid highlights)
 - Aerial perspective даёт depth cue на VoxelLab (distant geometry slightly desaturated)
 - Combined cost: post-FX < 1 ms на VoxelLab 1920×1080
@@ -156,6 +162,7 @@ Panning, который не удаётся устранить bias adjustments 
 A/B/C/D ниже.
 
 **Background (откуда этот разворот):**
+
 - VoxelLab peter-panning не починился reduction of `receiverLightBias` floor (`max(normalBias*0.5,
   depthBias*4.0)` → `max(normalBias*0.2, depthBias*2.0)`) — слишком маленькая компонента
   относительно доминирующего `receiverDepthBias`.
@@ -170,14 +177,17 @@ A/B/C/D ниже.
   budget без потери FPS.
 
 **Что сделано** (commits `6018c27`, `47ce703`, `285ce79`, `5390dab`, `c528396`, `18x+`):
+
 - BLAS dispatch wired в `BuildDirtyBlases` через one-shot cmd buffer + fence
 - AABB geometry per-chunk (`VK_GEOMETRY_TYPE_AABBS_KHR` + `vkCmdUpdateBuffer` + TRANSFER→AS_BUILD barrier)
 - `DirtyChunkRebuild { chunkIndex, aabb }` queue
-- Shader variants `voxel.frag.rtx.spv` + `voxel.frag.rtx_taa_on.spv` с `rayQueryEXT` + `accelerationStructureEXT rtxTlas` (binding 13)
+- Shader variants `voxel.frag.rtx.spv` + `voxel.frag.rtx_taa_on.spv` с `rayQueryEXT` +
+  `accelerationStructureEXT rtxTlas` (binding 13)
 - `TraceRtxSmoothSpecularRay` для `roughness ≤ kVctCutoffRoughness=0.3`
 - `graphicsPipelineRtx` + `graphicsPipelineRtxTaaOn` pipelines
 - `ProjectVRayTracedShadowTests` 11/11 sub-tests
-- `ProbeHardwareRayTracingSupport` ловит acceleration structure / ray query / deferred host ops / buffer device address caps
+- `ProbeHardwareRayTracingSupport` ловит acceleration structure / ray query / deferred host ops / buffer device address
+  caps
 - 18x+ fix: device creation pNext chain construction
 
 **Что осталось** (см. milestones ниже — A/B/C/D + последующие 5.4-5.6 для полной RTX-driven освещения).
@@ -189,6 +199,7 @@ A/B/C/D ниже.
 проставляет `accelerationStructureReference` через `vkGetAccelerationStructureDeviceAddressKHR`.
 
 **Конкретно:**
+
 - Per-chunk BLAS handle storage (`VkAccelerationStructureKHR[]` + `VkBuffer[]` для storage buffer'ов,
   либо `vkCreateAccelerationStructureKHR` с `VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR`
   плюс backing buffer per BLAS).
@@ -207,14 +218,17 @@ A/B/C/D ниже.
   `RayTracedShadows: instances=N blasRebuilds=M tlasRebuilds=K` где все три счётчика ненулевые.
 
 **Ключевые файлы:**
+
 - `src/render/RayTracedShadows.cpp:415-449` — `UpdateTlas` fix
 - `src/render/RayTracedShadows.cpp:451-463` — `RecordTlasBuild` real impl
 - `src/render/RayTracedShadows.cpp:327-413` — `BuildChunkBlas` (уже работает, надо дополнить
   cache'ом device address)
-- `src/render/RayTracedShadows.hpp:15-40` — `RayTracedShadowConfig` — добавить `std::vector<VkAccelerationStructureKHR> blasHandles`,
+- `src/render/RayTracedShadows.hpp:15-40` — `RayTracedShadowConfig` — добавить
+  `std::vector<VkAccelerationStructureKHR> blasHandles`,
   `std::vector<VkBuffer> blasStorageBuffers`, `std::vector<VkDeviceAddress> blasDeviceAddresses`
 
 **DoD:**
+
 - `PROJECTV_HW_RAY_TRACING=ON bin/ProjectV` → smoke log `RayTracedShadows: instances=120+
   blasRebuilds=120+ tlasRebuilds=N` где N растёт с числом кадров (на VoxelLab ~120 visible chunks)
 - `vulkaninfo`-based validation: TLAS handle non-null, `vkGetAccelerationStructureDeviceAddressKHR`
@@ -230,6 +244,7 @@ else csmShadow()`. Ray query против TLAS даёт ground-truth shadow visi
 без CSM-артефактов.
 
 **Конкретно:**
+
 - Новая GLSL функция `TraceRtxSunShadowRay(origin, dir, maxDistance) → float` (1.0 = lit, 0.0 = in shadow).
   Использует `rayQueryEXT` против `rtxTlas` (binding 13 уже есть в шейдере для specular).
 - Compile нового shader варианта `voxel.frag.ray_shadow.spv` + `voxel.frag.ray_shadow_taa_on.spv`
@@ -247,12 +262,14 @@ else csmShadow()`. Ray query против TLAS даёт ground-truth shadow visi
   `receiverDepthBias` для RTX path.
 
 **Ключевые файлы:**
+
 - `src/shaders/voxel.frag:776-832` — `ComputeSunShadowSample` split
 - `src/shaders/voxel.frag:77-86` — `TraceRtxSmoothSpecularRay` (template для новой shadow ray)
 - `src/CMakeLists.txt:60-100` — добавить `voxel.frag.ray_shadow` + `voxel.frag.ray_shadow_taa_on`
   в glslangValidator custom command
 
 **DoD:**
+
 - `PROJECTV_HW_RAY_TRACING=ON bin/ProjectV` + VoxelLab scene → визуально тени **привязаны к вокселям**,
   нет Peter Panning, нет acne, нет необходимости в cascade tuning.
 - 60+ FPS на VoxelLab 1920×1080 (RTX 3060 Ti, ray query cost estimate: ~0.5-1ms per frame)
@@ -266,6 +283,7 @@ RTX shadows включаются автоматически — никаких e
 (не запускается), а не fallback на CSM. Это pet-project, никаких уступок legacy.
 
 **Конкретно:**
+
 - `IsRayTracedShadowEnabled()` (`:24-31` в `RayTracedShadows.cpp`) переделать: возвращать
   `context.rayTracing.accelerationStructure && context.rayTracing.rayQuery` (auto-detect).
   Env gate **полностью убирается** — больше никаких `PROJECTV_HW_RAY_TRACING=ON/OFF`.
@@ -275,6 +293,7 @@ RTX shadows включаются автоматически — никаких e
 - VoxelLab baseline shadow визуально улучшается из коробки (без Peter Panning).
 
 **Ключевые файлы:**
+
 - `src/render/RayTracedShadows.cpp:24-31` — `IsRayTracedShadowEnabled` auto-detect, env gate удалить
 - `src/render/RayTracedShadows.cpp:Initialize` — отказ при non-RTX GPU вместо silent fallback
 - `src/render/Renderer.cpp` — wire auto-detected RTX path
@@ -283,12 +302,14 @@ RTX shadows включаются автоматически — никаких e
   делают её moot)
 
 **Hardware target policy (новый):**
+
 - **Minimum:** NVIDIA RTX 2060 (Turing, первые RT cores, generation 2019)
 - **Recommended:** NVIDIA RTX 3060 Ti / 3070 / 3080 / 4070+ (Ampere/Ada, 2nd/3rd gen RT cores)
 - **Unsupported:** anything without dedicated RT cores (GTX 10xx/16xx, AMD pre-RDNA3, Intel Arc A-series
   без decent RT perf). Hard fail с чётким error message.
 
 **DoD:**
+
 - Дефолтный запуск `bin/ProjectV` на RTX-capable GPU → RTX shadows active, без env vars, без
   `#ifdef LEGACY_CSM`.
 - Скриншот из user-facing demo: тени без Peter Panning, FPS ≥ 120 на RTX 3060 Ti.
@@ -302,6 +323,7 @@ RTX shadows включаются автоматически — никаких e
 RTX shadows — единственный shadow path. Минус ~1300 LoC legacy кода.
 
 **Конкретно (полный список удаляемого):**
+
 - `src/render/ShadowProjection.hpp` + `src/render/ShadowProjection.cpp` (~673 строки) — целиком
 - `src/shaders/voxel_shadow.vert` + `src/shaders/voxel_shadow.frag` (~154 строки) — целиком,
   если не переиспользуется для other shadow types (point lights, area lights)
@@ -335,12 +357,14 @@ RTX shadows — единственный shadow path. Минус ~1300 LoC legac
 - `LightingDebugView::Cascade` enum value — удалить
 
 **Что НЕ удалять (даже в этом milestone):**
+
 - VCT (Voxel Cone Tracing) — пока остаётся как GI path. Заменится на DDGI в Milestone 5.5.
 - CSM math может переиспользоваться для non-sun lights (point lights с малым radius) — оставить
   как building block, переименовать в `BuildLocalShadowProjection` или подобное.
 - Voxel shadow caster shader (`voxel_shadow.vert`) — может пригодиться для area light shadows.
 
 **DoD:**
+
 - `grep -r "BuildSunShadow\|SampleSunShadow\|sunShadowParams\|shadowCascadeDepthSplits" src/`
   → пусто (или только исторические ссылки в agent/knowledge.md)
 - `git grep "CSM" src/ tests/ CMakePresets.json` → пусто
@@ -365,6 +389,7 @@ RTX shadows — единственный shadow path. Минус ~1300 LoC legac
 на RTX 3060 Ti реалистично 120+ FPS.
 
 **Общий ray budget (per pixel, VoxelLab 1080p × 120 FPS = 248 MRays/sec):**
+
 - Sun shadow: 1 ray
 - Contact shadow: 1 ray
 - Local light shadow: 5 rays
@@ -380,16 +405,19 @@ RTX shadows — единственный shadow path. Минус ~1300 LoC legac
 traversal. BVH culling на AABB BLAS даёт дешевле для sparse scenes.
 
 **Конкретно:**
+
 - Новая GLSL функция `TraceRtxAmbientOcclusionRay(origin, direction, maxDistance)` через rayQueryEXT.
 - Заменить `TraceAmbientOcclusionRay` в `voxel.frag:389-411` (DDA) на ray query.
 - Удалить DDA helper `ComputeRayStepTMax` если больше не нужен.
 - AO cone count остаётся 3 (normal + 2 side) — RTX обрабатывает их параллельно в hardware.
 
 **Ключевые файлы:**
+
 - `src/shaders/voxel.frag:438-465` — `ComputeAmbientOcclusionVisibility` switch на RTX
 - `src/shaders/voxel.frag:77-86` — `TraceRtxSmoothSpecularRay` (template)
 
 **DoD:**
+
 - VoxelLab AO выглядит более consistent (no banding artifacts на voxel edges от DDA quantization)
 - AO pass cost: <0.3 ms/frame (3 rays/pixel на 1080p)
 - ctest regression green
@@ -398,9 +426,11 @@ traversal. BVH culling на AABB BLAS даёт дешевле для sparse scen
 
 **Цель:** Заменить VCT (Voxel Cone Tracing) clipmap на DDGI (Dynamic Diffuse Global Illumination)
 probes. RTX rays per probe обновляются каждый N кадров. Trilinear interpolation between probes at
-receiver. Это RTX-стандарт для GI per [Morgan McGuire NVIDIA RTX GI blog](https://developer.nvidia.com/blog/rtx-global-illumination-part-i/).
+receiver. Это RTX-стандарт для GI
+per [Morgan McGuire NVIDIA RTX GI blog](https://developer.nvidia.com/blog/rtx-global-illumination-part-i/).
 
 **Конкретно:**
+
 - Новая структура `RtxGiProbes` в `src/render/RtxGiProbes.{hpp,cpp}`:
   - 8×8×8 grid probes (512 для VoxelLab scene bounds)
   - Per-probe: 64 ray directions, radiance + depth storage (2 × vec4 = 32 bytes per probe)
@@ -414,12 +444,14 @@ receiver. Это RTX-стандарт для GI per [Morgan McGuire NVIDIA RTX G
 - VCT 3D clipmap остаётся как fallback для non-RTX, но RTX path его не использует
 
 **Ключевые файлы:**
+
 - `src/render/RtxGiProbes.{hpp,cpp}` (new file ~300 LoC)
 - `src/render/SceneResources.{hpp,cpp}` — add `RtxGiProbes` resource
 - `src/shaders/voxel.frag:137-179` — replace VCT with DDGI sampling
 - `src/shaders/voxel.frag:912-927` — `vctDiffuseIrradiance` → `ddgiDiffuseIrradiance`
 
 **DoD:**
+
 - VoxelLab diffuse GI визуально comparable to VCT (или лучше — нет bleeding artifacts на
   разных плотностях геометрии)
 - DDGI update cost: <0.5 ms/frame amortized
@@ -433,6 +465,7 @@ receiver. Это RTX-стандарт для GI per [Morgan McGuire NVIDIA RTX G
 attenuation. Луч входит в voxel, выходит с IOR-based bend, читает background.
 
 **Конкретно:**
+
 - Новая GLSL функция `TraceRtxRefractionRay(origin, direction, ior)` через rayQueryEXT
 - Modify `voxel.frag` glass path (around lines 969-977) — current fake transmission replaced with
   ray-traced lookup of background voxel color
@@ -441,10 +474,12 @@ attenuation. Луч входит в voxel, выходит с IOR-based bend, ч�
   refraction; if miss → use sky color
 
 **Ключевые файлы:**
+
 - `src/shaders/voxel.frag:76-100` — new `TraceRtxRefractionRay`
 - `src/shaders/voxel.frag:969-977` — replace fake transmission
 
 **DoD:**
+
 - Glass voxels показывают distorted background (видны объекты за стеклом)
 - Fluid voxels показывают underwater look (IOR-bent background)
 - Refraction pass cost: <0.3 ms/frame (1 ray/pixel, terminate-on-first-hit)
@@ -456,16 +491,19 @@ attenuation. Луч входит в voxel, выходит с IOR-based bend, ч�
 surfaces (mirrors, polished metal). Дополняет DDGI (только diffuse) для глянцевых surfaces.
 
 **Конкретно:**
+
 - `TraceRtxSmoothSpecularRay` уже есть (`:77-86`) — расширить до N bounces
 - Per bounce: trace ray, evaluate BRDF (specular component), accumulate
 - Bounce count: 2-3 (RTX GI reference: 2 bounces достаточно для visual quality)
 - Заменить VCT specular в `voxel.frag:918-928` на ray-traced multi-bounce
 
 **Ключевые файлы:**
+
 - `src/shaders/voxel.frag:77-86` — `TraceRtxSmoothSpecularRay` → `TraceRtxMultiBounceSpecular`
 - `src/shaders/voxel.frag:918-928` — VCT specular path → ray-traced path
 
 **DoD:**
+
 - Зеркальные surfaces показывают visible reflections других surfaces (ground truth GI)
 - Multi-bounce cost: <0.5 ms/frame (1 ray × 3 bounces = 3 rays/pixel)
 - Аналог `2026-06-21-rt-shadows-vs-csm` experiment verdict: visual quality boost стоит perf cost
@@ -477,6 +515,7 @@ surfaces (mirrors, polished metal). Дополняет DDGI (только diffus
 **Статус:** Deferred indefinite. Возобновляется ТОЛЬКО при появлении одного из ниже критериев.
 
 **Критерий возобновления** (любой из):
+
 - **C1. Plugin system / modding API.** Появляется задача на загрузку user-модулей в runtime. PIMPL
   даёт ABI stability boundary, без которого плагины не могут безопасно ссылаться на `AppState`.
 - **C2. Shared library / DLL boundary.** Проект начинает линковаться как `.so` / `.dll` для других
@@ -488,11 +527,13 @@ surfaces (mirrors, polished metal). Дополняет DDGI (только diffus
   транзитивных includes в `AppState.hpp`. PIMPL сокращает header surface.
 
 **Текущие показатели** (проверять quarterly):
+
 - Full rebuild time: ~30s с ccache (target met, C4 не сработал)
 - `AppState.hpp` transitive includes: Vulkan + Jolt + SDL + Tracy + Flecs (10+ headers)
 - Mechanical refactor scope: ~172 call sites (semicolon/dot typo risk, lifetime issues через `->`)
 
 **Что сделано** (не теряется):
+
 - `static_assert` контракт на размеры major members верифицирован в `src/core/Types.hpp`
 - Forward-declaration pattern частично применён (PIMPL в Types.cpp для рендер-классов)
 
@@ -503,6 +544,7 @@ surfaces (mirrors, polished metal). Дополняет DDGI (только diffus
 **Статус:** Deferred indefinite. Возобновляется ТОЛЬКО при появлении одного из ниже критериев.
 
 **Критерий возобновления** (любой из):
+
 - **C1. Procedural materials per voxel.** Появляется задача на per-voxel normal maps / detail maps
   / procedural patterns. SVT даёт уникальные текстуры на каждом чанке без раздувания атласа.
 - **C2. Material blending across chunk boundaries.** Воксели на границе чанков должны
@@ -515,6 +557,7 @@ surfaces (mirrors, polished metal). Дополняет DDGI (только diffus
   расширяется на volume textures.
 
 **Текущие показатели** (проверять quarterly):
+
 - Material count: 5 (Air, Fluid, Glass, FloorWhite, FloorGray) — параметрические, не текстурные
 - VCT: 3D clipmap использует occupancy, не текстуры
 - `voxel.frag` использует `materialId` напрямую для BRDF / albedo — UV не нужны
@@ -543,21 +586,22 @@ surfaces (mirrors, polished metal). Дополняет DDGI (только diffus
    (z, y, x ascending).
 
 3. **Портируемость:** Изменения собираются и проходят тесты на обоих dev-контурах:
-   - `linux-clang-debug` (native clang 22 + libstdc++)
-   - `windows-clang-debug` (clang-cl 22 + MSVC STL)
+  - `linux-clang-debug` (native clang 22 + libstdc++)
+  - `windows-clang-debug` (clang-cl 22 + MSVC STL)
 
 4. **Безопасность типов:**
-   - `std::expected<T, E>` для cold path (I/O, asset load, init)
-   - `bool` return + `PV_ASSERT` на инвариантах для hot path (render, cull, simulation)
-   - Jolt includes: `<Jolt/Jolt.h>` обязан быть ПЕРВЫМ во всех TU, использующих физику
+  - `std::expected<T, E>` для cold path (I/O, asset load, init)
+  - `bool` return + `PV_ASSERT` на инвариантах для hot path (render, cull, simulation)
+  - Jolt includes: `<Jolt/Jolt.h>` обязан быть ПЕРВЫМ во всех TU, использующих физику
 
 5. **Комментарии:** поясняющие комментарии остаются в коде одной строкой после комментируемой строки (см. AGENTS.md
    §5.7).
    `// EVIL:` только для неочевидных хаков или захардкоженных математических констант.
 
 6. **Стратегический порядок:** RTX shadows primary (5.2.A→B→C, multi-session) → CSM removal (5.2.D)
-   → RTX AO replacement (5.4) → DDGI (5.5) → RTX refraction (5.6) → TAA + tonemap + post-FX polish
-   (7.x, опционально) → deferred roadmap (6.2/2.3 при появлении trigger-критериев). Разворот 2026-06-22:
+   → RTX AO replacement (5.4) → DDGI (5.5) → RTX refraction (5.6) → tonemap + post-FX polish
+   (7.x, опционально; TAA удалён из mainline, см. §7.2) → deferred roadmap (6.2/2.3 при появлении trigger-критериев).
+   Разворот 2026-06-22:
    non-RTX CSM bias tuning признан неэффективным (peter-panning не решается через bias coefficients);
    CSM **полностью удаляется** (задача 7.2 closed как REMOVED 2026-06-22). Hardware target = RTX 20/30/40/50 series.
    Non-RTX fallback **не предоставляется** — это pet-project, нет нужды в legacy уступках.
@@ -572,12 +616,12 @@ narrative — `agent/workspace.md`.
 
 Краткая сводка по фазам:
 
-| Phase | Tasks | Status |
-|-------|-------|--------|
-| 1. Voxel Database & GPU Storage | 1.1 NanoVDB, 1.2 Dedup, 1.3 Audio async | ✅ all closed |
-| 2. GPU-Driven Geometry | 2.1 HZB, 2.2 Mesh Shaders | ✅ · 2.3 SVT 🔒 deferred-pending |
-| 3. Physics & Simulation | 3.1 GPU Fluid CA, 3.2 Incremental Jolt, 3.3 Greedy merger | ✅ all closed |
-| 4. Procedural Generation & LOD | 4.1 World Gen, 4.2 LOD, 4.3 Draw distance | ✅ all closed |
-| 5. RTX-Driven Lighting & Temporal | 5.2 RTX shadows (A/B/C/D) · 5.3 TAA MV · 5.4 RTX AO · 5.5 DDGI · 5.6 RTX refraction | 🔓 resumed 2026-06-22, A/B/C in flight |
-| 6. Refactoring | 6.1 ECS, 6.3 Async Compute | ✅ · 6.2 PIMPL 🔒 deferred-pending |
-| 7. Rendering Polish (post-RTX-shadow) | 7.1 VCT cones · 7.2 TAA · 7.3 tonemap · 7.4 post-FX | 🔓 all open |
+| Phase                                 | Tasks                                                                                                        | Status                            |
+|---------------------------------------|--------------------------------------------------------------------------------------------------------------|-----------------------------------|
+| 1. Voxel Database & GPU Storage       | 1.1 NanoVDB, 1.2 Dedup, 1.3 Audio async                                                                      | ✅ all closed                      |
+| 2. GPU-Driven Geometry                | 2.1 HZB, 2.2 Mesh Shaders                                                                                    | ✅ · 2.3 SVT 🔒 deferred-pending   |
+| 3. Physics & Simulation               | 3.1 GPU Fluid CA, 3.2 Incremental Jolt, 3.3 Greedy merger                                                    | ✅ all closed                      |
+| 4. Procedural Generation & LOD        | 4.1 World Gen, 4.2 LOD, 4.3 Draw distance                                                                    | ✅ all closed                      |
+| 5. RTX-Driven Lighting & Temporal     | 5.2 RTX shadows (A/B/C/D/E) · 5.3 TAA MV · 5.4 RTX AO · 5.5 DDGI · 5.6 RTX refraction · 5.7 RTX multi-bounce | ✅ all closed                      |
+| 6. Refactoring                        | 6.1 ECS, 6.3 Async Compute                                                                                   | ✅ · 6.2 PIMPL 🔒 deferred-pending |
+| 7. Rendering Polish (post-RTX-shadow) | 7.1 VCT cones · 7.3 tonemap · 7.4 post-FX                                                                    | ✅ all closed                      |

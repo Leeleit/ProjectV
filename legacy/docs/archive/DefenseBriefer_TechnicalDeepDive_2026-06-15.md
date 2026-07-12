@@ -302,7 +302,8 @@ enum class LightingDebugView : uint8_t {
 **`src/render/RayMarchPass.hpp:9-30`** — статус:
 > «The current implementation is an **API + state contract only** — the `RecordRayMarchCommands` entry point logs the
 > per-frame state and is a no-op until a small follow-up slice binds the compute pass into the graphics command stream.
-> That follow-up is documented in `docs/DefenseReport.md §3` and `agent/decisions.md` (deferred to Phase 7 — full compute
+> That follow-up is documented in `docs/DefenseReport.md §3` and `agent/decisions.md` (deferred to Phase 7 — full
+> compute
 > pipeline + offscreen color attachment + blit to swapchain). The shape of the API is stable; consumers can wire their
 > side of the call site now.»
 

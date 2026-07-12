@@ -245,7 +245,8 @@ int main(int argc, char **argv)
 	uint step = 0;
 
 	cout << "\nStarting simulation..." << endl;
-	cout << "Sphere will fall onto the floor and eventually go to sleep.\n" << endl;
+	cout << "Sphere will fall onto the floor and eventually go to sleep.\n"
+		 << endl;
 
 	while (body_interface.IsActive(sphere_id)) {
 		++step;

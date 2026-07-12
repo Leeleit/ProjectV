@@ -210,27 +210,27 @@ vkCmdDrawIndexedIndirect(commandBuffer, indirectBuffer,
 - **Task shaders** — coarse-grained work distribution
 - **Mesh shaders** — fine-grained geometry generation
 - **Advantages for voxels**:
-  - Elimination of CPU-side mesh generation
-  - Dynamic topology changes
-  - Better utilization of GPU compute
+    - Elimination of CPU-side mesh generation
+    - Dynamic topology changes
+    - Better utilization of GPU compute
 
 ### Dynamic Rendering (`VK_KHR_dynamic_rendering`)
 
 - **No RenderPass/Framebuffer objects** — simplified API
 - **Attachmentless rendering** — для compute-only pipelines
 - **Benefits for voxel engines**:
-  - Reduced driver overhead
-  - Easier integration with compute pipelines
-  - Better performance for complex rendering graphs
+    - Reduced driver overhead
+    - Easier integration with compute pipelines
+    - Better performance for complex rendering graphs
 
 ### Shader Object Layer (`VK_EXT_shader_object`)
 
 - **Pipeline-less rendering** — динамическая компиляция шейдеров
 - **Runtime specialization** — оптимизация под конкретные воксельные паттерны
 - **Use cases**:
-  - Procedural material shaders
-  - Dynamic terrain generation
-  - Real-time voxel editing
+    - Procedural material shaders
+    - Dynamic terrain generation
+    - Real-time voxel editing
 
 ### Descriptor Buffer (`VK_EXT_descriptor_buffer`)
 
@@ -387,8 +387,10 @@ vkQueueSubmit(graphicsQueue, ...); // Wait for value N
 
 1. **Input**: Буфер с данными вокселей (ID, материалы).
 2. **Compute Shader**:
-  - Анализирует соседей (culling невидимых граней).
-  - Генерирует вершины и индексы в выходные буферы.
+
+- Анализирует соседей (culling невидимых граней).
+- Генерирует вершины и индексы в выходные буферы.
+
 3. **Output**: Vertex/Index буферы для рендеринга.
 
 ```cpp

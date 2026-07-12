@@ -24,8 +24,8 @@ PRE-RESET SNAPSHOT — ARCHIVED 2026-06-24
 > - `agent/workspace.md` (текущий контекст + active tasks)
 > - `TODO.md` (roadmap)
 > - `AGENTS.md` (протокол работы агента)
-================================================================================
--->
+    ================================================================================
+    -->
 
 # COMMENTS.md
 
@@ -40,9 +40,11 @@ For git-archeology (refactor/bug-fix history of past commits), see `CHANGELOG.md
 `COMMENTS.md` describes **current** code; `CHANGELOG.md` describes **past** changes.
 
 Categories:
+
 - `refactor-history` — git-archeology (`// **Tier X.Y (2026-MM-DD).** Removed; replaced by ...`)
 - `design-rationale` — why this code exists / this choice was made. Cross-refs to
-  `agent/knowledge.md Part A` (formerly decisions.md) and `agent/knowledge.md Part B` (formerly memory.md) are preserved verbatim.
+  `agent/knowledge.md Part A` (formerly decisions.md) and `agent/knowledge.md Part B` (formerly memory.md) are preserved
+  verbatim.
 - `intent` — what the code does / contract of a function, struct, or field.
 - `test-narrative` — test scenario description (`// M5: ...`, `// **X axis.** ...`).
 
@@ -171,7 +173,6 @@ w=0 on the Vec3 per the `_pad` field's default-init
 
 contract).
 
-
 ## `src/core/StringId.ixx`
 
 ### L18-L27 (intent)
@@ -260,18 +261,18 @@ to make the specialisation distinguishable from the
 
 primary template.
 
-
 ## `src/render/vulkan/VulkanMeshShaderPipeline.cpp`
 
 ### L1-L41 (design-rationale)
 
 Pattern C mesh shader pipeline per `TODO.md §2.1` + `mesh-shader-vs-compute-cull` verdict=mixed
+
 + `agent/knowledge.md §10.11` per-vertex AO no-op contract. Three sub-pipelines share one
-descriptor set layout (4 SSBOs): pre-cull compute + mesh-shader graphics + future pipelines.
-Push-constant range 128 bytes (Vulkan min) covers VoxelMeshingPushConstants(64) +
-viewProjection(64) exactly. `vkGetPhysicalDeviceMeshShaderFeaturesEXT.meshShader == VK_TRUE`
-probed at init; graceful fallback to PackedFace indirect draw when absent or env unset.
-Cross-vendor support: NVIDIA (RTX 30/40/50), AMD RDNA2/3/4, Intel Arc Battlemage+.
+  descriptor set layout (4 SSBOs): pre-cull compute + mesh-shader graphics + future pipelines.
+  Push-constant range 128 bytes (Vulkan min) covers VoxelMeshingPushConstants(64) +
+  viewProjection(64) exactly. `vkGetPhysicalDeviceMeshShaderFeaturesEXT.meshShader == VK_TRUE`
+  probed at init; graceful fallback to PackedFace indirect draw when absent or env unset.
+  Cross-vendor support: NVIDIA (RTX 30/40/50), AMD RDNA2/3/4, Intel Arc Battlemage+.
 
 ### L210-L240 (design-rationale)
 
@@ -290,6 +291,7 @@ COMPUTE→MESH stage. Returns true if dispatch happened. Counter overflow safe (
 chunk count, which is upper bound for visible set per camera frustum).
 
 --
+
 ## `src/shaders/voxel_mesh.mesh`
 
 ### L1-L4 (design-rationale)
@@ -315,69 +317,163 @@ spec).
 
 ### L1-L48 (design-rationale)
 
-Stage 3.1 GPU Fluid CA full pipeline integration per `TODO.md §3.1` + `agent/knowledge.md §30.4` 3-step migration precedent. `FluidCaPushConstants` (48 bytes) + `FluidCaGpuFrameStats` (16 bytes) cross-shader byte-exact contracts. Public API surface minimal: env-gate (`IsFluidCaGpuPipelineRequested`), pipeline lifecycle (`CreateFluidCaPipelines` / `DestroyFluidCaPipelines`), per-frame record (`RecordFluidCaDispatch`), cross-queue submit (`SubmitFluidCaToComputeQueue` via `vkQueueSubmit2` + `VkSemaphoreSubmitInfo` + `renderTimelineSemaphore`), stats readback (`ReadFluidCaFrameStats` via `vmaInvalidateAllocation` mapped buffer). Atomic strategy: `fluid_ca.comp` uses `atomicOr` + bit-check (functionally equivalent to CAS for "set bit if unset" claim per `2026-06-21-gpu-fluid-ca-atomic-strategy` in-progress experiment).
+Stage 3.1 GPU Fluid CA full pipeline integration per `TODO.md §3.1` + `agent/knowledge.md §30.4` 3-step migration
+precedent. `FluidCaPushConstants` (48 bytes) + `FluidCaGpuFrameStats` (16 bytes) cross-shader byte-exact contracts.
+Public API surface minimal: env-gate (`IsFluidCaGpuPipelineRequested`), pipeline lifecycle (`CreateFluidCaPipelines` /
+`DestroyFluidCaPipelines`), per-frame record (`RecordFluidCaDispatch`), cross-queue submit (
+`SubmitFluidCaToComputeQueue` via `vkQueueSubmit2` + `VkSemaphoreSubmitInfo` + `renderTimelineSemaphore`), stats
+readback (`ReadFluidCaFrameStats` via `vmaInvalidateAllocation` mapped buffer). Atomic strategy: `fluid_ca.comp` uses
+`atomicOr` + bit-check (functionally equivalent to CAS for "set bit if unset" claim per
+`2026-06-21-gpu-fluid-ca-atomic-strategy` in-progress experiment).
 
 ## `src/render/vulkan/VulkanFluidCaPipeline.cpp`
 
 ### L1-L88 (design-rationale)
 
-Constants block: 5 descriptor bindings (PackedChunkDescriptors / ActiveChunkIds / SourceFluidCells / DestinationFluidCells / FluidStats) match `fluid_ca.comp` layout 1:1; 5*MAX_FRAMES_IN_FLIGHT pool size for storage buffer descriptors; `kFluidCaStatsResetValue=0u` for `vkCmdFillBuffer` reset. Shader module loader mirrors `VulkanMeshShaderPipeline::CreateMeshShaderModule` pattern (extracted helper to avoid duplication with the mesh shader code path). `CreateFluidCaPipelines` does graceful fallback (returns false on missing spv or device creation failure; caller in `VulkanInit.cpp` logs informational and continues with CPU path per `agent/knowledge.md §30.4` Step 1).
+Constants block: 5 descriptor bindings (PackedChunkDescriptors / ActiveChunkIds / SourceFluidCells /
+DestinationFluidCells / FluidStats) match `fluid_ca.comp` layout 1:1; 5*MAX_FRAMES_IN_FLIGHT pool size for storage
+buffer descriptors; `kFluidCaStatsResetValue=0u` for `vkCmdFillBuffer` reset. Shader module loader mirrors
+`VulkanMeshShaderPipeline::CreateMeshShaderModule` pattern (extracted helper to avoid duplication with the mesh shader
+code path). `CreateFluidCaPipelines` does graceful fallback (returns false on missing spv or device creation failure;
+caller in `VulkanInit.cpp` logs informational and continues with CPU path per `agent/knowledge.md §30.4` Step 1).
 
 ### L120-L250 (design-rationale)
 
-`CreateFluidCaPipelines` builds compute pipeline from `fluid_ca.comp.spv` via `vkCreateComputePipelines`. Pipeline layout uses single 5-binding descriptor set layout + 48-byte push constant range. Shader module named "FluidCaShader", pipeline layout "FluidCaPipelineLayout", pipeline "FluidCaPipeline", descriptor set layout "FluidCaDescriptorSetLayout" via `SetVulkanObjectName` for Validation Layer debug. Sets `render->fluidCaPipelineEnabled = true` on success. `DestroyFluidCaPipelines` tears down in reverse order (pipeline, pipeline layout, descriptor pool, descriptor set layout, shader module, all 4 per-frame buffers per SceneFrameResources). Safe to call on `pipelineEnabled=false` (no-op).
+`CreateFluidCaPipelines` builds compute pipeline from `fluid_ca.comp.spv` via `vkCreateComputePipelines`. Pipeline
+layout uses single 5-binding descriptor set layout + 48-byte push constant range. Shader module named "FluidCaShader",
+pipeline layout "FluidCaPipelineLayout", pipeline "FluidCaPipeline", descriptor set layout "FluidCaDescriptorSetLayout"
+via `SetVulkanObjectName` for Validation Layer debug. Sets `render->fluidCaPipelineEnabled = true` on success.
+`DestroyFluidCaPipelines` tears down in reverse order (pipeline, pipeline layout, descriptor pool, descriptor set
+layout, shader module, all 4 per-frame buffers per SceneFrameResources). Safe to call on `pipelineEnabled=false` (
+no-op).
 
 ### L260-L380 (design-rationale)
 
-`RefreshFluidCaResourceBindings` creates descriptor pool + allocates 1 descriptor set per `SceneFrameResources` + writes 5 `VkWriteDescriptorSet` entries (chunkDescriptorBuffer, fluidCaActiveChunkIdBuffer, fluidCaSourceBuffer, fluidCaDestinationBuffer, fluidCaStatsBuffer). Skips sets where any binding is null (graceful for frames with partial init). `RecordFluidCaDispatch` resets stats buffer via `std::memset` (mapped memory) + 3 pre-dispatch `VkBufferMemoryBarrier2` (stats fill + source + activeChunkId HOST→COMPUTE) + binds pipeline + descriptor set + push constants + `vkCmdDispatch(activeChunkCount, 1, 1)` + 2 post-dispatch barriers (stats + dest COMPUTE→HOST).
+`RefreshFluidCaResourceBindings` creates descriptor pool + allocates 1 descriptor set per `SceneFrameResources` + writes
+5 `VkWriteDescriptorSet` entries (chunkDescriptorBuffer, fluidCaActiveChunkIdBuffer, fluidCaSourceBuffer,
+fluidCaDestinationBuffer, fluidCaStatsBuffer). Skips sets where any binding is null (graceful for frames with partial
+init). `RecordFluidCaDispatch` resets stats buffer via `std::memset` (mapped memory) + 3 pre-dispatch
+`VkBufferMemoryBarrier2` (stats fill + source + activeChunkId HOST→COMPUTE) + binds pipeline + descriptor set + push
+constants + `vkCmdDispatch(activeChunkCount, 1, 1)` + 2 post-dispatch barriers (stats + dest COMPUTE→HOST).
 
 ### L420-L530 (design-rationale)
 
-`SubmitFluidCaToComputeQueue` uses `vkQueueSubmit2` with `VkCommandBufferSubmitInfo` + `VkSemaphoreSubmitInfo` wait on `renderTimelineSemaphore` (value = previous) + `VkSemaphoreSubmitInfo` signal on same semaphore (value = incremented). Bumps `context->renderTimelineValue += 1u` to advance the timeline. RAW hazard: compute→graphics (writeOutput → readInput) satisfied by semaphore signal+wait. Cross-queue submission ready but not yet wired in `Renderer.cpp` (current path uses main graphics command buffer for dispatch, then SubmitFluidCaToComputeQueue can route to dedicated compute queue once dedicated compute command pool is added — see `agent/workspace.md §2`).
+`SubmitFluidCaToComputeQueue` uses `vkQueueSubmit2` with `VkCommandBufferSubmitInfo` + `VkSemaphoreSubmitInfo` wait on
+`renderTimelineSemaphore` (value = previous) + `VkSemaphoreSubmitInfo` signal on same semaphore (value = incremented).
+Bumps `context->renderTimelineValue += 1u` to advance the timeline. RAW hazard: compute→graphics (writeOutput →
+readInput) satisfied by semaphore signal+wait. Cross-queue submission ready but not yet wired in `Renderer.cpp` (current
+path uses main graphics command buffer for dispatch, then SubmitFluidCaToComputeQueue can route to dedicated compute
+queue once dedicated compute command pool is added — see `agent/workspace.md §2`).
 
 ### L540-L620 (design-rationale)
 
-`ReadFluidCaFrameStats` invalidates the mapped stats buffer via `vmaInvalidateAllocation` + copies 16 bytes (4 × uint32: activeFluidCells / droppedFluidCells / iteration / reserved) for CPU-side debug HUD. Per `agent/knowledge.md §30.4` contract the stats are debug-only — count conservation invariant enforced by `fluid_ca.comp:101-105` `atomicOr` + bit-check, not by stats counter.
+`ReadFluidCaFrameStats` invalidates the mapped stats buffer via `vmaInvalidateAllocation` + copies 16 bytes (4 × uint32:
+activeFluidCells / droppedFluidCells / iteration / reserved) for CPU-side debug HUD. Per `agent/knowledge.md §30.4`
+contract the stats are debug-only — count conservation invariant enforced by `fluid_ca.comp:101-105` `atomicOr` +
+bit-check, not by stats counter.
 
 ## `src/voxel/VoxelLodDownsample.{hpp,cpp}`
 
 ### L1-L132 (design-rationale)
 
-Stage 4.2 LOD chunk 2 B_SurfacePreserve downsampling kernel + per-chunk `LodDownsampleJob` orchestrator per `2026-06-21-lod-mesh-downsampling` verdict=mixed. Lives in `projectv::voxel` namespace (separate from `voxel/VoxelWorld.cpp` to minimize transitive include cost for the test target). `LodDownsampleStepForLod` maps LOD 0/1/2/3 → step 1/2/4/8 (per `SelectLodLevelForDistance` distance thresholds <32m/<64m/<128m/≥128m). `LodDownsampledExtentForLod` returns `chunkSize/step` (clamped to ≥1 for safety). `SurfacePreserveVote8` reads step³ source voxels in fixed `sz,sy,sx` order, returns first non-Air material found OR Air if all step³ are Air — 0 T-junction holes across 75 boundary configurations per experiment. `DownsampleChunkForLodSurfacePreserve` allocates `outDownsampled` of size `outExtent³`, populates from `chunk.min` origin. `RunLodDownsampleJobs` iterates all chunks, calls downsample, sets `lodDownsampledNonAirCount` byte. `IsLodDownsampleEnabled` env gate (`PROJECTV_LOD_DOWNSAMPLE=ON`, default OFF).
+Stage 4.2 LOD chunk 2 B_SurfacePreserve downsampling kernel + per-chunk `LodDownsampleJob` orchestrator per
+`2026-06-21-lod-mesh-downsampling` verdict=mixed. Lives in `projectv::voxel` namespace (separate from
+`voxel/VoxelWorld.cpp` to minimize transitive include cost for the test target). `LodDownsampleStepForLod` maps LOD
+0/1/2/3 → step 1/2/4/8 (per `SelectLodLevelForDistance` distance thresholds <32m/<64m/<128m/≥128m).
+`LodDownsampledExtentForLod` returns `chunkSize/step` (clamped to ≥1 for safety). `SurfacePreserveVote8` reads step³
+source voxels in fixed `sz,sy,sx` order, returns first non-Air material found OR Air if all step³ are Air — 0 T-junction
+holes across 75 boundary configurations per experiment. `DownsampleChunkForLodSurfacePreserve` allocates
+`outDownsampled` of size `outExtent³`, populates from `chunk.min` origin. `RunLodDownsampleJobs` iterates all chunks,
+calls downsample, sets `lodDownsampledNonAirCount` byte. `IsLodDownsampleEnabled` env gate (
+`PROJECTV_LOD_DOWNSAMPLE=ON`, default OFF).
 
 ## `src/physics/GreedyPhysicsMerger.{hpp,cpp}`
 
 ### L1-L200 (design-rationale)
 
-Stage 3.3 Greedy Physics Meshing integration per `2026-06-21-greedy-physics-meshing-cpu` verdict=yes (D_3D greedy merge algorithm, 35× shape reduction, 100% volume preservation). `MergedVoxelBox` struct holds min/max-exclusive extents in voxel coordinates. `GreedyMergeSolidVoxelsInBounds` algorithm: for each (x,y,z) in fixed `z,y,x` ascending order, find max X extent (X+), then max Y extent over X-range (Y+), then max Z extent over XY-range (Z+), mark consumed via byte mask, emit one `MergedVoxelBox` per maximal extents. `IsSolidAt` inline helper checks `IsPhysicsSolidMaterial` (Glass + FloorWhite + FloorGray; Air + Fluid return false). `IsGreedyPhysicsMeshEnabled` env gate (`PROJECTV_GREEDY_PHYSICS_MESH=ON` default; `=OFF` falls back to naive per-voxel loop in PhysicsWorld.cpp). Both `BuildStaticVoxelCollisionBody` and `BuildChunkStaticCollisionBody` (per-chunk incremental Jolt) integrate greedy merge. Per-chunk rebuild path uses greedy merge for new compound shape. Tests cover empty world, single voxel unit box, full chunk single box, volume preservation (sum of merged box volumes equals solid voxel count), mixed half-chunk reduction, fluid+air ignored, oversized bounds clamp to world extents.
+Stage 3.3 Greedy Physics Meshing integration per `2026-06-21-greedy-physics-meshing-cpu` verdict=yes (D_3D greedy merge
+algorithm, 35× shape reduction, 100% volume preservation). `MergedVoxelBox` struct holds min/max-exclusive extents in
+voxel coordinates. `GreedyMergeSolidVoxelsInBounds` algorithm: for each (x,y,z) in fixed `z,y,x` ascending order, find
+max X extent (X+), then max Y extent over X-range (Y+), then max Z extent over XY-range (Z+), mark consumed via byte
+mask, emit one `MergedVoxelBox` per maximal extents. `IsSolidAt` inline helper checks `IsPhysicsSolidMaterial` (Glass +
+FloorWhite + FloorGray; Air + Fluid return false). `IsGreedyPhysicsMeshEnabled` env gate (
+`PROJECTV_GREEDY_PHYSICS_MESH=ON` default; `=OFF` falls back to naive per-voxel loop in PhysicsWorld.cpp). Both
+`BuildStaticVoxelCollisionBody` and `BuildChunkStaticCollisionBody` (per-chunk incremental Jolt) integrate greedy merge.
+Per-chunk rebuild path uses greedy merge for new compound shape. Tests cover empty world, single voxel unit box, full
+chunk single box, volume preservation (sum of merged box volumes equals solid voxel count), mixed half-chunk reduction,
+fluid+air ignored, oversized bounds clamp to world extents.
 
 ## `src/physics/PhysicsWorld.cpp` (17x incremental SyncPhysicsWorld)
 
 ### L3205-L3241 (design-rationale)
 
-`SyncPhysicsWorld` split into two paths after Stage 3.2 follow-up. World-pointer change (first load or scene switch) does full chunk rebuild via per-chunk `BuildChunkStaticCollisionBody` for every chunk — populates `chunkStaticBodies` + new `chunkMergedBoxes` map. Edit-only path is incremental: `ProcessChunkRebuildQueue` applies dirty chunk rebuilds first, then `RebuildStaticWorldBodyFromChunkShapes` re-emits the monolithic `staticWorldBodyId` as a single `JPH::StaticCompoundShapeSettings` covering all per-chunk merged boxes. Net effect: per-edit physics sync cost drops from O(N_world_cells) full scan (≈250 ms on FlatBench 166 400 cells) to O(N_dirty_chunks + N_total_chunks) compound rebuild (≈30 ms on 400 chunks). Walk-character contact check (`IsWalkJumpLockedSourceSupportSideWallContact`) uses new `IsPhysicsStaticWorldBodyId` helper that recognizes both monolithic and per-chunk body IDs, so the contact normal vs `staticWorldBodyId` API stays compatible.
+`SyncPhysicsWorld` split into two paths after Stage 3.2 follow-up. World-pointer change (first load or scene switch)
+does full chunk rebuild via per-chunk `BuildChunkStaticCollisionBody` for every chunk — populates `chunkStaticBodies` +
+new `chunkMergedBoxes` map. Edit-only path is incremental: `ProcessChunkRebuildQueue` applies dirty chunk rebuilds
+first, then `RebuildStaticWorldBodyFromChunkShapes` re-emits the monolithic `staticWorldBodyId` as a single
+`JPH::StaticCompoundShapeSettings` covering all per-chunk merged boxes. Net effect: per-edit physics sync cost drops
+from O(N_world_cells) full scan (≈250 ms on FlatBench 166 400 cells) to O(N_dirty_chunks + N_total_chunks) compound
+rebuild (≈30 ms on 400 chunks). Walk-character contact check (`IsWalkJumpLockedSourceSupportSideWallContact`) uses new
+`IsPhysicsStaticWorldBodyId` helper that recognizes both monolithic and per-chunk body IDs, so the contact normal vs
+`staticWorldBodyId` API stays compatible.
 
 ### L3040-L3110 (design-rationale)
 
-New helpers `DestroyAllChunkStaticBodies(physics)` and `RebuildStaticWorldBodyFromChunkShapes(physics, world)`. The first clears `chunkStaticBodies` + `chunkMergedBoxes` and removes Jolt bodies. The second iterates `chunkMergedBoxes` (one entry per dirty or pre-built chunk) and emits a single `JPH::StaticCompoundShapeSettings` for the whole world, then `compoundSettings.Create()` + `CreateAndAddBody()` + replaces `staticWorldBodyId`. `PhysicsState` now also stores `std::unordered_map<uint32_t, std::vector<projectv::physics::MergedVoxelBox>> chunkMergedBoxes` — populated by `BuildChunkStaticCollisionBody` after the GreedyMerge pass so `RebuildStaticWorldBodyFromChunkShapes` doesn't have to re-merge. Erased in `DestroyChunkStaticBody` and in the empty-chunk early-out of `BuildChunkStaticCollisionBody`.
+New helpers `DestroyAllChunkStaticBodies(physics)` and `RebuildStaticWorldBodyFromChunkShapes(physics, world)`. The
+first clears `chunkStaticBodies` + `chunkMergedBoxes` and removes Jolt bodies. The second iterates `chunkMergedBoxes` (
+one entry per dirty or pre-built chunk) and emits a single `JPH::StaticCompoundShapeSettings` for the whole world, then
+`compoundSettings.Create()` + `CreateAndAddBody()` + replaces `staticWorldBodyId`. `PhysicsState` now also stores
+`std::unordered_map<uint32_t, std::vector<projectv::physics::MergedVoxelBox>> chunkMergedBoxes` — populated by
+`BuildChunkStaticCollisionBody` after the GreedyMerge pass so `RebuildStaticWorldBodyFromChunkShapes` doesn't have to
+re-merge. Erased in `DestroyChunkStaticBody` and in the empty-chunk early-out of `BuildChunkStaticCollisionBody`.
 
 ### L427-L437 (design-rationale)
 
-`IsPhysicsStaticWorldBodyId(physics, bodyId)` — true if `bodyId` matches the monolithic `staticWorldBodyId` OR any body in `chunkStaticBodies.values()`. Replaces the original `bodyId == physics.staticWorldBodyId` check at line 432 (walk jump support side-wall contact) so the contact check keeps working when the static world is represented as multiple per-chunk bodies. Linear scan over `chunkStaticBodies` (~400 entries on FlatBench, sub-microsecond) is acceptable for walk character tick rate (60 Hz × 1 lookup per contact = 24 K lookups/sec).
+`IsPhysicsStaticWorldBodyId(physics, bodyId)` — true if `bodyId` matches the monolithic `staticWorldBodyId` OR any body
+in `chunkStaticBodies.values()`. Replaces the original `bodyId == physics.staticWorldBodyId` check at line 432 (walk
+jump support side-wall contact) so the contact check keeps working when the static world is represented as multiple
+per-chunk bodies. Linear scan over `chunkStaticBodies` (~400 entries on FlatBench, sub-microsecond) is acceptable for
+walk character tick rate (60 Hz × 1 lookup per contact = 24 K lookups/sec).
 
 ## `src/voxel/VoxelWorld.cpp` (17x Fluid editVersion suppress)
 
 ### L1063-L1148 (design-rationale)
 
-`SetVoxelMaterial` now has a `isFluidAirTransition` early-out: when both `previousMaterial` and `material` are within the {Air, Fluid} set (i.e. one is Air and the other is Fluid), skip `++world.editVersion` and skip the `physics != nullptr` chunk-rebuild queue block. Rationale: Fluid is not a `IsPhysicsSolidMaterial` (PhysicsWorld.cpp:548), so changing Fluid↔Air cannot change static-collision geometry; bumping `editVersion` would trigger a full `SyncPhysicsWorld` rebuild on every fluid tick (20 Hz × 1-8 movements per tick = up to 160 redundant rebuilds per second on FlatBench before the fix). The storage write + `AccumulateMaterialCount` + `MarkChunksTouchedByVoxelEditDirty` (mesh rebuild) still happen — water moving still needs new meshes, just not new physics bodies. `chunk.isStatic = false; chunk.ticksSinceLastEdit = 0;` is preserved for first placement semantics (Air→Fluid on a previously-empty chunk).
+`SetVoxelMaterial` now has a `isFluidAirTransition` early-out: when both `previousMaterial` and `material` are within
+the {Air, Fluid} set (i.e. one is Air and the other is Fluid), skip `++world.editVersion` and skip the
+`physics != nullptr` chunk-rebuild queue block. Rationale: Fluid is not a `IsPhysicsSolidMaterial` (PhysicsWorld.cpp:
+548), so changing Fluid↔Air cannot change static-collision geometry; bumping `editVersion` would trigger a full
+`SyncPhysicsWorld` rebuild on every fluid tick (20 Hz × 1-8 movements per tick = up to 160 redundant rebuilds per second
+on FlatBench before the fix). The storage write + `AccumulateMaterialCount` + `MarkChunksTouchedByVoxelEditDirty` (mesh
+rebuild) still happen — water moving still needs new meshes, just not new physics bodies.
+`chunk.isStatic = false; chunk.ticksSinceLastEdit = 0;` is preserved for first placement semantics (Air→Fluid on a
+previously-empty chunk).
 
 ### L1085-L1091 (design-rationale)
 
-AABB-bounded Fluid CA support. `VoxelWorld` tracks `fluidCAAabbMin` (initialized to `INT32_MAX` corner — invalid) and `fluidCAAabbMaxExclusive` (initialized to `INT32_MIN` corner). On every `SetVoxelMaterial` that touches Fluid (either old or new material is Fluid), the AABB is expanded to include the cell. The AABB is lazy-shrinking: it only grows; it does not shrink when fluid is removed. When `world.stats.fluidVoxelCount == 0` the `UpdateFluidCA` early-out kicks in and the AABB doesn't matter. AABB reset to invalid happens implicitly on world reload (new `VoxelWorld` struct is zero-initialized via default member initializers). `UpdateFluidCA` uses this AABB to scope all 3 nested loops (read pass, sim pass, commit pass) — read pass uses `[min-1, max+1]` for 1-cell margin so spread/fall neighbor reads land on real data; sim and commit use `[min, max]`. For 1 water block on FlatBench the AABB is 3×3×3 = 27 cells, vs the old full-world iteration of 80×26×80 = 166 400 cells. This is the actual root-cause fix for the 4 FPS-on-FlatBench regression (the `SyncPhysicsWorld` per-edit rebuild was only the secondary symptom).
+AABB-bounded Fluid CA support. `VoxelWorld` tracks `fluidCAAabbMin` (initialized to `INT32_MAX` corner — invalid) and
+`fluidCAAabbMaxExclusive` (initialized to `INT32_MIN` corner). On every `SetVoxelMaterial` that touches Fluid (either
+old or new material is Fluid), the AABB is expanded to include the cell. The AABB is lazy-shrinking: it only grows; it
+does not shrink when fluid is removed. When `world.stats.fluidVoxelCount == 0` the `UpdateFluidCA` early-out kicks in
+and the AABB doesn't matter. AABB reset to invalid happens implicitly on world reload (new `VoxelWorld` struct is
+zero-initialized via default member initializers). `UpdateFluidCA` uses this AABB to scope all 3 nested loops (read
+pass, sim pass, commit pass) — read pass uses `[min-1, max+1]` for 1-cell margin so spread/fall neighbor reads land on
+real data; sim and commit use `[min, max]`. For 1 water block on FlatBench the AABB is 3×3×3 = 27 cells, vs the old
+full-world iteration of 80×26×80 = 166 400 cells. This is the actual root-cause fix for the 4 FPS-on-FlatBench
+regression (the `SyncPhysicsWorld` per-edit rebuild was only the secondary symptom).
 
 ### L1663-L1686 (design-rationale) — 18x debug-assertion fix
 
-`UpdateFluidCA` debug-only invariant assertion was scoped to `[fluidCAAabbMin, fluidCAAabbMaxExclusive]`. That scope is the **monotonic-grow AABB** of where fluid has *ever* been touched (see L1085 above), not where fluid currently is. After enough CA ticks, fluid can move outside the original AABB (e.g. a column placed at Y=5..9 settles at Y=0..4 on the floor) and the assertion would count fluid only inside the stale AABB while `stats.fluidVoxelCount` is the world-wide count — they diverge, `PV_ASSERT` fires. Fix: count over `[world.min, world.maxExclusive]` (the full world bounds). Cost is `O(world.volume)` per CA tick in debug only, which is negligible. The AABB stays as a fast-path scan range for the **sim and commit loops** (the production hot path); only the debug invariant expands to world bounds. New regression test `TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb` + `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` (loads the user's actual `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` if present and runs 300 ticks) lock the contract.
+`UpdateFluidCA` debug-only invariant assertion was scoped to `[fluidCAAabbMin, fluidCAAabbMaxExclusive]`. That scope is
+the **monotonic-grow AABB** of where fluid has *ever* been touched (see L1085 above), not where fluid currently is.
+After enough CA ticks, fluid can move outside the original AABB (e.g. a column placed at Y=5..9 settles at Y=0..4 on the
+floor) and the assertion would count fluid only inside the stale AABB while `stats.fluidVoxelCount` is the world-wide
+count — they diverge, `PV_ASSERT` fires. Fix: count over `[world.min, world.maxExclusive]` (the full world bounds). Cost
+is `O(world.volume)` per CA tick in debug only, which is negligible. The AABB stays as a fast-path scan range for the *
+*sim and commit loops** (the production hot path); only the debug invariant expands to world bounds. New regression test
+`TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb` +
+`TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` (loads the user's actual
+`/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` if present and runs 300 ticks) lock the contract.
 
 ### L653-L686 (design-rationale) — 18x+ AABB recompute on derived state rebuild
 
@@ -405,37 +501,67 @@ a no-op redundant safety net there.
 
 ### L1-L80 (design-rationale)
 
-Stage 4.3 Chunk Streaming foundation Step 1 per `2026-06-21-voxel-chunk-streaming-pipeline` (in-progress experiment, closed mixed verdict expected). Interface contract: `ChunkStreamRequest` (chunkIndex + priority), `ChunkData` (voxelBytes + nodeWords vectors), `EnqueueChunkStreamRequest` (mutex-guarded enqueue), `DrainChunkStreamQueueSize` (peek queue depth), `TryDequeueChunkData` (returns `std::expected<ChunkData, ChunkStreamError>` for thread-safe dequeue). `ChunkStreamError` enum covers `QueueFull` + `InvalidChunk` + `NotInitialized`. `IsChunkStreamingEnabled` env gate (`PROJECTV_CHUNK_STREAMING=ON` default; `=OFF` returns `NotInitialized` from TryDequeue). Pending and ready deques are mutex-protected via static-local `std::mutex` instances. Cold-path per `agent/knowledge.md §29.0` (`std::expected<T, E>` for I/O). Background thread + SSD read integration deferred to dedicated session — interface is in place, ready for `ChunkStreamer::ProcessPendingRequests()` background worker.
+Stage 4.3 Chunk Streaming foundation Step 1 per `2026-06-21-voxel-chunk-streaming-pipeline` (in-progress experiment,
+closed mixed verdict expected). Interface contract: `ChunkStreamRequest` (chunkIndex + priority), `ChunkData` (
+voxelBytes + nodeWords vectors), `EnqueueChunkStreamRequest` (mutex-guarded enqueue), `DrainChunkStreamQueueSize` (peek
+queue depth), `TryDequeueChunkData` (returns `std::expected<ChunkData, ChunkStreamError>` for thread-safe dequeue).
+`ChunkStreamError` enum covers `QueueFull` + `InvalidChunk` + `NotInitialized`. `IsChunkStreamingEnabled` env gate (
+`PROJECTV_CHUNK_STREAMING=ON` default; `=OFF` returns `NotInitialized` from TryDequeue). Pending and ready deques are
+mutex-protected via static-local `std::mutex` instances. Cold-path per `agent/knowledge.md §29.0` (`std::expected<T, E>`
+for I/O). Background thread + SSD read integration deferred to dedicated session — interface is in place, ready for
+`ChunkStreamer::ProcessPendingRequests()` background worker.
 
 ## `src/render/vulkan/VulkanWorldGenPipeline.{hpp,cpp}`
 
 ### L1-L300 (design-rationale)
 
-Stage 4.1 GPU World Gen dispatch infrastructure per `2026-06-21-gpu-procedural-noise-compute-kernels` verdict=mixed (CC0 OpenSimplex2 3D-S recommended). `WorldGenPushConstants` (64 bytes, static_assert'd) packs chunkOriginAndChunkSize (ivec4) + chunkCountAndFlags (uvec4) + noiseParams (vec4) + seed (uint) + reserved (3× uint). Compute pipeline from `world_gen.comp.spv` via `ReadShaderFile` + `vkCreateComputePipelines`. 1-binding descriptor set: storage buffer at binding 0 (writeonly voxel buffer). `BuildActiveChunkIdsForWorldGen(world, outChunkIds)` helper filters out non-empty chunks (only generates voxels for chunks with `nonAirVoxelCount == 0`). `RecordWorldGenDispatch(commandBuffer, render, frameResources, pushConstants, activeChunkCount)` does HOST→COMPUTE buffer barrier + bind pipeline + bind descriptor set + push constants + `vkCmdDispatch(activeChunkCount, 1, 1)`. `RefreshWorldGenResourceBindings` allocates 1 descriptor set per frame + 1 storage buffer write. Per-frame SSBO capacity = `sizeof(uint32_t) * 8³ * max(chunks.size(), 1)`. `IsWorldGenGpuPipelineRequested` env gate (`PROJECTV_WORLD_GEN_GPU=ON` default; `=OFF` short-circuits before shader load). `IsWorldGenGpuPipelineRequested` is `inline` in header for testability without linking the .cpp.
+Stage 4.1 GPU World Gen dispatch infrastructure per `2026-06-21-gpu-procedural-noise-compute-kernels` verdict=mixed (CC0
+OpenSimplex2 3D-S recommended). `WorldGenPushConstants` (64 bytes, static_assert'd) packs chunkOriginAndChunkSize (
+ivec4) + chunkCountAndFlags (uvec4) + noiseParams (vec4) + seed (uint) + reserved (3× uint). Compute pipeline from
+`world_gen.comp.spv` via `ReadShaderFile` + `vkCreateComputePipelines`. 1-binding descriptor set: storage buffer at
+binding 0 (writeonly voxel buffer). `BuildActiveChunkIdsForWorldGen(world, outChunkIds)` helper filters out non-empty
+chunks (only generates voxels for chunks with `nonAirVoxelCount == 0`).
+`RecordWorldGenDispatch(commandBuffer, render, frameResources, pushConstants, activeChunkCount)` does HOST→COMPUTE
+buffer barrier + bind pipeline + bind descriptor set + push constants + `vkCmdDispatch(activeChunkCount, 1, 1)`.
+`RefreshWorldGenResourceBindings` allocates 1 descriptor set per frame + 1 storage buffer write. Per-frame SSBO
+capacity = `sizeof(uint32_t) * 8³ * max(chunks.size(), 1)`. `IsWorldGenGpuPipelineRequested` env gate (
+`PROJECTV_WORLD_GEN_GPU=ON` default; `=OFF` short-circuits before shader load). `IsWorldGenGpuPipelineRequested` is
+`inline` in header for testability without linking the .cpp.
 
 ## `src/render/TaaRenderTargets.{hpp,cpp}` (12x updates)
 
 ### L44-L65 (design-rationale)
 
-12x Phase 3 added motion vector + history render targets per `2026-06-21-taa-motion-vectors` verdict=yes Pipeline A. `kTaaMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT` (Karis 2014 "16:16 RG velocity buffer"). VRAM cost 8 MiB/frame double-buffered @ 1080p = 0.16% of 5.06 GiB budget per `hardware-profile.md §3`. `CreateOrRecreateTaaRenderTargets` signature extended with 2 new `OffscreenColorTarget&` params (`motionVectorColor` + `motionVectorHistoryColor`). `TransitionTaaMotionVectorForSample` transitions MOTION_ATTACHMENT_OPTIMAL → SHADER_READ_ONLY_OPTIMAL with COLOR_ATTACHMENT_WRITE → SHADER_SAMPLED_READ access. `RecordTaaMotionVectorHistoryCopy` does scene→history transfer with full barrier chain (matches `RecordTaaHistoryCopy` pattern for scene color). `DestroyTaaRenderTargets` extended with 2 new destroy targets. Note: this data path is complete; `taa_resolve.frag` integration (consume MV texture instead of computing from prevViewProjectionMatrix in-shader) is deferred to dedicated session — `agent/workspace.md §2` Nearest Gap.
+12x Phase 3 added motion vector + history render targets per `2026-06-21-taa-motion-vectors` verdict=yes Pipeline A.
+`kTaaMotionVectorFormat = VK_FORMAT_R16G16_SFLOAT` (Karis 2014 "16:16 RG velocity buffer"). VRAM cost 8 MiB/frame
+double-buffered @ 1080p = 0.16% of 5.06 GiB budget per `hardware-profile.md §3`. `CreateOrRecreateTaaRenderTargets`
+signature extended with 2 new `OffscreenColorTarget&` params (`motionVectorColor` + `motionVectorHistoryColor`).
+`TransitionTaaMotionVectorForSample` transitions MOTION_ATTACHMENT_OPTIMAL → SHADER_READ_ONLY_OPTIMAL with
+COLOR_ATTACHMENT_WRITE → SHADER_SAMPLED_READ access. `RecordTaaMotionVectorHistoryCopy` does scene→history transfer with
+full barrier chain (matches `RecordTaaHistoryCopy` pattern for scene color). `DestroyTaaRenderTargets` extended with 2
+new destroy targets. Note: this data path is complete; `taa_resolve.frag` integration (consume MV texture instead of
+computing from prevViewProjectionMatrix in-shader) is deferred to dedicated session — `agent/workspace.md §2` Nearest
+Gap.
 
 ## `src/render/vulkan/VulkanBootstrap.cpp`
 
 ### L447-L454 (intent)
 
 `PhysicalDeviceCandidate` gained `meshShaderFeatures` (VkPhysicalDeviceMeshShaderFeaturesEXT)
+
 + `supportsMeshShader` (bool). Probed in `CheckRequiredFeatures` via pNext chain; only
-queried if `HasDeviceExtension(physicalDevice, "VK_EXT_mesh_shader")` returns true (avoids
-spurious pNext struct ignored on devices without extension).
+  queried if `HasDeviceExtension(physicalDevice, "VK_EXT_mesh_shader")` returns true (avoids
+  spurious pNext struct ignored on devices without extension).
 
 ### L743-L748 (design-rationale)
 
 `PROJECTV_MESH_SHADER_PIPELINE=ON` env var gates `deviceExtensions.push_back(kMeshShaderExtension)`
+
 + `enabledMeshShaderFeatures{meshShader=VK_TRUE, taskShader=VK_TRUE}` chaining in
-`VkDeviceCreateInfo::pNext`. Per `agent/knowledge.md §32` Pattern C contract, feature is
-opt-in. When env unset, device is created without the extension — same mainline as before.
-Both `meshShader` and `taskShader` enabled together because Pattern C uses task shader only
-indirectly via compute pre-cull, but the feature must be linked for the pipeline to compile.
+  `VkDeviceCreateInfo::pNext`. Per `agent/knowledge.md §32` Pattern C contract, feature is
+  opt-in. When env unset, device is created without the extension — same mainline as before.
+  Both `meshShader` and `taskShader` enabled together because Pattern C uses task shader only
+  indirectly via compute pre-cull, but the feature must be linked for the pipeline to compile.
 
 ### L459 (intent)
 
@@ -508,6 +634,7 @@ Cold path: uses `std::expected<ChunkData, ChunkStreamError>` per `agent/knowledg
 4x session extended HZB culling to per-chunk mip level selection. `kHizCullingDescriptorBindings`
 5→6 elements (added binding 5 = `perChunkMipLevels` SSBO). Pool size bumped 3→4 storage
 sets per frame. Per `2026-06-21-hzb-smart-mip-select` experiment verdict=mixed:
+
 - `IsHzbSmartMipEnabled()` env gate (`PROJECTV_HZB_SMART_MIP=ON`, default OFF) preserves
   mainline behavior. When OFF, push constant mipLevel=0 is used (per-chunk SSBO ignored
   because the shader checks `perChunkMip > 0`).
@@ -558,13 +685,13 @@ up to 8 ready chunks per frame, populates chunks into the voxel world. Tracy plo
 on `IsChunkStreamingEnabled()`. Throttles per-frame SSD read pressure (avoids 60Hz frame
 budget spikes when many chunks become ready simultaneously).
 
-
 ## `src/render/vulkan/VulkanAsyncCompute.hpp`
 
 ### L1-L28 (design-rationale)
 
 Stage 6.3 per-pass async compute wiring per `TODO.md §6.3` + `agent/knowledge.md §30.4`
 3-step migration precedent. New file (4x session, this section). Public API:
+
 - `IsAsyncComputeResourcesAllocated(context)` — predicate for early-out in `DrawFrame`
   routing.
 - `EnsureAsyncComputeResources(context)` — creates dedicated compute command pool
@@ -692,13 +819,13 @@ wait on `renderTimelineSemaphore` at value = `asyncComputeLastTimelineValue` so
 graphics consumes the previous frame's async compute result (1-frame pipeline
 depth, the canonical nvpro-samples pattern).
 
-
 ## `src/render/LodDownsampleGpuConsume.hpp`
 
 ### L1-L25 (design-rationale)
 
 Stage 4.2 LOD GPU consume infrastructure per `TODO.md §4.2` + `agent/knowledge.md §30.4`
 3-step migration. New file (this session, this section). Public API:
+
 - `IsLodDownsampledGpuConsumeEnabled()` — env gate predicate (`PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME=ON`,
   default OFF per additive optional path precedent).
 - `ComputeLodDownsampledVoxelPayloadBytes(chunkCount, chunkSize)` — capacity helper for worst-case
@@ -726,13 +853,14 @@ that iterates chunks, serializes each chunk's `chunkSize^3` material grid via
 `world.sparseStorage.GetCell(x, y, z)`, writes to `chunk_<index>.bin` with the same
 16-byte header format as the existing reader. `ChunkPrebakeStats` struct reports
 `chunksBaked` + `chunksSkipped` + `totalVoxelBytes`. `IsChunkStreamerPrebakeReady()`
+
 + `GetChunkStreamerPrebakeVersion()` expose a monotonic atomic `prebakeVersion`
-counter. `PreloadChunksAroundCamera(cameraX, cameraY, cameraZ, radiusChunks)`
-iterates grid cells within radius, computes `linearIndex` via
-`gz * gridHeight * gridWidth + gy * gridWidth + gx` (matches
-`VoxelWorld::chunks` storage order), enqueues high-priority `ChunkStreamRequest`
-for each. Grid bounds check via `world.width/height/depth` clamps negative or
-out-of-range grid coords. All three functions gated on `IsChunkStreamingEnabled()`.
+  counter. `PreloadChunksAroundCamera(cameraX, cameraY, cameraZ, radiusChunks)`
+  iterates grid cells within radius, computes `linearIndex` via
+  `gz * gridHeight * gridWidth + gy * gridWidth + gx` (matches
+  `VoxelWorld::chunks` storage order), enqueues high-priority `ChunkStreamRequest`
+  for each. Grid bounds check via `world.width/height/depth` clamps negative or
+  out-of-range grid coords. All three functions gated on `IsChunkStreamingEnabled()`.
 
 ## `src/render/HizCulling.{hpp,cpp}` (this session changes)
 
@@ -877,6 +1005,7 @@ halfRes = resolution/2 offset, clamp to [0, resolution-1]).
 VCT compute pipeline infrastructure. `IsVctGpuPipelineRequested()` env gate
 (`PROJECTV_VCT_GPU=ON`, default OFF per `agent/knowledge.md §30.4` Step 1
 additive optional path). `CreateVoxelizePipelines` lazy-allocates:
+
 - 3D image `vctClipmapImage` (256³ RGBA16F, 4 mip levels, 16 MiB VRAM)
   with `VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
   VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT` (sampled
@@ -917,14 +1046,15 @@ RTX future work). Specular Fresnel: `0.04 + 0.96 * pow(1 - nDotV, 5)` (Schlick
 approximation), reduced by `(1 - metallic)` for non-metals.
 
 `VoxelSceneLighting` struct extended with 2 new `vec4` fields:
+
 - `vctParams = (diffuseConeApertureTan, maxDistance, mipBias, enabledFlag)` (16 B)
 - `vctSpecularParams = (coneApertureMax, distanceScale, mipBias, _)` (16 B)
-Total struct size 624 → 656 bytes. Byte-exact contract with shader
-`SceneLightingBuffer` binding 3 per `agent/knowledge.md §15` lighting
-contract. New `sampler3D vctClipmap` at binding 11. Diffuse contribution
-multiplied by `albedo * (1/PI) * ambientVisibility`; specular multiplied
-by Fresnel * (1 - metallic). All cone math in tangent world space (no
-view rotation), per WickedEngine VXGI per `turanszkij` cone table.
+  Total struct size 624 → 656 bytes. Byte-exact contract with shader
+  `SceneLightingBuffer` binding 3 per `agent/knowledge.md §15` lighting
+  contract. New `sampler3D vctClipmap` at binding 11. Diffuse contribution
+  multiplied by `albedo * (1/PI) * ambientVisibility`; specular multiplied
+  by Fresnel * (1 - metallic). All cone math in tangent world space (no
+  view rotation), per WickedEngine VXGI per `turanszkij` cone table.
 
 `kVctCutoffRoughness=0.3f` and `kVctMaxDistanceMeters=64.0f` constants in
 `voxel.frag:91-94` (kVct constants block). For `chunkSize=8` VoxelLab
@@ -958,10 +1088,11 @@ Pipeline creation: `vkCreateGraphicsPipelines` with dynamic-rendering
 `VkPipelineRenderingCreateInfo` (color format R16G16B16A16_SFLOAT + depth
 D32_SFLOAT). No vertex buffers — full-screen triangle via `gl_VertexIndex`
 derivation. `depthTestEnable=VK_TRUE` + `depthCompareOp=VK_COMPARE_OP_ALWAYS`
+
 + `depthWriteEnable=VK_TRUE` so sky writes depth=0.9999 (and main pass
-`loadOp=LOAD` will see it). `colorWriteMask` excludes alpha (sky is opaque
-over scene). `DestroySkyAtmospherePipelines` mirrors creation in reverse
-order, safe to call when `skyAtmospherePipelineEnabled=false` (no-op).
+  `loadOp=LOAD` will see it). `colorWriteMask` excludes alpha (sky is opaque
+  over scene). `DestroySkyAtmospherePipelines` mirrors creation in reverse
+  order, safe to call when `skyAtmospherePipelineEnabled=false` (no-op).
 
 ### L182-L260 (design-rationale)
 
@@ -981,10 +1112,11 @@ Per Hillaire 2020 EGSR (publication `cf14050` + `sebh/UnrealEngineSkyAtmosphere`
 reference impl). MVP analytical color: zenith → horizon gradient + sun
 disc approximation. Phase 3 upgrade: full single-scattering Rayleigh
 (per-channel wavelength β_R) + Mie (β_M) + Henyey-Greenstein phase function
+
 + 16-step exponential depth distribution. No LUT precomputation in
-fragment shader (Phase 3 deferred to follow-up session — add Sky-View
-LUT 256×128 RGBA16F + Multi-Scattering LUT 32×32 RGBA16F per Hillaire
-2020 production reference for ~10× cost reduction at 4K).
+  fragment shader (Phase 3 deferred to follow-up session — add Sky-View
+  LUT 256×128 RGBA16F + Multi-Scattering LUT 32×32 RGBA16F per Hillaire
+  2020 production reference for ~10× cost reduction at 4K).
 
 ### L20-L40 (EVIL)
 
@@ -1093,22 +1225,22 @@ by default — the owning function is the only place allowed to vmaDestroy*
 or vkDestroy*.** Do NOT free these fields directly outside of their
 owner.
 
-| Field group | Owner (Create) | Owner (Destroy) |
-|---|---|---|
-| `graphicsDescriptorSetLayout/Pool`, `shadowDescriptorSetLayout/Pool`, `voxelMeshingDescriptorSetLayout/Pool` | `CreateGraphicsPipeline` | `DestroyGraphicsPipeline` |
-| `sceneFrameResources[]` (32+ SSBO triads: `*Buffer`+`*Allocation`+`*MappedData`+`*CapacityBytes`) | `CreateSceneResources` (`RefreshSceneFrameResources`) | `DestroySceneResources` (`DrainAllDeferredNanoVdbDestroys` first) |
-| `deferredNanoVdbDestroys[]` (per-frame-in-flight queue) | `GrowNanoVdbBuffer` (enqueue) | `DestroySceneResources` (drain) |
-| `rayTracedShadows *` | `CreateRayTracedShadowResources` | `DestroyRayTracedShadowResources` |
-| `depthImage/View/Allocation` | `CreateDepthResources` | `DestroyDepthResources` |
-| `vctClipmapImage/View/Allocation/Memory/Sampler` | `CreateVctClipmapFallbackSamplerOnly` (fallback) / `CreateVctClipmapResources` (env-gated) | `DestroyVctClipmapResources` |
-| `vctVoxelize*` (pipeline/layout/shader/descriptor set) | `CreateVoxelizePipelines` | `DestroyVoxelizePipelines` |
-| `shadowImage/View/CascadeViews/Allocation/Sampler` | `CreateShadowResources` | `DestroyShadowResources` |
-| `hizBuffer`, `hizCulling*` | `CreateHizCullingPipeline` (lazily created on first dispatch) | `DestroyHizCullingPipeline` |
-| `screenshotReadbackBuffer/Allocation/MappedData` | `CreateScreenshotReadbackResources` | `DestroyScreenshotReadbackResources` |
-| `materialVisualBuffer/Allocation/MappedData` | `CreateMaterialVisualResources` (env-gated) | `DestroyMaterialVisualResources` |
-| `skyAtmospherePipeline/Layout/Modules/DescriptorSetLayout/Pool/Sets[]/Lut images` | `CreateSkyAtmosphereResources` / `CreateSkyLutResources` | `DestroySkyAtmosphereResources` / `DestroySkyLutResources` |
-| `volumetricFogFroxelImage/View/Sampler/Pipeline/Layout/Descriptor*`, `volumetricFogFallbackImage/View` | `CreateVolumetricFogFallbackOnly` (fallback) / `CreateVolumetricFogResources` (env-gated) | `DestroyVolumetricFogResources` |
-| `cloudscapePipeline/Layout/Descriptor*` | `CreateCloudscapeResources` (env-gated) | `DestroyCloudscapeResources` |
+| Field group                                                                                                  | Owner (Create)                                                                             | Owner (Destroy)                                                   |
+|--------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| `graphicsDescriptorSetLayout/Pool`, `shadowDescriptorSetLayout/Pool`, `voxelMeshingDescriptorSetLayout/Pool` | `CreateGraphicsPipeline`                                                                   | `DestroyGraphicsPipeline`                                         |
+| `sceneFrameResources[]` (32+ SSBO triads: `*Buffer`+`*Allocation`+`*MappedData`+`*CapacityBytes`)            | `CreateSceneResources` (`RefreshSceneFrameResources`)                                      | `DestroySceneResources` (`DrainAllDeferredNanoVdbDestroys` first) |
+| `deferredNanoVdbDestroys[]` (per-frame-in-flight queue)                                                      | `GrowNanoVdbBuffer` (enqueue)                                                              | `DestroySceneResources` (drain)                                   |
+| `rayTracedShadows *`                                                                                         | `CreateRayTracedShadowResources`                                                           | `DestroyRayTracedShadowResources`                                 |
+| `depthImage/View/Allocation`                                                                                 | `CreateDepthResources`                                                                     | `DestroyDepthResources`                                           |
+| `vctClipmapImage/View/Allocation/Memory/Sampler`                                                             | `CreateVctClipmapFallbackSamplerOnly` (fallback) / `CreateVctClipmapResources` (env-gated) | `DestroyVctClipmapResources`                                      |
+| `vctVoxelize*` (pipeline/layout/shader/descriptor set)                                                       | `CreateVoxelizePipelines`                                                                  | `DestroyVoxelizePipelines`                                        |
+| `shadowImage/View/CascadeViews/Allocation/Sampler`                                                           | `CreateShadowResources`                                                                    | `DestroyShadowResources`                                          |
+| `hizBuffer`, `hizCulling*`                                                                                   | `CreateHizCullingPipeline` (lazily created on first dispatch)                              | `DestroyHizCullingPipeline`                                       |
+| `screenshotReadbackBuffer/Allocation/MappedData`                                                             | `CreateScreenshotReadbackResources`                                                        | `DestroyScreenshotReadbackResources`                              |
+| `materialVisualBuffer/Allocation/MappedData`                                                                 | `CreateMaterialVisualResources` (env-gated)                                                | `DestroyMaterialVisualResources`                                  |
+| `skyAtmospherePipeline/Layout/Modules/DescriptorSetLayout/Pool/Sets[]/Lut images`                            | `CreateSkyAtmosphereResources` / `CreateSkyLutResources`                                   | `DestroySkyAtmosphereResources` / `DestroySkyLutResources`        |
+| `volumetricFogFroxelImage/View/Sampler/Pipeline/Layout/Descriptor*`, `volumetricFogFallbackImage/View`       | `CreateVolumetricFogFallbackOnly` (fallback) / `CreateVolumetricFogResources` (env-gated)  | `DestroyVolumetricFogResources`                                   |
+| `cloudscapePipeline/Layout/Descriptor*`                                                                      | `CreateCloudscapeResources` (env-gated)                                                    | `DestroyCloudscapeResources`                                      |
 
 **Why raw pointers and not `std::unique_ptr` / RAII wrappers?** Most of
 these types are opaque Vulkan handles (VkBuffer, VkImage, etc.) whose
@@ -1126,6 +1258,7 @@ preferred over per-field RAII for two reasons:
    (calls `Destroy*` mid-init). RAII makes this hard to express.
 
 **Refactor hazard:** if a new pointer field is added to `RenderState`:
+
 1. Add to the matching `CreateXxxResources` function (and `DestroyXxxResources`).
 2. Add to the table above.
 3. Verify DestroyRenderState calls the right destroyer.
@@ -1147,11 +1280,11 @@ preserves alignment.
 
 ### Per-kernel contract
 
-| Function | Caller | Alignment requirement | Asserted at runtime |
-|---|---|---|---|
-| `projectv_cull_frustum_scalar` (C, CPU) | `tests/FrustumCullBenchmark`, `RunCScalar` | `aabbs` and `masks` arrays: 16-byte aligned | No runtime assert (release benchmark, contract per declaration) |
-| `projectv_cull_frustum_avx2` (C, AVX2 CPU) | `tests/FrustumCullBenchmark`, `RunCAvx2` | Same | Yes — `static_assert(alignof(ProjectvCFrustumCullParameters) >= 16)` at call site, vector base addr checked at vector prologue |
-| `FrustumCulling::TestXxx` (C++ thin wrappers) | CPU code | Inherits via `alignas` on POD structs | Compile-time `static_assert` on consumer side |
+| Function                                      | Caller                                     | Alignment requirement                       | Asserted at runtime                                                                                                            |
+|-----------------------------------------------|--------------------------------------------|---------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
+| `projectv_cull_frustum_scalar` (C, CPU)       | `tests/FrustumCullBenchmark`, `RunCScalar` | `aabbs` and `masks` arrays: 16-byte aligned | No runtime assert (release benchmark, contract per declaration)                                                                |
+| `projectv_cull_frustum_avx2` (C, AVX2 CPU)    | `tests/FrustumCullBenchmark`, `RunCAvx2`   | Same                                        | Yes — `static_assert(alignof(ProjectvCFrustumCullParameters) >= 16)` at call site, vector base addr checked at vector prologue |
+| `FrustumCulling::TestXxx` (C++ thin wrappers) | CPU code                                   | Inherits via `alignas` on POD structs       | Compile-time `static_assert` on consumer side                                                                                  |
 
 **EVIL markers** would normally be added per declaration, but
 `alignas(16)` is the C++ standard mechanism — adding `// EVIL: aligned for AVX2`
@@ -1172,6 +1305,7 @@ ARM/aarch64 should be added to catch this.
 `UpdateWalkGroundSupport` (`PhysicsWorld.cpp:2389`) is called per walk tick
 from `TickWalkSystem` and from `SyncPhysicsWorld` fallbacks. The function
 recomputes contact state from scratch each call:
+
 - Reads `character->GetLinearVelocity()` and `GetPosition()` (line 2413)
 - Queries Jolt contact manifold via `CharacterVirtual::ExtendedUpdate` (upstream)
 - Stores results in `physics.walkXxx` state fields for the next-tick
@@ -1187,6 +1321,7 @@ the contract, not a fragility.
 
 `RebuildStaticWorldBodyFromChunkShapes` (`PhysicsWorld.cpp:3054`) takes the
 destroy+create path:
+
 1. `DestroyStaticWorldBody` (line 3057) → `bodyInterface.RemoveBody` + `DestroyBody`
 2. Build new compound shape from `physics.chunkMergedBoxes`
 3. `bodyInterface.CreateAndAddBody` → new `staticWorldBodyId`
@@ -1196,6 +1331,7 @@ that would preserve the body ID across rebuilds (only swapping the
 shape). The audit suggests this as a Jolt best practice.
 
 **Why we chose destroy+create:**
+
 - Shape construction cost is the same (compound shape build + sub-shape
   validation must happen either way).
 - SetShape would need to handle the case where the new shape is invalid
@@ -1244,11 +1380,14 @@ boundary. Audit concern already addressed in mainline.
 
 `PhysicsState::chunkMergedBoxes` is a `std::unordered_map<uint32_t, std::vector<MergedVoxelBox>>`
 (`PhysicsWorld.hpp` field). Current lifecycle:
-- **Created** at `BuildChunkStaticCollisionBody` (`PhysicsWorld.cpp:2943`) — `chunkMergedBoxes[chunkIndex] = mergedBoxes`
+
+- **Created** at `BuildChunkStaticCollisionBody` (`PhysicsWorld.cpp:2943`) —
+  `chunkMergedBoxes[chunkIndex] = mergedBoxes`
 - **Erased** at chunk rebuild (`PhysicsWorld.cpp:2928`, `2992`, `3037`)
 - **Cleared** at full world rebuild via `DestroyAllChunkStaticBodies` (`PhysicsWorld.cpp:3051`)
 
 **Current code never grows the map unboundedly** because:
+
 1. Chunk edits always rewrite the existing entry (line 2943 overwrites)
 2. Full rebuild clears the map (line 3051)
 3. **There is no chunk unload path in mainline yet** — `ChunkStreamer.hpp`
@@ -1307,6 +1446,7 @@ calls `MarkChunksTouchedByVoxelEditDirty`). The gate `!fluidOnlyChunkRebuilds`
 becomes `false`, so the flatten is **skipped** for the fluid-only case.
 
 **Why this is acceptable:**
+
 - NanoVdb flatten is consumed by VCT diffuse/specular cone tracing
   (`voxel.frag` binding 9/10) and RTX ray queries (binding 11) — both
   for SOLID geometry. Fluid is rendered via `volumetric_fog.comp`
@@ -1365,7 +1505,8 @@ False alarm for current mainline.
 
 `RayTracedShadowConfig` расширен 9 новыми полями для per-chunk BLAS storage и TLAS backing buffer.
 До этого сетапа TLAS был stub'ом — `RecordTlasBuild` инкрементировал счётчик и всё,
-`UpdateTlas` хардкодил `accelerationStructureReference = 0u` (баг VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12281).
+`UpdateTlas` хардкодил `accelerationStructureReference = 0u` (баг
+VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12281).
 Теперь каждый chunk имеет свой VkAccelerationStructureKHR + backing buffer + кэшированный device address
 (через `EnsureBlasHandle` — lazy allocate при первом `BuildChunkBlas` для chunkIndex).
 TLAS handle создаётся один раз в `AllocateBuffers` с capacity для `maxBlasCount = 4096` instances
@@ -1412,10 +1553,11 @@ to pass `*context`). Hardware target policy — см. `agent/knowledge.md §15`
 ### L519-L537 (design-rationale)
 
 `CreateRayTracedShadowResources` теперь hard-fail на non-RTX GPU: SDL_LogCritical
+
 + return false. Caller (`VulkanInit::InitVulkan`) propagates as
-`std::unexpected(VulkanInitError::ShadowResourcesFailed)`. Engine refuses to start
-on non-RTX hardware — no partial functionality, no CSM fallback. Это pet-project,
-никаких уступок legacy hardware.
+  `std::unexpected(VulkanInitError::ShadowResourcesFailed)`. Engine refuses to start
+  on non-RTX hardware — no partial functionality, no CSM fallback. Это pet-project,
+  никаких уступок legacy hardware.
 
 ## `src/shaders/voxel.frag` (session 19x, Stage 5.2.B RTX shadow consume)
 
@@ -1508,7 +1650,6 @@ Reading 0 → `clamp(0, 0.25, 4.0) = 0.25` (whitePoint) +
 sRGB-ready color в swapchain. Fix = удалить 4 stale fields из всех 4 шейдеров.
 Pre-existing в session 19x baseline (не регрессия 5.2.D, но обнаружена и
 исправлена в 20x при поиске root cause серого экрана).
-
 
 ## src/render/RayTracedShadows.cpp
 
@@ -1612,53 +1753,95 @@ operator must kill it.
 
 ### L79-L97 (design-rationale)
 
-Correct DDA intersection distance calculation. Initializes `tMaxAxis` relative to `rayOriginWorld` (using the same coordinate space as `reportIntersectionEXT` and `gl_RayTminEXT`/`gl_RayTmaxEXT`) instead of `pos` (which was relative to `pos = rayOriginWorld + rayDirWorld * tStart`). Tracks `tCurrent` as the exact crossing distance at cell entries, reporting `tCurrent` on hits. Prevents mixing coordinate spaces (`tMinCell` relative to `pos` vs `tEnd` relative to `rayOriginWorld`), avoiding invalid hit distances that were reconstructed close to the camera near plane and caused floor self-shadowing (black platform) as the camera moved.
+Correct DDA intersection distance calculation. Initializes `tMaxAxis` relative to `rayOriginWorld` (using the same
+coordinate space as `reportIntersectionEXT` and `gl_RayTminEXT`/`gl_RayTmaxEXT`) instead of `pos` (which was relative to
+`pos = rayOriginWorld + rayDirWorld * tStart`). Tracks `tCurrent` as the exact crossing distance at cell entries,
+reporting `tCurrent` on hits. Prevents mixing coordinate spaces (`tMinCell` relative to `pos` vs `tEnd` relative to
+`rayOriginWorld`), avoiding invalid hit distances that were reconstructed close to the camera near plane and caused
+floor self-shadowing (black platform) as the camera moved.
 
 ## `src/shaders/voxel_rtx_shadow.rgen` (session 23x, Stage 5.2.E raygen biasing and bias reduction fixes)
 
 ### L90-L127 (design-rationale)
 
-Correct ray flags and biasing logic. Uses `gl_RayFlagsOpaqueEXT` for Step 1 (primary ray) to find the closest hit point (visible surface) instead of `gl_RayFlagsTerminateOnFirstHitEXT` (which terminated on arbitrary BVH intersections, resulting in non-closest hits). Biases Step 2 (shadow ray) along `sunDir * 0.003` (towards the light source) and uses `T_min = 0.001` (total of `0.004` meters / `4` millimeters) to prevent self-intersection of voxel faces while keeping the shadow starting gap (Peter Panning) completely invisible.
+Correct ray flags and biasing logic. Uses `gl_RayFlagsOpaqueEXT` for Step 1 (primary ray) to find the closest hit
+point (visible surface) instead of `gl_RayFlagsTerminateOnFirstHitEXT` (which terminated on arbitrary BVH intersections,
+resulting in non-closest hits). Biases Step 2 (shadow ray) along `sunDir * 0.003` (towards the light source) and uses
+`T_min = 0.001` (total of `0.004` meters / `4` millimeters) to prevent self-intersection of voxel faces while keeping
+the shadow starting gap (Peter Panning) completely invisible.
 
 ## `src/render/vulkan/VulkanGraphicsPipeline.cpp` (session 23x, Stage 5.2.D CSM shader loading cleanup)
 
 ### L1379-L1380 (design-rationale)
 
-Removed loading of `voxel_shadow.vert.spv` and `voxel_shadow.frag.spv` and compilation/management of unused shadow shader modules/stages. Following the removal of CSM in Milestone 5.2.D, the shader files were deleted, but the pipeline initialization code still unconditionally tried to load them, causing application startup to crash with `voxel shader blob is empty` (GraphicsPipelineFailed). Removing the unused loading checks and module creation closes the loop.
+Removed loading of `voxel_shadow.vert.spv` and `voxel_shadow.frag.spv` and compilation/management of unused shadow
+shader modules/stages. Following the removal of CSM in Milestone 5.2.D, the shader files were deleted, but the pipeline
+initialization code still unconditionally tried to load them, causing application startup to crash with
+`voxel shader blob is empty` (GraphicsPipelineFailed). Removing the unused loading checks and module creation closes the
+loop.
 
 ## `src/shaders/voxel_rtx_shadow.rint` (session 23x, Stage 5.2.E DDA and Glass shadow ignore fixes)
 
 ### L95-L129 (design-rationale)
 
-DDA voxel-level traversal fixes. Added `tCurrent` updates to `tMaxAxis` when stepping along axes, restoring correct intersection distance propagation. Previously, `tCurrent` was never updated in the DDA loop and remained equal to `max(tEntry, rayTmin)` (the entry point of the ray into the chunk's AABB). This caused the raygen primary trace to register hits at the chunk's front bounds rather than the actual voxel face, producing chunk-aligned black boxes. Additionally, added a check to ignore `Glass` (material ID `1u`) during shadow ray traversal to prevent transparent glass spheres/shells from casting solid shadows.
+DDA voxel-level traversal fixes. Added `tCurrent` updates to `tMaxAxis` when stepping along axes, restoring correct
+intersection distance propagation. Previously, `tCurrent` was never updated in the DDA loop and remained equal to
+`max(tEntry, rayTmin)` (the entry point of the ray into the chunk's AABB). This caused the raygen primary trace to
+register hits at the chunk's front bounds rather than the actual voxel face, producing chunk-aligned black boxes.
+Additionally, added a check to ignore `Glass` (material ID `1u`) during shadow ray traversal to prevent transparent
+glass spheres/shells from casting solid shadows.
 
 ## `src/render/Renderer.cpp` (session 23x, Stage 5.2.E exact chunk AABB restore)
 
 ### L1360-L1380 (design-rationale)
 
-Restored exact, unshrunk chunk AABBs for BLAS geometry. The previous workaround shrunk AABBs by `1.5f` meters to avoid self-shadowing, but this caused rays traversing the outer layers of chunks to miss the AABB entirely, bypassing the intersection shader and producing empty shadow segments near chunk boundaries. Since the intersection shader correctly handles self-shadowing through ray biasing (`sunDir * 0.02`) and DDA step offsets, the shrink offset was safely removed to restore precise shadow coverage for all voxels.
+Restored exact, unshrunk chunk AABBs for BLAS geometry. The previous workaround shrunk AABBs by `1.5f` meters to avoid
+self-shadowing, but this caused rays traversing the outer layers of chunks to miss the AABB entirely, bypassing the
+intersection shader and producing empty shadow segments near chunk boundaries. Since the intersection shader correctly
+handles self-shadowing through ray biasing (`sunDir * 0.02`) and DDA step offsets, the shrink offset was safely removed
+to restore precise shadow coverage for all voxels.
 
 ## `src/shaders/voxel.frag` (session 23x, Stage 5.2.E shadow intensity scale and contact shadow removal)
 
 ### L798-L803 (design-rationale)
 
-Blended ray-traced shadow visibility and contact shadow removal. Removed screen-space/voxel-DDA contact shadow multiplication (`rtxContactVisibility`) from the RTX shadow path to prevent overlapping double-shadow edges and DDA-aliasing artifacts on voxel corners. Additionally, introduced a shadow strength scaling constant (`0.75`) via GLSL `mix(0.25, 1.0, rtxLit)` in `ComputeSunShadowSample` to prevent ray-traced shadows from being pitch-black, leaving a `25%` baseline sun light factor in shadowed areas to simulate ambient bounce before real-time indirect GI probes are fully wired.
+Blended ray-traced shadow visibility and contact shadow removal. Removed screen-space/voxel-DDA contact shadow
+multiplication (`rtxContactVisibility`) from the RTX shadow path to prevent overlapping double-shadow edges and
+DDA-aliasing artifacts on voxel corners. Additionally, introduced a shadow strength scaling constant (`0.75`) via GLSL
+`mix(0.25, 1.0, rtxLit)` in `ComputeSunShadowSample` to prevent ray-traced shadows from being pitch-black, leaving a
+`25%` baseline sun light factor in shadowed areas to simulate ambient bounce before real-time indirect GI probes are
+fully wired.
 
 ## `src/CMakeLists.txt` (session 23x, fix for automatic shader update tracking)
 
 ### L228-L232 (design-rationale)
 
-Changed POST_BUILD copy command of generated shader `.spv` files to a target-level dependency pipeline. By declaring a `CopyShaders` custom target that runs unconditionally and depends on the `Shaders` target, we ensure that shader `.spv` copies are executed on every build invocation of `ProjectV`. This resolves the dependency tracking issue in IDEs like CLion, where editing a GLSL shader without modifying C++ sources would rebuild the `.spv` files in `build/` but skip the copy step to `bin/` because the `ProjectV` executable itself was considered up-to-date.
+Changed POST_BUILD copy command of generated shader `.spv` files to a target-level dependency pipeline. By declaring a
+`CopyShaders` custom target that runs unconditionally and depends on the `Shaders` target, we ensure that shader `.spv`
+copies are executed on every build invocation of `ProjectV`. This resolves the dependency tracking issue in IDEs like
+CLion, where editing a GLSL shader without modifying C++ sources would rebuild the `.spv` files in `build/` but skip the
+copy step to `bin/` because the `ProjectV` executable itself was considered up-to-date.
 
 ## `src/shaders/voxel.frag` (session 23x, Stage 5.5 DDGI probe sampling)
 
 ### L260-L348 (design-rationale)
 
-Dynamic Diffuse Global Illumination (DDGI) probe volume sampling. Implements full trilinear interpolation among the 8 surrounding probe nodes in the 3D grid based on the receiver's world position. To prevent light leaking and bleeding across solid voxel walls, weights are attenuated by two factors: a normal-based cosine distribution (back-facing probes receive zero weight) and a Chebyshev probability test based on mean and mean-squared ray travel distance stored in the 3D depth texture. Probe slice indexing uses discrete normalized depth coordinates to prevent linear filtering from bleeding between different probe entries in the Z dimension.
+Dynamic Diffuse Global Illumination (DDGI) probe volume sampling. Implements full trilinear interpolation among the 8
+surrounding probe nodes in the 3D grid based on the receiver's world position. To prevent light leaking and bleeding
+across solid voxel walls, weights are attenuated by two factors: a normal-based cosine distribution (back-facing probes
+receive zero weight) and a Chebyshev probability test based on mean and mean-squared ray travel distance stored in the
+3D depth texture. Probe slice indexing uses discrete normalized depth coordinates to prevent linear filtering from
+bleeding between different probe entries in the Z dimension.
 
 ## `src/shaders/voxel.frag` (session 24x, DDA traversal consolidation and refraction self-intersection fix)
 
 ### L645-L754 (design-rationale)
 
-Chunk DDA traversal consolidation and refraction fixes. Consolidated duplicate chunk-level DDA voxel traversal logic inside `TraceRtxAmbientOcclusionRay`, `EvaluateVoxelLighting`, and `TraceVoxelIntersection` into a single unified `TraceVoxelIntersection` helper. Introduced `ignoreGlass` and `ignoreFluid` parameter switches to handle selective transparent voxel culling (refraction skips all transparents to resolve self-intersection, while shadow and AO checks can choose to ignore only glass). Added a `rayFlags` parameter to propagate customized ray query flags (`gl_RayFlagsOpaqueEXT` and `gl_RayFlagsTerminateOnFirstHitEXT`) for driver-level hardware ray tracing optimizations, fulfilling unit test constraints.
+Chunk DDA traversal consolidation and refraction fixes. Consolidated duplicate chunk-level DDA voxel traversal logic
+inside `TraceRtxAmbientOcclusionRay`, `EvaluateVoxelLighting`, and `TraceVoxelIntersection` into a single unified
+`TraceVoxelIntersection` helper. Introduced `ignoreGlass` and `ignoreFluid` parameter switches to handle selective
+transparent voxel culling (refraction skips all transparents to resolve self-intersection, while shadow and AO checks
+can choose to ignore only glass). Added a `rayFlags` parameter to propagate customized ray query flags (
+`gl_RayFlagsOpaqueEXT` and `gl_RayFlagsTerminateOnFirstHitEXT`) for driver-level hardware ray tracing optimizations,
+fulfilling unit test constraints.
 

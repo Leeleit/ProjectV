@@ -1146,20 +1146,23 @@ private:
 ### Что мы получили после интеграции:
 
 1. **✅ MemoryManager Integration:** Все аллокации JoltPhysics проходят через ProjectV аллокаторы:
-  - `PageAllocator` для ядра системы и постоянных буферов
-  - `ArenaAllocator` для временных данных кадра (O(1) аллокация и сброс)
-  - `PoolAllocator` для частых объектов (Body, Shape, Constraint)
+
+- `PageAllocator` для ядра системы и постоянных буферов
+- `ArenaAllocator` для временных данных кадра (O(1) аллокация и сброс)
+- `PoolAllocator` для частых объектов (Body, Shape, Constraint)
 
 2. **✅ Logging Integration:** Все физические события логируются через ProjectV логгер:
-  - `Info` уровень для инициализации и основных событий
-  - `Debug` уровень для создания/удаления динамических тел
-  - `Error` уровень для ошибок симуляции
-  - `Trace` уровень для коллизий (только при отладке)
+
+- `Info` уровень для инициализации и основных событий
+- `Debug` уровень для создания/удаления динамических тел
+- `Error` уровень для ошибок симуляции
+- `Trace` уровень для коллизий (только при отладке)
 
 3. **✅ Profiling Integration:** Полная интеграция с Tracy:
-  - High-level: `PhysicsSystem::Update`
-  - Mid-level: `CollisionDetection` и `ConstraintSolving`
-  - Deep-level: `BroadPhaseNarrowPhase` (под макросом `PROJECTV_PROFILE_DEEP`)
+
+- High-level: `PhysicsSystem::Update`
+- Mid-level: `CollisionDetection` и `ConstraintSolving`
+- Deep-level: `BroadPhaseNarrowPhase` (под макросом `PROJECTV_PROFILE_DEEP`)
 
 4. **✅ C++26 Module:** Современная модульная архитектура с Global Module Fragment
 5. **✅ Error Handling:** Использование `std::expected<..., JoltError>` для type-safe ошибок

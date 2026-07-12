@@ -81,14 +81,14 @@ void TestMotionVectorResolveContract(TestContext &context)
 
 	const std::array<float, 2> prevUvValid{uvCenter[0] + motionValid[0], uvCenter[1] + motionValid[1]};
 	const bool validInBounds = (prevUvValid[0] >= 0.0f && prevUvValid[0] <= 1.0f &&
-		prevUvValid[1] >= 0.0f && prevUvValid[1] <= 1.0f);
+								prevUvValid[1] >= 0.0f && prevUvValid[1] <= 1.0f);
 	if (!validInBounds) {
 		context.Fail(__LINE__, "uv + motion must produce in-bounds prevUv for typical inputs");
 	}
 
 	const std::array<float, 2> prevUvOut{uvCorner[0] + motionOutOfRange[0], uvCorner[1] + motionOutOfRange[1]};
 	const bool outOfBounds = (prevUvOut[0] < 0.0f || prevUvOut[0] > 1.0f ||
-		prevUvOut[1] < 0.0f || prevUvOut[1] > 1.0f);
+							  prevUvOut[1] < 0.0f || prevUvOut[1] > 1.0f);
 	if (!outOfBounds) {
 		context.Fail(__LINE__, "uv + motion must produce out-of-bounds prevUv when motion pushes outside [0,1]");
 	}
@@ -146,7 +146,7 @@ void TestResolveShaderMotionBinding(TestContext &context)
 	}
 }
 
-}  // namespace
+} // namespace
 
 int main()
 {

@@ -566,6 +566,34 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VmaAllocation cloudscapeNoiseAllocation = nullptr;
 	VkSampler cloudscapeLinearSampler = VK_NULL_HANDLE;
 	bool cloudscapePipelineEnabled = false;
+
+	VkExtent2D postFxExtent{};
+	VkImage bloomScratchImage = VK_NULL_HANDLE;
+	VkImageView bloomScratchImageView = VK_NULL_HANDLE;
+	VmaAllocation bloomScratchImageAllocation = nullptr;
+	std::vector<VkImageView> bloomScratchMipViews;
+	VkImage bloomResultImage = VK_NULL_HANDLE;
+	VkImageView bloomResultImageView = VK_NULL_HANDLE;
+	VmaAllocation bloomResultImageAllocation = nullptr;
+	VkImage postFxOutputImage = VK_NULL_HANDLE;
+	VkImageView postFxOutputImageView = VK_NULL_HANDLE;
+	VmaAllocation postFxOutputImageAllocation = nullptr;
+	VkPipeline bloomThresholdPipeline = VK_NULL_HANDLE;
+	VkPipeline bloomDownsamplePipeline = VK_NULL_HANDLE;
+	VkPipeline bloomUpsamplePipeline = VK_NULL_HANDLE;
+	VkPipeline bloomCompositePipeline = VK_NULL_HANDLE;
+	VkPipelineLayout postFxPipelineLayout = VK_NULL_HANDLE;
+	VkShaderModule bloomThresholdShaderModule = VK_NULL_HANDLE;
+	VkShaderModule bloomDownsampleShaderModule = VK_NULL_HANDLE;
+	VkShaderModule bloomUpsampleShaderModule = VK_NULL_HANDLE;
+	VkShaderModule bloomCompositeShaderModule = VK_NULL_HANDLE;
+	VkDescriptorSetLayout postFxDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool postFxDescriptorPool = VK_NULL_HANDLE;
+	std::vector<VkDescriptorSet> postFxDescriptorSets;
+	VkSampler postFxLinearSampler = VK_NULL_HANDLE;
+	bool bloomPipelineEnabled = false;
+	bool aerialPerspectivePipelineEnabled = false;
+
 	VkPipelineLayout graphicsPipelineLayout = VK_NULL_HANDLE;
 	VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline graphicsPipeline = VK_NULL_HANDLE;

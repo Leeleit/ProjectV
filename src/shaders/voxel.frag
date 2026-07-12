@@ -281,18 +281,22 @@ layout(location = 0) out vec4 outColor;
 
 
 
-// EVIL: kVctConeDirectionCount=6. Matches TODO.md §5.1 explicit "6 широких конусов"
-// diffuse cone tracing. Cones are aligned to the world axes with small upward bias to
-// avoid singularity at the floor (Y=0); for full 16/32-cone production quality upgrade
-// see WickedEngine VXGI (turanszkij) cone tables.
-const uint kVctConeDirectionCount = 6u;
-const vec3 kVctConeDirections[6] = vec3[6](
-    vec3(1.0, 0.1, 0.0),
-    vec3(-1.0, 0.1, 0.0),
-    vec3(0.0, 0.1, 1.0),
-    vec3(0.0, 0.1, -1.0),
-    vec3(0.0, 1.0, 0.0),
-    vec3(0.0, -0.2, 0.0));
+// 12-cone diffuse hemisphere sampling (Fibonacci spiral on upper hemisphere + down bias).
+// Reference: WickedEngine VXGI/Snowdrop production cone counts per TODO.md §7.1.
+const uint kVctConeDirectionCount = 12u;
+const vec3 kVctConeDirections[12] = vec3[12](
+    vec3(+0.416598, +0.909091, +0.000000),
+    vec3(-0.506092, +0.727273, -0.463622),
+    vec3(+0.073275, +0.545455, +0.834931),
+    vec3(+0.566786, +0.363636, -0.739272),
+    vec3(-0.968300, +0.181818, +0.171279),
+    vec3(+0.842700, +0.050000, +0.536057),
+    vec3(-0.259280, +0.050000, -0.964507),
+    vec3(-0.460331, +0.050000, +0.886338),
+    vec3(+0.938146, +0.050000, -0.342610),
+    vec3(-0.923189, +0.050000, -0.381079),
+    vec3(+0.423316, +0.050000, +0.904601),
+    vec3(+0.000000, -0.200000, +0.000000));
 
 vec3 VctSampleDirectionalCone(
     const vec3 worldOrigin,
@@ -321,7 +325,7 @@ vec3 VctSampleDirectionalCone(
     return weight > 0.0 ? accum / weight : vec3(0.0);
 }
 
-vec3 VctSampleReflectionCone(
+vec3 VctSampleReflectionConeSet(
     const vec3 worldOrigin,
     const vec3 viewDirection,
     const vec3 normal,
@@ -330,12 +334,33 @@ vec3 VctSampleReflectionCone(
     const uint maxMipLevel) {
     const vec3 reflectionDir = reflect(-viewDirection, normal);
     const float coneAperture = clamp(roughness * 0.6, 0.05, 0.6);
-    return VctSampleDirectionalCone(
-        worldOrigin,
+
+    if (roughness > 0.6) {
+        return VctSampleDirectionalCone(
+            worldOrigin, reflectionDir, coneAperture, maxDistance, maxMipLevel);
+    }
+
+    vec3 tangent;
+    if (abs(reflectionDir.y) < 0.999) {
+        tangent = normalize(cross(vec3(0.0, 1.0, 0.0), reflectionDir));
+    } else {
+        tangent = normalize(cross(vec3(0.0, 0.0, 1.0), reflectionDir));
+    }
+    const vec3 bitangent = cross(reflectionDir, tangent);
+    const float spread = coneAperture * 0.5;
+
+    const vec3 coneDirs[4] = vec3[4](
         reflectionDir,
-        coneAperture,
-        maxDistance,
-        maxMipLevel);
+        normalize(reflectionDir + tangent * spread),
+        normalize(reflectionDir + (-0.5 * tangent + 0.8660254 * bitangent) * spread),
+        normalize(reflectionDir + (-0.5 * tangent - 0.8660254 * bitangent) * spread));
+
+    vec3 accum = vec3(0.0);
+    for (int i = 0; i < 4; ++i) {
+        accum += VctSampleDirectionalCone(
+            worldOrigin, coneDirs[i], coneAperture, maxDistance, maxMipLevel);
+    }
+    return accum * 0.25;
 }
 
 #define DDA_BODY(MAX_STEPS, TRAVELED_OP, PRED, RETURN_EXPR, DEFAULT_RETURN) \
@@ -1178,7 +1203,7 @@ void main() {
 
     vec3 vctSpecular = vec3(0.0);
     if (vctEnabled && roughness > kVctCutoffRoughness) {
-        const vec3 reflectionIrradiance = VctSampleReflectionCone(
+        const vec3 reflectionIrradiance = VctSampleReflectionConeSet(
             inWorldPosition,
             viewDirection,
             normal,
@@ -1348,12 +1373,35 @@ void main() {
             OUT_COLOR = vec4(material.baseColor.rgb * 0.25, 1.0);
         }
         return;
+    } else if (lightingDebugView == 17u) {
+        const float coneCountVis = float(kVctConeDirectionCount) / 16.0;
+        outColor = vec4(vec3(coneCountVis), 1.0);
+        return;
+    } else if (lightingDebugView == 18u) {
+        const vec3 reflectionDir = reflect(-viewDirection, normal);
+        outColor = vec4(reflectionDir * 0.5 + 0.5, 1.0);
+        return;
+    }
+
+    if (lightingDebugView == 16u) {
+        const float exposure = max(sceneLighting.postProcess.x, 0.0001);
+        const float exposureT = clamp(log2(exposure) * 0.5 + 0.5, 0.0, 1.0);
+        outColor = vec4(vec3(exposureT), 1.0);
+        return;
     }
 
     if (lightingDebugView != 7u) {
         color = mix(color, fogColor, fog);
         color = color * volumetricFogTransmittance + volumetricFogAccum;
     }
+
+    if (lightingDebugView == 14u) {
+        color *= max(sceneLighting.postProcess.x, 0.0);
+        color = ApplyToneMap(color);
+        outColor = vec4(color, material.baseColor.a);
+        return;
+    }
+
     color *= max(sceneLighting.postProcess.x, 0.0);
     color = ApplyToneMap(color);
     color = ApplyColorGrading(color);

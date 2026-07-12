@@ -17,3 +17,5 @@ docs/experiments/sources
 # Local Vulkan SDK cache used by docker/Dockerfile.ci; do not commit.
 docker/vulkansdk.tar.xz
 .superpowers/
+.superpowers/sdd
+.superpowers/sdd/progress.md

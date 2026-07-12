@@ -8,8 +8,8 @@ Doxygen: [flecs.dev](https://www.flecs.dev/flecs/).
 
 ## Карта заголовков
 
-| Файл                                                                                              | Назначение                                   |
-|---------------------------------------------------------------------------------------------------|----------------------------------------------|
+| Файл                                                                                                    | Назначение                                   |
+|---------------------------------------------------------------------------------------------------------|----------------------------------------------|
 | [flecs.h](../../../../external/flecs/include/flecs.h)                                                   | Точка входа, C API                           |
 | [flecs/addons/flecs_c.h](../../../../external/flecs/include/flecs/addons/flecs_c.h)                     | C макросы (ECS_COMPONENT, ecs_set, ecs_each) |
 | [flecs/addons/cpp/flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp)             | C++ точка входа                              |

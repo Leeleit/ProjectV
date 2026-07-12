@@ -58,7 +58,10 @@ constexpr uint32_t MAX_THREADS = 4;
 
 // Базовый компонент для Vulkan ресурсов
 struct VulkanResource {
-	enum class Type { BUFFER, IMAGE, PIPELINE, DESCRIPTOR_SET };
+	enum class Type { BUFFER,
+					  IMAGE,
+					  PIPELINE,
+					  DESCRIPTOR_SET };
 
 	Type type;
 	uint64_t last_used_frame = 0;
@@ -166,7 +169,9 @@ struct VkPipelineComponent {
 	bool use_mesh_shaders = false;
 
 	// Для воксельного рендеринга
-	enum class VoxelMode { GREEDY_MESHING, MARCHING_CUBES, MESH_SHADERS } voxel_mode = VoxelMode::GREEDY_MESHING;
+	enum class VoxelMode { GREEDY_MESHING,
+						   MARCHING_CUBES,
+						   MESH_SHADERS } voxel_mode = VoxelMode::GREEDY_MESHING;
 
 	// Специализационные константы
 	std::vector<uint32_t> specialization_constants;
@@ -319,7 +324,9 @@ struct VoxelMaterialComponent {
 	bool needs_descriptor_update = false;
 
 	// Для оптимизации рендеринга
-	enum class RenderQueue { OPAQUE, TRANSPARENT, EMISSIVE } render_queue = RenderQueue::OPAQUE;
+	enum class RenderQueue { OPAQUE,
+							 TRANSPARENT,
+							 EMISSIVE } render_queue = RenderQueue::OPAQUE;
 
 	void update_descriptor_indices(VkDescriptorBufferComponent &descriptor_buffer)
 	{
@@ -358,9 +365,15 @@ struct RenderState {
 
 // Компонент для compute задач
 struct ComputeTask {
-	enum class Type { VOXEL_MESH_GENERATION, TEXTURE_PROCESSING, PHYSICS_UPDATE, AI_PATHFINDING } type;
+	enum class Type { VOXEL_MESH_GENERATION,
+					  TEXTURE_PROCESSING,
+					  PHYSICS_UPDATE,
+					  AI_PATHFINDING } type;
 
-	enum class Priority { LOW, MEDIUM, HIGH, CRITICAL } priority = Priority::MEDIUM;
+	enum class Priority { LOW,
+						  MEDIUM,
+						  HIGH,
+						  CRITICAL } priority = Priority::MEDIUM;
 
 	flecs::entity target_entity;
 	uint64_t estimated_workload = 0;
@@ -795,7 +808,9 @@ class FlecsVulkanIntegration {
 	struct ComputeScheduler {};
 	struct NeedsRemesh {};
 	enum ComputeTaskType { VOXEL_MESH_GENERATION };
-	enum ComputePriority { LOW, MEDIUM, HIGH };
+	enum ComputePriority { LOW,
+						   MEDIUM,
+						   HIGH };
 
 	void resize_buffer(size_t new_size)
 	{

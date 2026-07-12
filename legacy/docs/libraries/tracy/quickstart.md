@@ -292,17 +292,20 @@ void loadResource(const std::string& filename) {
 ### После освоения быстрого старта:
 
 1. **Изучите продвинутые возможности:**
-  - [Справочник API](../tracy/api-reference.md) — все макросы и функции
-  - [Основные понятия](../tracy/concepts.md) — архитектура Tracy
+
+- [Справочник API](../tracy/api-reference.md) — все макросы и функции
+- [Основные понятия](../tracy/concepts.md) — архитектура Tracy
 
 2. **Настройте интеграцию под ваш проект:**
-  - [Интеграция](../tracy/integration.md) — CMake, конфигурация, платформы
-  - [Решение проблем](../tracy/troubleshooting.md) — диагностика ошибок
+
+- [Интеграция](../tracy/integration.md) — CMake, конфигурация, платформы
+- [Решение проблем](../tracy/troubleshooting.md) — диагностика ошибок
 
 3. **Оптимизируйте использование:**
-  - Управление overhead
-  - Селективное профилирование
-  - Remote profiling
+
+- Управление overhead
+- Селективное профилирование
+- Remote profiling
 
 ### Для ProjectV разработчиков:
 

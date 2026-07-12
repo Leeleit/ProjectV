@@ -52,6 +52,10 @@ set(SHADERS
         ${SHADER_DIR}/voxel_rtx_shadow.rchit
         ${SHADER_DIR}/voxel_rtx_shadow.rmiss
         ${SHADER_DIR}/probe_update.comp
+        ${SHADER_DIR}/bloom_threshold.comp
+        ${SHADER_DIR}/bloom_downsample.comp
+        ${SHADER_DIR}/bloom_upsample.comp
+        ${SHADER_DIR}/post_composite.comp
 )
 
 foreach (SHADER ${SHADERS})
@@ -160,6 +164,7 @@ target_sources(ProjectV PRIVATE
         render/SkyAtmosphere.cpp
         render/VolumetricFog.cpp
         render/Cloudscape.cpp
+        render/PostFx.cpp
         voxel/VoxelInteraction.cpp
         voxel/VoxelMaterials.cpp
         voxel/VoxelRaycast.cpp

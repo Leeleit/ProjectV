@@ -467,26 +467,26 @@ namespace projectv::physics {
 
 // PIMPL Implementation — fully hidden from module interface
 struct PhysicsSystem::Impl {
-    JPH::PhysicsSystem* physics_system{nullptr};
-    JPH::JobSystemThreadPool* job_system{nullptr};
-    JPH::TempAllocatorImpl* temp_allocator{nullptr};
-    JPH::BroadPhaseLayerInterface* broad_phase_layer{nullptr};
+JPH::PhysicsSystem* physics_system{nullptr};
+JPH::JobSystemThreadPool* job_system{nullptr};
+JPH::TempAllocatorImpl* temp_allocator{nullptr};
+JPH::BroadPhaseLayerInterface* broad_phase_layer{nullptr};
 
     uint32_t max_bodies{0};
     std::unordered_map<uint64_t, JPH::BodyID> body_map;
 
 auto PhysicsSystem::create(
-    uint32_t max_bodies,
-    uint32_t max_body_pairs,
-    uint32_t max_contact_constraints
+uint32_t max_bodies,
+uint32_t max_body_pairs,
+uint32_t max_contact_constraints
 ) noexcept -> std::expected<PhysicsSystem, PhysicsError> {
-    // Initialize Jolt factory (singleton)
-    static bool jolt_initialized = []{
-        JPH::RegisterDefaultAllocator();
-        JPH::Factory::sInstance = new JPH::Factory();
-        JPH::RegisterTypes();
-        return true;
-    }();
+// Initialize Jolt factory (singleton)
+static bool jolt_initialized = []{
+JPH::RegisterDefaultAllocator();
+JPH::Factory::sInstance = new JPH::Factory();
+JPH::RegisterTypes();
+return true;
+}();
 
     PhysicsSystem system;
     system.impl_ = std::make_unique<Impl>();
@@ -522,23 +522,23 @@ auto PhysicsSystem::create(
     return system;
 
 PhysicsSystem::~PhysicsSystem() noexcept {
-    if (impl_) {
-        delete impl_->physics_system;
-        delete impl_->job_system;
-        delete impl_->temp_allocator;
-        delete impl_->broad_phase_layer;
-        impl_.reset();
+if (impl_) {
+delete impl_->physics_system;
+delete impl_->job_system;
+delete impl_->temp_allocator;
+delete impl_->broad_phase_layer;
+impl_.reset();
 
 PhysicsSystem::PhysicsSystem(PhysicsSystem&& other) noexcept
-    : impl_(std::move(other.impl_)) {}
+: impl_(std::move(other.impl_)) {}
 
 PhysicsSystem& PhysicsSystem::operator=(PhysicsSystem&& other) noexcept {
-    if (this != &other) {
-        impl_ = std::move(other.impl_);
-    return *this;
+if (this != &other) {
+impl_ = std::move(other.impl_);
+return *this;
 
 auto PhysicsSystem::step(float delta_time) noexcept -> void {
-    if (!impl_ || !impl_->physics_system) return;
+if (!impl_ || !impl_->physics_system) return;
 
     impl_->physics_system->Update(
         delta_time,
@@ -548,8 +548,8 @@ auto PhysicsSystem::step(float delta_time) noexcept -> void {
 
 auto PhysicsSystem::create_body(
 ) noexcept -> std::expected<BodyID, PhysicsError> {
-    if (!impl_ || !impl_->physics_system) {
-        return std::unexpected(PhysicsError::InitializationFailed);
+if (!impl_ || !impl_->physics_system) {
+return std::unexpected(PhysicsError::InitializationFailed);
 
     // Create shape based on type
     JPH::RefConst<JPH::Shape> shape;
@@ -607,7 +607,7 @@ auto PhysicsSystem::create_body(
     return result;
 
 auto PhysicsSystem::get_body_position(BodyID id) const noexcept
-    -> std::expected<glm::vec3, PhysicsError> {
+-> std::expected<glm::vec3, PhysicsError> {
 
     auto it = impl_->body_map.find(id.native());
     if (it == impl_->body_map.end()) {
@@ -705,7 +705,7 @@ module ProjectV.ECS.Flecs;
 namespace projectv::ecs {
 
 struct World::Impl {
-    ::flecs::world world;
+::flecs::world world;
 
     Impl() = default;
 
@@ -716,7 +716,7 @@ struct World::Impl {
 World::World() noexcept : impl_(std::make_unique<Impl>()) {}
 
 World::World(int32_t thread_count) noexcept
-    : impl_(std::make_unique<Impl>(thread_count)) {}
+: impl_(std::make_unique<Impl>(thread_count)) {}
 
 World::~World() noexcept = default;
 
@@ -724,28 +724,28 @@ World::World(World&&) noexcept = default;
 World& World::operator=(World&&) noexcept = default;
 
 auto World::progress(float delta_time) noexcept -> bool {
-    return impl_->world.progress(delta_time);
+return impl_->world.progress(delta_time);
 
 auto World::entity() noexcept -> uint64_t {
-    return impl_->world.entity().id();
+return impl_->world.entity().id();
 
 auto World::entity(std::string_view name) noexcept -> uint64_t {
-    return impl_->world.entity(name.data()).id();
+return impl_->world.entity(name.data()).id();
 
 auto World::destroy(uint64_t entity_id) noexcept -> void {
-    impl_->world.entity(entity_id).destruct();
+impl_->world.entity(entity_id).destruct();
 
 auto World::exists(uint64_t entity_id) const noexcept -> bool {
-    return impl_->world.entity(entity_id).is_alive();
+return impl_->world.entity(entity_id).is_alive();
 
 auto World::set(uint64_t entity_id, T const& component) noexcept -> void {
-    impl_->world.entity(entity_id).set<T>(component);
+impl_->world.entity(entity_id).set<T>(component);
 
 auto World::get(uint64_t entity_id) const noexcept -> T const* {
-    return impl_->world.entity(entity_id).get<T>();
+return impl_->world.entity(entity_id).get<T>();
 
 auto World::get_mut(uint64_t entity_id) noexcept -> T* {
-    return impl_->world.entity(entity_id).get_mut<T>();
+return impl_->world.entity(entity_id).get_mut<T>();
 
 // Explicit template instantiations for common components
 template auto World::set<glm::vec3>(uint64_t, glm::vec3 const&) noexcept -> void;
@@ -822,54 +822,55 @@ module ProjectV.UI.ImGui;
 namespace projectv::ui {
 
 struct ImGuiContext::Impl {
-    ::ImGuiContext* context{nullptr};
+::ImGuiContext* context{nullptr};
 
 ImGuiContext::ImGuiContext() noexcept
-    : impl_(std::make_unique<Impl>()) {
-    impl_->context = ::ImGui::CreateContext();
-    ::ImGui::SetCurrentContext(impl_->context);
+: impl_(std::make_unique<Impl>()) {
+impl_->context = ::ImGui::CreateContext();
+::ImGui::SetCurrentContext(impl_->context);
 
     // Configure style
     ::ImGui::StyleColorsDark();
     auto& style = ::ImGui::GetStyle();
     style.WindowRounding = 4.0f;
     style.FrameRounding = 2.0f;
+
 }
 
 ImGuiContext::~ImGuiContext() noexcept {
-    if (impl_ && impl_->context) {
-        ::ImGui::DestroyContext(impl_->context);
+if (impl_ && impl_->context) {
+::ImGui::DestroyContext(impl_->context);
 
 ImGuiContext::ImGuiContext(ImGuiContext&&) noexcept = default;
 ImGuiContext& ImGuiContext::operator=(ImGuiContext&&) noexcept = default;
 
 auto ImGuiContext::new_frame() noexcept -> void {
-    ::ImGui::NewFrame();
+::ImGui::NewFrame();
 
 auto ImGuiContext::render() noexcept -> void {
-    ::ImGui::Render();
+::ImGui::Render();
 
 auto input_float3(std::string_view label, glm::vec3& value, float speed) noexcept -> bool {
-    return ::ImGui::DragFloat3(label.data(), &value.x, speed);
+return ::ImGui::DragFloat3(label.data(), &value.x, speed);
 
 auto input_quat(std::string_view label, glm::quat& value) noexcept -> bool {
-    glm::vec3 euler = glm::degrees(glm::eulerAngles(value));
-    if (::ImGui::DragFloat3(label.data(), &euler.x, 1.0f)) {
-        value = glm::quat(glm::radians(euler));
-        return true;
-    return false;
+glm::vec3 euler = glm::degrees(glm::eulerAngles(value));
+if (::ImGui::DragFloat3(label.data(), &euler.x, 1.0f)) {
+value = glm::quat(glm::radians(euler));
+return true;
+return false;
 
 auto color_picker(std::string_view label, glm::vec4& value) noexcept -> bool {
-    return ::ImGui::ColorEdit4(label.data(), &value.x);
+return ::ImGui::ColorEdit4(label.data(), &value.x);
 
 ScopedWindow::ScopedWindow(std::string_view name) noexcept {
-    is_open_ = ::ImGui::Begin(name.data());
+is_open_ = ::ImGui::Begin(name.data());
 
 ScopedWindow::~ScopedWindow() noexcept {
-    ::ImGui::End();
+::ImGui::End();
 
 auto ScopedWindow::is_open() const noexcept -> bool {
-    return is_open_;
+return is_open_;
 
 ---
 
@@ -946,32 +947,38 @@ find_package(Vulkan 1.4 REQUIRED)
 ### 4.3 Module Dependencies Order
 
 ```
+
 Зависимости модулей (порядок компиляции):
 
 Level 0 (C libraries via GMF):
-  - ProjectV.Render.Vulkan (Vulkan, VMA)
-  - ProjectV.Core.Platform (SDL3)
-  - ProjectV.Audio.Miniaudio (miniaudio)
+
+- ProjectV.Render.Vulkan (Vulkan, VMA)
+- ProjectV.Core.Platform (SDL3)
+- ProjectV.Audio.Miniaudio (miniaudio)
 
 Level 1 (нет зависимостей):
-  - ProjectV.Core.Memory (VMA в .cpp)
-  - ProjectV.Core.Containers
-  - ProjectV.Voxel.SVO (только типы)
+
+- ProjectV.Core.Memory (VMA в .cpp)
+- ProjectV.Core.Containers
+- ProjectV.Voxel.SVO (только типы)
 
 Level 2 (зависит от Level 0-1):
-  - ProjectV.Core (агрегирует Level 1)
-  - ProjectV.Render (агрегирует Vulkan + SVO)
-  - ProjectV.Physics.Jolt (PIMPL, Jolt в .cpp)
-  - ProjectV.ECS.Flecs (PIMPL, Flecs в .cpp)
-  - ProjectV.UI.ImGui (PIMPL, ImGui в .cpp)
+
+- ProjectV.Core (агрегирует Level 1)
+- ProjectV.Render (агрегирует Vulkan + SVO)
+- ProjectV.Physics.Jolt (PIMPL, Jolt в .cpp)
+- ProjectV.ECS.Flecs (PIMPL, Flecs в .cpp)
+- ProjectV.UI.ImGui (PIMPL, ImGui в .cpp)
 
 Level 3 (зависит от Level 2):
-  - ProjectV.Physics (агрегирует Jolt)
-  - ProjectV.ECS (агрегирует Flecs)
-  - ProjectV.UI (агрегирует ImGui)
+
+- ProjectV.Physics (агрегирует Jolt)
+- ProjectV.ECS (агрегирует Flecs)
+- ProjectV.UI (агрегирует ImGui)
 
 Level 4 (зависит от Level 3):
-  - ProjectV.App (агрегирует всё)
+
+- ProjectV.App (агрегирует всё)
 
 ---
 

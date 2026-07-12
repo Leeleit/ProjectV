@@ -864,6 +864,9 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VolumetricFog)) == "VOL_FOG");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::VolumetricTransmittance)) == "VOL_TRN");
 	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::GreedyMeshing)) == "MESH");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::ToneMapOutput)) == "TONEMAP");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::ColorGradingOutput)) == "GRADING");
+	EXPECT_TRUE(context, std::string_view(LightingDebugViewToString(LightingDebugView::ExposureCurve)) == "EXPOSURE");
 	EXPECT_TRUE(
 		context,
 		GetNextLightingDebugView(LightingDebugView::Direct) == LightingDebugView::Local);
@@ -899,7 +902,22 @@ void TestLightingDebugViewCycleIncludesShadow(TestContext &context)
 		GetNextLightingDebugView(LightingDebugView::VolumetricTransmittance) == LightingDebugView::GreedyMeshing);
 	EXPECT_TRUE(
 		context,
-		GetNextLightingDebugView(LightingDebugView::GreedyMeshing) == LightingDebugView::Final);
+		GetNextLightingDebugView(LightingDebugView::GreedyMeshing) == LightingDebugView::ToneMapOutput);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::ToneMapOutput) == LightingDebugView::ColorGradingOutput);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::ColorGradingOutput) == LightingDebugView::ExposureCurve);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::ExposureCurve) == LightingDebugView::VctConeCount);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::VctConeCount) == LightingDebugView::VctConeDirections);
+	EXPECT_TRUE(
+		context,
+		GetNextLightingDebugView(LightingDebugView::VctConeDirections) == LightingDebugView::Final);
 }
 
 void TestShadowTuningTargetCycleAndLabels(TestContext &context)

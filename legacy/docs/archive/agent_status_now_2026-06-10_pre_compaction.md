@@ -11,19 +11,51 @@
 ## 1. Now
 
 - Project phase: `pre-MVP alpha / working vertical slice`.
-- Mainline still has the runnable voxel sandbox slice with interaction, control modes, snapshots, lightweight editor, profiling, smoke probes, and the current `walk` controller.
-- Legacy reference docs are now consolidated under a single `legacy/docs` tree: `philosophy/`, `standards/`, and `libraries/` remain the active reference roots, `libraries/` again preserves the broad per-library corpus instead of only minimal summaries, restored `guides/`, `tutorials/`, and `examples/` keep the older learning material inside the same unified root, `architecture/` now also exposes its speculative `future/` slice explicitly, and former `latest` / `old` planning duplicates now live only under `legacy/docs/archive/roadmaps/`.
-- Latest closed slice: the current lighting baseline is now not only runtime-tunable and runtime-capturable, but also materially closer to the original `10.5.1` contract without washing the scene flat. The sun-shadow path still stays intentionally simple (`2048x2048`, weighted `5x5` PCF, dedicated all-occluder `shadowIndirectBuffer`, active-chunk shadow fit, authored sun vector flipped only inside the CPU shadow camera, angle-aware receiver bias plus a small sun-direction receiver offset), yet the direct-light side no longer lives on ad-hoc `spec power + shininess`. `VoxelMaterialVisual` now packs explicit `AO / roughness / metallic / reflectance` data plus transmission tint and fog/emissive/ambient/direct-response hooks, and `voxel.frag` shades the sun with a `GGX + Fresnel-Schlick + Smith` baseline while still honoring authored ambient and diffuse weights so shadow contrast does not disappear into fill light. Real live capture passes still exist on top of that baseline in both opaque-heavy presets: `ChunkGrid` ships with tighter defaults (`depth=0.0010`, `normal=0.0040`, `filter=1.30`) based on `C` captures, while `MeshingStress` now has a reproducible reference shot (`cam -25 19 25`, `look 0.62 -0.48 -0.62`) that produces meaningful diffs for bias candidates even though the tested moderate variants still did not beat the current code baseline clearly enough to justify changing it. The latest warning-cleanup follow-up on top of that baseline also removed the remaining current-source inspection nits in screenshot capture, lighting debug helper contracts, shadow-projection use-sites, descriptor pool constants, and test BMP/debug-HUD helpers; a fresh `problems/tests/` pass then also closed the remaining helper nits in `tests/VoxelWorldTests.cpp` and left only a deliberate file-level `CppDFAUnreachableFunctionCall` suppression for the bespoke single-TU test runner.
-- Current session also closed the next fresh root-level `problems/` export follow-up on top of that same shadow baseline:
+- Mainline still has the runnable voxel sandbox slice with interaction, control modes, snapshots, lightweight editor,
+  profiling, smoke probes, and the current `walk` controller.
+- Legacy reference docs are now consolidated under a single `legacy/docs` tree: `philosophy/`, `standards/`, and
+  `libraries/` remain the active reference roots, `libraries/` again preserves the broad per-library corpus instead of
+  only minimal summaries, restored `guides/`, `tutorials/`, and `examples/` keep the older learning material inside the
+  same unified root, `architecture/` now also exposes its speculative `future/` slice explicitly, and former `latest` /
+  `old` planning duplicates now live only under `legacy/docs/archive/roadmaps/`.
+- Latest closed slice: the current lighting baseline is now not only runtime-tunable and runtime-capturable, but also
+  materially closer to the original `10.5.1` contract without washing the scene flat. The sun-shadow path still stays
+  intentionally simple (`2048x2048`, weighted `5x5` PCF, dedicated all-occluder `shadowIndirectBuffer`, active-chunk
+  shadow fit, authored sun vector flipped only inside the CPU shadow camera, angle-aware receiver bias plus a small
+  sun-direction receiver offset), yet the direct-light side no longer lives on ad-hoc `spec power + shininess`.
+  `VoxelMaterialVisual` now packs explicit `AO / roughness / metallic / reflectance` data plus transmission tint and
+  fog/emissive/ambient/direct-response hooks, and `voxel.frag` shades the sun with a `GGX + Fresnel-Schlick + Smith`
+  baseline while still honoring authored ambient and diffuse weights so shadow contrast does not disappear into fill
+  light. Real live capture passes still exist on top of that baseline in both opaque-heavy presets: `ChunkGrid` ships
+  with tighter defaults (`depth=0.0010`, `normal=0.0040`, `filter=1.30`) based on `C` captures, while `MeshingStress`
+  now has a reproducible reference shot (`cam -25 19 25`, `look 0.62 -0.48 -0.62`) that produces meaningful diffs for
+  bias candidates even though the tested moderate variants still did not beat the current code baseline clearly enough
+  to justify changing it. The latest warning-cleanup follow-up on top of that baseline also removed the remaining
+  current-source inspection nits in screenshot capture, lighting debug helper contracts, shadow-projection use-sites,
+  descriptor pool constants, and test BMP/debug-HUD helpers; a fresh `problems/tests/` pass then also closed the
+  remaining helper nits in `tests/VoxelWorldTests.cpp` and left only a deliberate file-level
+  `CppDFAUnreachableFunctionCall` suppression for the bespoke single-TU test runner.
+- Current session also closed the next fresh root-level `problems/` export follow-up on top of that same shadow
+  baseline:
   remaining inspection tails in `SceneResources.cpp/.hpp`, `ShadowProjection.cpp/.hpp`, `ScreenshotCapture.cpp`,
   `DebugHud.cpp`, `Types.hpp`, `FramePreparation.cpp`, `VoxelMaterials.cpp/.hpp`, `VoxelWorldTests.cpp`, and the
   touched shadow docs are now gone from the current-source pass. The cleanup stayed bounded: helper APIs that never
   accepted `nullptr` now use references, CSM matrix copy sites no longer depend on iterator+cast boilerplate, and the
   SDL Vulkan include contract now lives explicitly in `VulkanBootstrap.cpp` instead of leaking through `Types.hpp`.
   Sequential `windows-clang-debug` build + `ctest` are green again; no runtime smoke was needed for this pass.
-- Current session closed the immediate post-BRDF capture gap: `ChunkGrid` and the fixed `MeshingStress` reference shot now have scripted `FINAL` / `SHDW` captures under `build/windows-clang-debug/lookdev-captures/20260424-brdf-baseline-v2/`, and the runtime has env-driven startup camera + capture automation so this can be regenerated without manual camera/input timing. The first scripted pass also exposed a real screenshot readback race; `Renderer.cpp` now signals present after all commands so the post-render transfer copy cannot race with presentation.
-- Current session also closed the ambient/environment fill contract step: `postProcess.y` is now the per-preset environment diffuse intensity, detailed HUD and capture sidecars expose it, and refreshed `FINAL` / `AMB` / `SHDW` captures live under `build/windows-clang-debug/lookdev-captures/20260424-env-fill-v1/`.
-- Current session also fixed the first obvious local ambient-occlusion bug on top of that fill contract: compute meshing now stores a cheap per-face ambient-visibility byte in `PackedSceneVoxelFace`, `voxel.frag` multiplies sky/horizon/ground fill by it, and closed voxel cavities no longer read as if an upward normal automatically saw the whole sky. This is still a bounded voxel-neighborhood visibility term, not `SSAO/GTAO`.
+- Current session closed the immediate post-BRDF capture gap: `ChunkGrid` and the fixed `MeshingStress` reference shot
+  now have scripted `FINAL` / `SHDW` captures under
+  `build/windows-clang-debug/lookdev-captures/20260424-brdf-baseline-v2/`, and the runtime has env-driven startup
+  camera + capture automation so this can be regenerated without manual camera/input timing. The first scripted pass
+  also exposed a real screenshot readback race; `Renderer.cpp` now signals present after all commands so the post-render
+  transfer copy cannot race with presentation.
+- Current session also closed the ambient/environment fill contract step: `postProcess.y` is now the per-preset
+  environment diffuse intensity, detailed HUD and capture sidecars expose it, and refreshed `FINAL` / `AMB` / `SHDW`
+  captures live under `build/windows-clang-debug/lookdev-captures/20260424-env-fill-v1/`.
+- Current session also fixed the first obvious local ambient-occlusion bug on top of that fill contract: compute meshing
+  now stores a cheap per-face ambient-visibility byte in `PackedSceneVoxelFace`, `voxel.frag` multiplies
+  sky/horizon/ground fill by it, and closed voxel cavities no longer read as if an upward normal automatically saw the
+  whole sky. This is still a bounded voxel-neighborhood visibility term, not `SSAO/GTAO`.
 - Current session also closed the minimal exposure/grading contract step: `VoxelSceneLighting.colorGrading` now carries
   white point / contrast / saturation / lift, `voxel.frag` and clear color share the same post-tone-map grading path,
   detailed HUD and capture sidecars expose the values, and refreshed captures live under
@@ -59,13 +91,15 @@
   captures live under `build/windows-clang-debug/lookdev-captures/20260424-csm-caster-coverage-v1/`.
 - Current session then fixed the next live CSM mismatch the user found: cascade split planning now follows the same
   visible-scene receiver range as main-pass chunk visibility (`min(camera.farPlane, 64)`) instead of the raw camera far
-  plane, so tower-top receivers no longer get demoted just because the unseen half of the frustum still existed on paper.
+  plane, so tower-top receivers no longer get demoted just because the unseen half of the frustum still existed on
+  paper.
 - Current session then moved the default CSM split distribution itself after the user confirmed the range fix was not
   enough: mainline `sunShadowCascadeSplitLambda` now defaults to `0.80` instead of `0.65`, and a fresh scripted capture
   (`build/windows-clang-debug/lookdev-captures/20260424-csm-lambda-v1/`) confirms the current `MeshingStress` split plan
   is `3.62 / 8.43 / 19.78 / 64.00` rather than `5.95 / 12.86 / 25.08 / 64.00`.
 - Current session then fixed the next real cascade-specific clipping bug the user reported: caster coverage now expands
-  not only light-depth but also per-cascade light-space `XY` extents, so a nearer cascade no longer loses a tall/upstream
+  not only light-depth but also per-cascade light-space `XY` extents, so a nearer cascade no longer loses a
+  tall/upstream
   tower just because its receiver-fit footprint was smaller than the caster's projected silhouette. Fresh scripted CSM
   verification lives under `build/windows-clang-debug/lookdev-captures/20260424-csm-caster-xy-v1/`.
 - Current session then fixed the next live CSM clipping bug on top of that `XY` coverage: expanded upstream caster
@@ -85,7 +119,8 @@
   separate tinted/transmission or RT-oriented path is worth adding; `Fluid` casts through the current opaque shadow-map
   path. Refreshed `VoxelLab` `FINAL/SHDW` captures live under
   `build/windows-clang-debug/lookdev-captures/20260424-fluid-shadow-policy-v1/`.
-- Current session also fixed the close-range shadow acne/stair-step complaint in the shader baseline: receiver projection
+- Current session also fixed the close-range shadow acne/stair-step complaint in the shader baseline: receiver
+  projection
   now adds a small bias toward the sun, skips shadow sampling for nearly unlit/backfacing faces, and uses weighted `5x5`
   PCF instead of the old `3x3` box kernel. Close captures live under
   `build/windows-clang-debug/lookdev-captures/20260424-shadow-acne-close-v2/`.
@@ -110,7 +145,8 @@
   `build/windows-clang-debug-tracy-profiler/lookdev-captures/20260424-contact-shadow-tracy-v2/`.
 - Current session then continued `10.5.3` with the first ambient/contact-occlusion baseline in the same forward voxel
   path, not as a full `SSAO/GTAO` pass. `VoxelSceneLighting.ambientOcclusionParams` now carries
-  `strength/radius/minVisibility`, `voxel.frag` traces a short hemisphere DDA with distance-squared falloff, `B` includes
+  `strength/radius/minVisibility`, `voxel.frag` traces a short hemisphere DDA with distance-squared falloff, `B`
+  includes
   `AOCC`, detailed HUD and screenshot sidecars expose the values, and the tuned default keeps this layer local instead
   of letting big transparent-heavy scenes read as broad fake shadows. Inspected capture sets are green under
   `build/windows-clang-debug/lookdev-captures/20260424-aocc-baseline-v2/`,
@@ -139,7 +175,8 @@
   `build/windows-clang-debug/lookdev-captures/20260424-user-snapshot-camera-v1/`.
 - Current session then fixed the next real local-light aliasing complaint the user surfaced through close-up screenshots
   and a saved `F6` world snapshot: the local visibility term no longer uses a single hard ray from each pixel to the
-  emitter center. `voxel.frag` now traces from a stable point on the owning voxel face and averages a small emitter disk built from
+  emitter center. `voxel.frag` now traces from a stable point on the owning voxel face and averages a small emitter disk
+  built from
   the authored `sourceRadius`, which keeps partially occluded voxel faces from exploding into binary white/black speckle
   at close range. Refreshed saved-snapshot verification lives under
   `build/windows-clang-debug/lookdev-captures/20260424-user-f6-close-angle1-v2/` and
@@ -169,20 +206,24 @@
   it manually — sudo requires a real TTY, agent cannot pipe passwords). All 14 binaries smoke-tested live in the
   same session. Native repo: `gh 2.93.0` (authenticated as **Leeleit** via SSH, awaiting `GH_TOKEN` for REST API),
   `jq 1.8.1`, `tree 2.3.2`, `bloaty 1.1`, `valgrind 3.25.1`, `hyperfine 1.20.0`, `lldb 22.1.6` (matches clang major),
-  `delta 0.19.2`, `lazygit 0.62.2`, `perf 7.0.10-1`. AUR: `gitleaks`, `trufflehog`, `tldr 3.4.4`, `sccache 0.15.0`. Notable
+  `delta 0.19.2`, `lazygit 0.62.2`, `perf 7.0.10-1`. AUR: `gitleaks`, `trufflehog`, `tldr 3.4.4`, `sccache 0.15.0`.
+  Notable
   diagnostic outputs captured during smoke: `bloaty` reports ProjectV ELF as 31% `.debug_info` (14.9 MiB) + 25.9%
   `.text` (12.5 MiB), `gitleaks detect --no-git` on `src/` reports 0 leaks, `hyperfine` baseline for `/usr/bin/true`
   is 470.5 µs ± 188.1 µs, `valgrind --quiet /usr/bin/true` is clean. The full self-audit + verification scripts are
   preserved in `agent/_linux_post_install_verify.sh` for next-session re-validation.
-- **Git/editor baseline closed (`2026-06-09`).** `~/.gitconfig` now uses `core.pager = delta` (side-by-side with line numbers,
+- **Git/editor baseline closed (`2026-06-09`).** `~/.gitconfig` now uses `core.pager = delta` (side-by-side with line
+  numbers,
   hyperlinks, navigate), `core.editor = /home/le1t/.emacs.d/bin/doom emacs -nw` (Doom Emacs wrapper at explicit path;
   `core.editor = codium -w` was the previous value but codium/vscodium is not used as the IDE, so it was replaced
   with the Doom wrapper that loads the operator's `~/.doom.d/{config.el,init.el}`). User identity preserved
   (`Leeleit` / `le1t@list.ru`). `gh` is configured for SSH (`gh.protocol = ssh`). `gh.api_user` requires `GH_TOKEN` env
   var for REST calls (SSH-based auth does not expose an API token).
 - **Four-build Linux tree zoo validated (`2026-06-09`).** `linux-clang-debug` (everyday, 39.8 s cold, ctest 1.44 s),
-  `linux-clang-debug-sccache` (sccache 665/665 compile requests validated end-to-end, 0.049 s no-op rebuild), `linux-clang-debug-ci`
-  (27.4 s cold, ctest 1.37 s, quieter log level for CI), and `linux-clang-debug-tracy-profiler` (26.6 s cold, `ProjectV` itself
+  `linux-clang-debug-sccache` (sccache 665/665 compile requests validated end-to-end, 0.049 s no-op rebuild),
+  `linux-clang-debug-ci`
+  (27.4 s cold, ctest 1.37 s, quieter log level for CI), and `linux-clang-debug-tracy-profiler` (26.6 s cold, `ProjectV`
+  itself
   with Tracy instrumentation enabled — Tracy UI binary itself currently fails on Linux/glibc due to upstream
   `wolfpld/tracy` `tidy-html5` binding to obsolete `uint` / `ulong`; decision deferred to operator, see
   `agent/memory.md` § "Linux build tree zoo" for workarounds).

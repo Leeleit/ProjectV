@@ -39,21 +39,21 @@ where ProjectV's FetchContent target doesn't exist.
    and run the workload you want to profile.
 
 2. **Build Tracy UI standalone** (in a separate build dir):
-   - **Windows:**
-     ```powershell
-     .\tools\tracy-standalone\build-tracy-windows.ps1 -BuildDir build\windows-clang-tracy
-     ```
-   - **Linux:**
-     ```bash
-     bash tools/tracy-standalone/build-tracy-linux.sh build/linux-clang-tracy
-     ```
+    - **Windows:**
+      ```powershell
+      .\tools\tracy-standalone\build-tracy-windows.ps1 -BuildDir build\windows-clang-tracy
+      ```
+    - **Linux:**
+      ```bash
+      bash tools/tracy-standalone/build-tracy-linux.sh build/linux-clang-tracy
+      ```
 
 3. **Launch Tracy UI** and connect to ProjectV:
-   - **Windows:** `build\windows-clang-tracy\bin\tracy-profiler.exe`
-   - **Linux:** `build/linux-clang-tracy/tracy-profiler`
-   - Click **Connect** (default `127.0.0.1:8086`). The Tracy UI will
-     show live capture if `ProjectV.exe` is still running, or you can
-     load a `.tracy` capture file saved via the UI.
+    - **Windows:** `build\windows-clang-tracy\bin\tracy-profiler.exe`
+    - **Linux:** `build/linux-clang-tracy/tracy-profiler`
+    - Click **Connect** (default `127.0.0.1:8086`). The Tracy UI will
+      show live capture if `ProjectV.exe` is still running, or you can
+      load a `.tracy` capture file saved via the UI.
 
 ## Why not a CMake preset?
 

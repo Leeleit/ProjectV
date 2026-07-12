@@ -25,6 +25,7 @@ sharing, layout transitions), и в этой сессии фокус был на
 готовности, а не на визуальном эффекте.
 
 **Что landed (CPU + contracts + shaders, no visible effect yet):**
+
 - `VoxelSceneLighting` расширен с `taaParams` (vec4: jitterX, jitterY, blend, enabled),
   `prevViewProjectionMatrix` (mat4, 64 bytes), `taaHistoryParams` (vec4: texelX, texelY,
   historyValid, reserved) — суммарно 96 байт, sizeof 512 → 608, byte-layout enforced
@@ -43,7 +44,7 @@ sharing, layout transitions), и в этой сессии фокус был на
   `Fog → Taa → Final`, `LightingDebugViewToString` → `"TAA"`. `B` клавиша цикл теперь
   включает Taa debug view.
 - `InputAction::ToggleTaa` (37-е значение) — будет wired в `InputActions.cpp`
-  + обработано в `AppUpdate.cpp` в следующей сессии (binding `T` клавиши).
+    + обработано в `AppUpdate.cpp` в следующей сессии (binding `T` клавиши).
 - `Taa` debug view в `voxel.frag` — placeholder case (ещё не реализован).
 - `DebugStats` обогащён `taaEnabled`, `taaJitterX/Y`, `taaBlend`, `taaHistoryValid`.
 - `RenderState` обогащён `taaEnabled` (default **false**), `taaBlend=0.10`,
@@ -58,6 +59,7 @@ sharing, layout transitions), и в этой сессии фокус был на
   работал в линейном свете). Shaders написаны, но ещё не используются.
 
 **Что ещё **не** сделано (deferred TAA pipeline work):**
+
 - Offscreen scene color target (R16G16B16A16_SFLOAT, swapchain-sized) + history
   ping-pong (2 images, swap после resolve) — нужны VMA-allocated VkImage +
   VkImageView + transitions в `Renderer.cpp`.
@@ -84,12 +86,14 @@ wobble на main pass = видимый **новый** aliasing вместо anti
 следующей сессии — переключить default на `true` и проверить anti-jitter.
 
 **Build verification:**
+
 - `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` — green
 - `ctest --test-dir build/linux-clang-debug` — 1/1 passed (1.42 sec)
 - `cp build/.../src/*.spv build/.../bin/` — выполнено (per §10.11 lesson learned)
 - Проверка `Offsetof` через `static_assert` в C++ + identity в GLSL прошла compile-time.
 
 **Где смотреть прогресс:**
+
 - `src/voxel/VoxelMaterials.hpp` — `VoxelSceneLighting` layout + `static_assert`
 - `src/voxel/VoxelMaterials.cpp` — `LightingDebugView::Taa` + switch
 - `src/core/Types.hpp` — `DebugStats` + `RenderState` TAA поля + `InputAction::ToggleTaa`
@@ -113,6 +117,7 @@ wobble на main pass = видимый **новый** aliasing вместо anti
 `cmake --build ... --target ProjectV` для полной перелинковки, иначе `cp` вручную.
 
 **Следующий шаг (новая сессия):**
+
 1. Добавить offscreen scene color + history ping-pong в `VulkanSwapchain.cpp` (или
    новый `VulkanRenderTargets.{hpp,cpp}`).
 2. Создать TAA resolve pipeline в `VulkanGraphicsPipeline.cpp`.
@@ -127,56 +132,117 @@ wobble на main pass = видимый **новый** aliasing вместо anti
 
 ## 10.13 TAA offscreen targets landed (`2026-06-11`, follow-up to §10.12, committed `d9830c2`)
 
-TAA render targets (`projectv::taa::OffscreenColorTarget`) теперь **аллоцированы** в `VulkanSwapchain::RecreateSwapchain` — пара R16G16B16A16_SFLOAT images (scene + history) + linear sampler. Recreate path сбрасывает `taaHistoryValid = false` каждый раз, что отключает history-blend на один кадр после resize. Targets pre-allocated даже когда `taaEnabled=false` (~24 MiB на 1440p) чтобы runtime toggle не требовал swapchain recreate.
+TAA render targets (`projectv::taa::OffscreenColorTarget`) теперь **аллоцированы** в
+`VulkanSwapchain::RecreateSwapchain` — пара R16G16B16A16_SFLOAT images (scene + history) + linear sampler. Recreate path
+сбрасывает `taaHistoryValid = false` каждый раз, что отключает history-blend на один кадр после resize. Targets
+pre-allocated даже когда `taaEnabled=false` (~24 MiB на 1440p) чтобы runtime toggle не требовал swapchain recreate.
 
-**Forward-declaration dance:** `core/Types.hpp` forward-declares `projectv::taa::OffscreenColorTarget`, чтобы использовать указатель на incomplete type в `RenderState`. `TaaRenderTargets.hpp` имеет **own** forward decl `struct VulkanContextState` потому что `core/Types.hpp` сам включает `TaaRenderTargets.hpp` **до** своего `struct VulkanContextState;` forward-declaration line. `VmaAllocation` объявлен в `.hpp` как `void*` (через `using VmaAllocationHandle = void*;`) и кастится в `VmaAllocation` в `.cpp` где `vk_mem_alloc.h` уже включён — это держит `vk_mem_alloc.h` от утечки в каждый translation unit который включает `core/Types.hpp`. Полезный паттерн для будущих opaque types в render state.
+**Forward-declaration dance:** `core/Types.hpp` forward-declares `projectv::taa::OffscreenColorTarget`, чтобы
+использовать указатель на incomplete type в `RenderState`. `TaaRenderTargets.hpp` имеет **own** forward decl
+`struct VulkanContextState` потому что `core/Types.hpp` сам включает `TaaRenderTargets.hpp` **до** своего
+`struct VulkanContextState;` forward-declaration line. `VmaAllocation` объявлен в `.hpp` как `void*` (через
+`using VmaAllocationHandle = void*;`) и кастится в `VmaAllocation` в `.cpp` где `vk_mem_alloc.h` уже включён — это
+держит `vk_mem_alloc.h` от утечки в каждый translation unit который включает `core/Types.hpp`. Полезный паттерн для
+будущих opaque types в render state.
 
-**Lesson learned (header forward decl в cyclic include):** Когда header A включён в header B, и B определяет тип C, но A использует C — добавь forward decl C **в A** перед `#include B`. Guard предотвращает recursive include, но порядок объявлений теряется, так что forward decl в A становится необходим для парсинга до того, как B объявит C.
+**Lesson learned (header forward decl в cyclic include):** Когда header A включён в header B, и B определяет тип C, но A
+использует C — добавь forward decl C **в A** перед `#include B`. Guard предотвращает recursive include, но порядок
+объявлений теряется, так что forward decl в A становится необходим для парсинга до того, как B объявит C.
 
-**Что осталось до visual TAA:** TAA resolve pipeline в `VulkanGraphicsPipeline.cpp` (6-й pipeline, fullscreen, descriptor set с bindings sceneColor/historyColor/depth/sceneLighting), `Renderer.cpp` main pass → offscreen, TAA resolve pass → swapchain (через `vkCmdBlitImage` для format conversion R16G16B16A16_SFLOAT → B8G8R8A8_UNORM), `AppUpdate.cpp` ToggleTaa handler, `DebugHud.cpp` TAA строки, `ScreenshotCapture.cpp` `taa_*` sidecar entries, history invalidation на resize / world reload / preset change / pause / Taa toggle, `taaEnabled` default flip на `true`. После этого — captures (FINAL + JITR debug view) и `agent/decisions.md` §18 TAA contract.
+**Что осталось до visual TAA:** TAA resolve pipeline в `VulkanGraphicsPipeline.cpp` (6-й pipeline, fullscreen,
+descriptor set с bindings sceneColor/historyColor/depth/sceneLighting), `Renderer.cpp` main pass → offscreen, TAA
+resolve pass → swapchain (через `vkCmdBlitImage` для format conversion R16G16B16A16_SFLOAT → B8G8R8A8_UNORM),
+`AppUpdate.cpp` ToggleTaa handler, `DebugHud.cpp` TAA строки, `ScreenshotCapture.cpp` `taa_*` sidecar entries, history
+invalidation на resize / world reload / preset change / pause / Taa toggle, `taaEnabled` default flip на `true`. После
+этого — captures (FINAL + JITR debug view) и `agent/decisions.md` §18 TAA contract.
 
-Время: каждый из этих подзадач — 30-300 строк кода. Следующая сессия может довести до визуального TAA за 1-2 часа фокусированной работы.
+Время: каждый из этих подзадач — 30-300 строк кода. Следующая сессия может довести до визуального TAA за 1-2 часа
+фокусированной работы.
 
 ## 10.14 TAA renderer wiring landed (`2026-06-11`, follow-up to §10.13, **uncommitted**)
 
-`taaEnabled` остаётся `false` (visual TAA — отдельная сессия). Вся инфраструктура для resolve pass теперь подключена и работает как no-op когда `taaEnabled=false` (fallback на старое поведение TAA-off).
+`taaEnabled` остаётся `false` (visual TAA — отдельная сессия). Вся инфраструктура для resolve pass теперь подключена и
+работает как no-op когда `taaEnabled=false` (fallback на старое поведение TAA-off).
 
 **Что сделано в этой сессии:**
 
 1. **Subtask 1 — format mismatch fix:**
-   - `VulkanBootstrap.cpp` — `VK_EXT_dynamic_rendering_unused_attachments` (extension #500, ratified) включён opportunistically при `TryPickPhysicalDevice`. Feature struct `VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT` + feature bit `dynamicRenderingUnusedAttachments` через `pNext` chain в `VkDeviceCreateInfo`. На Linux host (RTX 3060 Ti, Vulkan 1.4.350) feature bit = `true`, extension revision 1. `VulkanContextState.supportsDynamicRenderingUnusedAttachments` хранит это для downstream gate.
-   - `VulkanGraphicsPipeline.cpp` — main voxel pipeline `VkPipelineRenderingCreateInfo` теперь декларирует **два** color attachment formats (`swapchain_format`, `R16G16B16A16_SFLOAT`). VUID-VkGraphicsPipelineCreateInfo-renderPass-06055 fixed через `pColorBlendState->attachmentCount = 2` с идентичными `pAttachments` entries (slot 0 = полный RGBA write, slot 1 = тот же; `dynamicRenderingUnusedAttachments` разрешает `imageView = VK_NULL_HANDLE` на unused slot в per-frame `VkRenderingAttachmentInfo`). Defensive fail-fast в `CreateGraphicsPipeline` если extension не поддерживается.
+    - `VulkanBootstrap.cpp` — `VK_EXT_dynamic_rendering_unused_attachments` (extension #500, ratified) включён
+      opportunistically при `TryPickPhysicalDevice`. Feature struct
+      `VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT` + feature bit `dynamicRenderingUnusedAttachments`
+      через `pNext` chain в `VkDeviceCreateInfo`. На Linux host (RTX 3060 Ti, Vulkan 1.4.350) feature bit = `true`,
+      extension revision 1. `VulkanContextState.supportsDynamicRenderingUnusedAttachments` хранит это для downstream
+      gate.
+    - `VulkanGraphicsPipeline.cpp` — main voxel pipeline `VkPipelineRenderingCreateInfo` теперь декларирует **два**
+      color attachment formats (`swapchain_format`, `R16G16B16A16_SFLOAT`).
+      VUID-VkGraphicsPipelineCreateInfo-renderPass-06055 fixed через `pColorBlendState->attachmentCount = 2` с
+      идентичными `pAttachments` entries (slot 0 = полный RGBA write, slot 1 = тот же;
+      `dynamicRenderingUnusedAttachments` разрешает `imageView = VK_NULL_HANDLE` на unused slot в per-frame
+      `VkRenderingAttachmentInfo`). Defensive fail-fast в `CreateGraphicsPipeline` если extension не поддерживается.
 
 2. **Subtask 2 — Renderer.cpp TAA-aware RecordGraphicsCommands:**
-   - Per-frame TAA gate: `taaOn = taaEnabled && offscreenTargets != nullptr && resolvePipeline != nullptr`. Все TAA-части обёрнуты в `if (taaOn)`.
-   - TAA-off path (по умолчанию): single `vkCmdBeginRendering` block, slot 0 = swapchain (write), slot 1 = NULL (discarded), debug overlay/HUD в main pass — **byte-equivalent contract** к pre-change состоянию (visual verified в smoke 6/6 с `PROJECTV_ENABLE_VALIDATION=ON`).
-   - TAA-on path: 2 begin/end blocks. Block 1 — main pass с двумя attachments (slot 0 = NULL, slot 1 = `taaSceneColorTarget`), opaque + transparent draws. Block 2 — TAA resolve pass (fullscreen triangle, 3 verts, no VBO), single attachment = swapchain, no depth, debug overlay/HUD в том же block. Layout transitions: sceneColor `COLOR_ATTACHMENT → SHADER_READ_ONLY`, depth `DEPTH_ATTACHMENT → DEPTH_READ_ONLY`, history `* → SHADER_READ_ONLY` (для resolve sample), затем history copy `vkCmdCopyImage` sceneColor → historyColor с переходами через `TRANSFER_SRC`/`TRANSFER_DST` (skip на первом кадре через `taaHistoryValid = false` flag).
-   - Per-image layout trackers в `RenderState` (`depthImageCurrentLayout`, `taaSceneColorCurrentLayout`, `taaHistoryColorCurrentLayout`) — depth lands в `DEPTH_ATTACHMENT` после TAA-off frame и `DEPTH_READ_ONLY` после TAA-on frame, и стартовый transition следующего кадра корректно выбирает `oldLayout` независимо от `taaEnabled` toggle между кадрами. Reset в `VulkanSwapchain.cpp::RecreateSwapchain` на UNDEFINED.
-   - `InvertColumnMajorMat4` helper (Gauss-Jordan с partial pivoting) в анонимном namespace `Renderer.cpp` для `inverseCurrentViewProjection` в `ResolvePushConstants` (GLM не подключен к build — стараемся избегать новых зависимостей).
-   - Subtle issue fixed mid-session: первоначально `pColorBlendState->attachmentCount` (1) не соответствовал `colorAttachmentCount` (2) → VUID-06055; потом `pAttachments[0] != pAttachments[1]` без `independentBlend` feature → VUID-00605. Оба fixed через identical dual entries.
+    - Per-frame TAA gate: `taaOn = taaEnabled && offscreenTargets != nullptr && resolvePipeline != nullptr`. Все
+      TAA-части обёрнуты в `if (taaOn)`.
+    - TAA-off path (по умолчанию): single `vkCmdBeginRendering` block, slot 0 = swapchain (write), slot 1 = NULL (
+      discarded), debug overlay/HUD в main pass — **byte-equivalent contract** к pre-change состоянию (visual verified в
+      smoke 6/6 с `PROJECTV_ENABLE_VALIDATION=ON`).
+    - TAA-on path: 2 begin/end blocks. Block 1 — main pass с двумя attachments (slot 0 = NULL, slot 1 =
+      `taaSceneColorTarget`), opaque + transparent draws. Block 2 — TAA resolve pass (fullscreen triangle, 3 verts, no
+      VBO), single attachment = swapchain, no depth, debug overlay/HUD в том же block. Layout transitions: sceneColor
+      `COLOR_ATTACHMENT → SHADER_READ_ONLY`, depth `DEPTH_ATTACHMENT → DEPTH_READ_ONLY`, history
+      `* → SHADER_READ_ONLY` (для resolve sample), затем history copy `vkCmdCopyImage` sceneColor → historyColor с
+      переходами через `TRANSFER_SRC`/`TRANSFER_DST` (skip на первом кадре через `taaHistoryValid = false` flag).
+    - Per-image layout trackers в `RenderState` (`depthImageCurrentLayout`, `taaSceneColorCurrentLayout`,
+      `taaHistoryColorCurrentLayout`) — depth lands в `DEPTH_ATTACHMENT` после TAA-off frame и `DEPTH_READ_ONLY` после
+      TAA-on frame, и стартовый transition следующего кадра корректно выбирает `oldLayout` независимо от `taaEnabled`
+      toggle между кадрами. Reset в `VulkanSwapchain.cpp::RecreateSwapchain` на UNDEFINED.
+    - `InvertColumnMajorMat4` helper (Gauss-Jordan с partial pivoting) в анонимном namespace `Renderer.cpp` для
+      `inverseCurrentViewProjection` в `ResolvePushConstants` (GLM не подключен к build — стараемся избегать новых
+      зависимостей).
+    - Subtle issue fixed mid-session: первоначально `pColorBlendState->attachmentCount` (1) не соответствовал
+      `colorAttachmentCount` (2) → VUID-06055; потом `pAttachments[0] != pAttachments[1]` без `independentBlend`
+      feature → VUID-00605. Оба fixed через identical dual entries.
 
 **Что НЕ сделано (deferred, отдельная сессия):**
+
 - `taaEnabled` default flip `false → true` — visual verify отдельная сессия.
 - `AppUpdate.cpp` `ToggleTaa` handler + `InputActions.cpp` T-биндинг (subtask C, out of scope).
 - `DebugHud.cpp` TAA JITR/BLND/HIST строки (subtask D, out of scope).
 - `ScreenshotCapture.cpp` `taa_*` sidecar entries (subtask E, out of scope).
-- History invalidation hooks (resize уже есть в `VulkanSwapchain.cpp`; остаются world reload / preset change / pause / Taa toggle, subtask F, out of scope).
+- History invalidation hooks (resize уже есть в `VulkanSwapchain.cpp`; остаются world reload / preset change / pause /
+  Taa toggle, subtask F, out of scope).
 - `agent/decisions.md` §18 TAA contract entry (после visual verify, subtask I).
 - Per-frame `vkCmdResetQueryPool` для HUD counters и TAA-related `DebugStats` propagation (subtask D-F).
-- History copy uses raw scene color (not resolved output) — для TAA on/off toggle это OK (history represents prev frame raw input), но resolved-output copy (через resolve pass → history target) был бы точнее. Это отдельный work item — потребует либо MRT в resolve shader, либо vkCmdBlitImage swapchain → history (свои layout transition complications).
+- History copy uses raw scene color (not resolved output) — для TAA on/off toggle это OK (history represents prev frame
+  raw input), но resolved-output copy (через resolve pass → history target) был бы точнее. Это отдельный work item —
+  потребует либо MRT в resolve shader, либо vkCmdBlitImage swapchain → history (свои layout transition complications).
 
 **Verification:**
-- `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` — green (только pre-existing `DebugHud.cpp:605` format warning).
-- `ctest --test-dir build/linux-clang-debug --output-on-failure -C Debug` — 1/1 passed (1.44 sec).
-- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `cam -25 19 25 look 0.62 -0.48 -0.62` (VoxelLab) с `PROJECTV_ENABLE_VALIDATION=ON` — 6/6 captures (FINAL SHDW CSM CTSH AOCC LOCL), 0 VUID / 0 Unfreed / 0 errors / 0 warnings.
-- Pre-existing non-determinism между consecutive smoke runs (~10% pixel diff) — не regression от моих изменений, видно по `shadow_cascade_ortho_extents` / `shadow_cascade_texel_world` в sidecars, которые зависят от camera position application. Камера между runs не байт-точно воспроизводимая; visual diff вручную не делал (no vision_analyze под рукой), но smoke pass + sidecar metadata показывают expected values.
 
-**Параллельная сессия `2026-06-11-asset-pipeline-m0-m5`:** см. `agent/active-sessions.md` (закрытая запись TAA + открытая asset-pipeline). На момент закрытия TAA-сессии asset-pipeline на M0 (CMake wiring) — непересекающиеся правки в `CMakeLists.txt` / `src/CMakeLists.txt`. **M4 asset-pipeline планирует править `Renderer.cpp` / `core/Types.hpp` / `SceneResources.cpp`** для `RecordModelCommands` + `ModelRenderState` — это **прямой конфликт** с моими TAA-изменениями в `Renderer.cpp::RecordGraphicsCommands` и `core/Types.hpp` layout trackers. Решение — за оператором:
+- `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` — green (только pre-existing `DebugHud.cpp:605`
+  format warning).
+- `ctest --test-dir build/linux-clang-debug --output-on-failure -C Debug` — 1/1 passed (1.44 sec).
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `cam -25 19 25 look 0.62 -0.48 -0.62` (VoxelLab) с
+  `PROJECTV_ENABLE_VALIDATION=ON` — 6/6 captures (FINAL SHDW CSM CTSH AOCC LOCL), 0 VUID / 0 Unfreed / 0 errors / 0
+  warnings.
+- Pre-existing non-determinism между consecutive smoke runs (~10% pixel diff) — не regression от моих изменений, видно
+  по `shadow_cascade_ortho_extents` / `shadow_cascade_texel_world` в sidecars, которые зависят от camera position
+  application. Камера между runs не байт-точно воспроизводимая; visual diff вручную не делал (no vision_analyze под
+  рукой), но smoke pass + sidecar metadata показывают expected values.
+
+**Параллельная сессия `2026-06-11-asset-pipeline-m0-m5`:** см. `agent/active-sessions.md` (закрытая запись TAA +
+открытая asset-pipeline). На момент закрытия TAA-сессии asset-pipeline на M0 (CMake wiring) — непересекающиеся правки в
+`CMakeLists.txt` / `src/CMakeLists.txt`. **M4 asset-pipeline планирует
+править `Renderer.cpp` / `core/Types.hpp` / `SceneResources.cpp`** для `RecordModelCommands` + `ModelRenderState` — это
+**прямой конфликт** с моими TAA-изменениями в `Renderer.cpp::RecordGraphicsCommands` и `core/Types.hpp` layout trackers.
+Решение — за оператором:
+
 - (a) Commit моих TAA-изменений сейчас → asset-pipeline будет rebase M4 поверх моих правок.
 - (b) Подождать M0-M3 asset-pipeline, чтобы TAA merge был атомарным с M4 conflict resolution.
 - (c) Параллельно — но потребует arbitration при merge conflict (см. `AGENTS.md §7.2.6`).
 
 **Commit message draft** (per `AGENTS.md §7.2.5`, _awaiting operator confirmation_):
+
 ```
 refactor(render): wire TAA offscreen main pass + resolve pass + history copy
 
@@ -327,6 +393,7 @@ the 4-corner accumulator in the existing loop, which is bandwidth-
 negligible.
 
 **Verification (`2026-06-12`, this session):**
+
 - `cmake --build build/linux-clang-debug --target ProjectV ProjectVTests`
   — green, 1 pre-existing warning at `DebugHud.cpp:600` (`%.0f` for
   bool, not my change).
@@ -347,6 +414,7 @@ negligible.
   detector. HUD FPS 93.2 on this build.
 
 **Working rules to inherit:**
+
 - **First-frame / post-recreate baseline guard.** Any new
   frame-to-frame state that's initialised to a sentinel (zero, NaN,
   identity matrix) and compared against the next-frame value needs a
@@ -373,9 +441,10 @@ section, `agent/status.md` §10 (in-progress session snapshot).
 ## 10.18 TAA Блок 1 / 1.7 — R11G11B10_UFloat scene color (`2026-06-12`)
 
 **Single-line format change: 8 → 4 bytes/pixel на TAA scene color
+
 + history.** Mechanical, low-risk, **2× bandwidth reduction** на
-resolve-pass read (`historyColor` sample) и per-frame
-`vkCmdCopyImage` history update.
+  resolve-pass read (`historyColor` sample) и per-frame
+  `vkCmdCopyImage` history update.
 
 **Single source of truth: `kTaaSceneColorFormat` constant.**
 
@@ -424,6 +493,7 @@ color_format` sidecar key lets the operator verify the format at
 runtime; if banding shows up, revert is a 1-line constant change.
 
 **Build / test / smoke (`2026-06-12`):**
+
 - `cmake --build build/linux-clang-debug --target ProjectV
   ProjectVTests ProjectVAssetTests ProjectVMeshBakerTests
   ProjectVDracoTests ProjectVFrustumCullingTests
@@ -442,6 +512,7 @@ runtime; if banding shows up, revert is a 1-line constant change.
   background uniform light blue, checker floor clean).
 
 **Working rule to inherit:**
+
 - **Single source of truth for cross-consumer constants.** When a
   Vulkan format is consumed by both image allocation and pipeline
   declaration, define it as an `inline constexpr` in the header
@@ -460,36 +531,52 @@ runtime; if banding shows up, revert is a 1-line constant change.
 
 ## 10.15 TAA close-out plumbing landed (A1, `2026-06-11`, committed as `9764463`)
 
-Phase A сессия 1. `taaEnabled` всё ещё `false` (default). Четыре deferred subtask'а из `agent/memory.md §10.14` закрыты + история-инвалидация:
+Phase A сессия 1. `taaEnabled` всё ещё `false` (default). Четыре deferred subtask'а из `agent/memory.md §10.14`
+закрыты + история-инвалидация:
 
 - **Subtask C — ToggleTaa handler + T-биндинг:**
-  - `InputActions.cpp`: `BindAction(input, InputAction::ToggleTaa, SDL_SCANCODE_T)` добавлен между PlayLastInputReplay (Y) и ToggleMutationAnchor (X).
-  - `AppUpdate.cpp`: ToggleTaa handler работает как остальные toggle handlers: `ConsumeInputActionPressed` → flip `render->taaEnabled` + `render->taaHistoryValid = false`. Гейт `world->voxelWorld` (требуется active world).
-  - Ранее добавленный `InputAction::ToggleTaa` (37-й элемент enum в `core/Types.hpp`) теперь забинден и обрабатывается.
-  - `DebugStats` propagation: каждый кадр `AppUpdate.cpp` копирует `render->taaEnabled/blend/frameCounter/historyValid/jitterX/Y` → `debug->stats.*`. Jitter X/Y были добавлены в `DebugStats` (ранее отсутствовали — комментарий предполагал, что JITR не нужен в HUD, но для A1 он потребовался).
+    - `InputActions.cpp`: `BindAction(input, InputAction::ToggleTaa, SDL_SCANCODE_T)` добавлен между
+      PlayLastInputReplay (Y) и ToggleMutationAnchor (X).
+    - `AppUpdate.cpp`: ToggleTaa handler работает как остальные toggle handlers: `ConsumeInputActionPressed` → flip
+      `render->taaEnabled` + `render->taaHistoryValid = false`. Гейт `world->voxelWorld` (требуется active world).
+    - Ранее добавленный `InputAction::ToggleTaa` (37-й элемент enum в `core/Types.hpp`) теперь забинден и
+      обрабатывается.
+    - `DebugStats` propagation: каждый кадр `AppUpdate.cpp` копирует
+      `render->taaEnabled/blend/frameCounter/historyValid/jitterX/Y` → `debug->stats.*`. Jitter X/Y были добавлены в
+      `DebugStats` (ранее отсутствовали — комментарий предполагал, что JITR не нужен в HUD, но для A1 он потребовался).
 
 - **Subtask D — DebugHud TAA JITR/BLND/HIST lines:**
-  - `DebugHud.cpp`: добавлен блок `TAA %s JIT %.2f %.2f BLND %.3f HIST %s` после TSHD (TransparentShadowPolicy) строки.
-  - JITR показывает текущий sub-pixel jitter offset (при `taaEnabled=false` это `0.00 0.00`).
-  - BLND показывает blend factor (`0.100` default).
-  - HIST показывает `true`/`false` (valid = 1 на втором+ кадре после TAA-enable или после history invalidation).
+    - `DebugHud.cpp`: добавлен блок `TAA %s JIT %.2f %.2f BLND %.3f HIST %s` после TSHD (TransparentShadowPolicy)
+      строки.
+    - JITR показывает текущий sub-pixel jitter offset (при `taaEnabled=false` это `0.00 0.00`).
+    - BLND показывает blend factor (`0.100` default).
+    - HIST показывает `true`/`false` (valid = 1 на втором+ кадре после TAA-enable или после history invalidation).
 
 - **Subtask E — ScreenshotCapture taa_* sidecar entries:**
-  - `ScreenshotCapture.cpp`: добавлены `taa_enabled`, `taa_jitter_x`, `taa_jitter_y`, `taa_blend`, `taa_history_valid` в format string + args между `shadow_cascade_blend` и `shadow_cascade_count`.
+    - `ScreenshotCapture.cpp`: добавлены `taa_enabled`, `taa_jitter_x`, `taa_jitter_y`, `taa_blend`, `taa_history_valid`
+      в format string + args между `shadow_cascade_blend` и `shadow_cascade_count`.
 
 - **Subtask F — History invalidation hooks:**
-  - `main.cpp::FinalizeActiveVoxelWorldReload`: `state->render.taaHistoryValid = false;` после флагов reload. Покрывает world reload (snapshot load, preset change).
-  - `AppUpdate.cpp::ToggleTaa handler`: `render->taaHistoryValid = false` на каждый toggle (в обе стороны). Новые jitter-projection начинает с чистого листа.
-  - Swapchain resize: уже было `render->taaHistoryValid = false` в `VulkanSwapchain.cpp` prior commit (`98fb391`).
-  - **Не invalidate:** pause toggle (нет изменения геометрии), voxel edit (sub-frame изменение, TAA depth-reproject handles).
+    - `main.cpp::FinalizeActiveVoxelWorldReload`: `state->render.taaHistoryValid = false;` после флагов reload.
+      Покрывает world reload (snapshot load, preset change).
+    - `AppUpdate.cpp::ToggleTaa handler`: `render->taaHistoryValid = false` на каждый toggle (в обе стороны). Новые
+      jitter-projection начинает с чистого листа.
+    - Swapchain resize: уже было `render->taaHistoryValid = false` в `VulkanSwapchain.cpp` prior commit (`98fb391`).
+    - **Не invalidate:** pause toggle (нет изменения геометрии), voxel edit (sub-frame изменение, TAA depth-reproject
+      handles).
 
 **Verification:**
+
 - `cmake --build build/linux-clang-debug --target ProjectV --parallel 8` — green
-- `ctest --test-dir build/linux-clang-debug --output-on-failure -C Debug` — 1/1 passed (ProjectVTests; ProjectVAssetTests Not Run — pre-existing from asset-pipeline M1)
-- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `cam -25 19 25 look 0.62 -0.48 -0.62` с `PROJECTV_ENABLE_VALIDATION=ON` — 6/6 captures (FINAL SHDW CSM CTSH AOCC LOCL), 0 VUIDs / 0 errors. Sidecar содержит `taa_enabled=0`, `taa_jitter_x=0.000000`, `taa_jitter_y=0.000000`, `taa_blend=0.100000`, `taa_history_valid=0`.
+- `ctest --test-dir build/linux-clang-debug --output-on-failure -C Debug` — 1/1 passed (ProjectVTests;
+  ProjectVAssetTests Not Run — pre-existing from asset-pipeline M1)
+- `tools/linux/Invoke-ProjectVRuntimeSmoke.sh` на `cam -25 19 25 look 0.62 -0.48 -0.62` с
+  `PROJECTV_ENABLE_VALIDATION=ON` — 6/6 captures (FINAL SHDW CSM CTSH AOCC LOCL), 0 VUIDs / 0 errors. Sidecar содержит
+  `taa_enabled=0`, `taa_jitter_x=0.000000`, `taa_jitter_y=0.000000`, `taa_blend=0.100000`, `taa_history_valid=0`.
 - TAA-off path (по умолчанию) остаётся byte-equivalent к pre-A1 — ни в одном capture нет regression.
 
 **A2 next steps (closed `2026-06-11`):**
+
 1. ✅ Flip `core/Types.hpp::RenderState.taaEnabled` default: `false → true`.
 2. ✅ Build + ctest + smoke с `taaEnabled=true` (FINAL + SHDW CSM CTSH AOCC LOCL).
 3. ✅ Vision-verify anti-jitter: captures clean, `taa_history_valid=1` after warmup.
@@ -500,55 +587,134 @@ Phase A сессия 1. `taaEnabled` всё ещё `false` (default). Четыр
 
 ## 10.16 TAA tuning ladder + RenderDoc markers landed (`2026-06-12`)
 
-Блок 1 / 1.4 + Блок 5 / 5.1 + Блок 6 / 6.x все закрыты в этой сессии. Build green на `linux-clang-debug`, `ProjectVTests` 1/1. Code state живёт в working tree, коммиты pending serialization с параллельной `session-2026-06-11-asset-pipeline-m0-m5` M4.
+Блок 1 / 1.4 + Блок 5 / 5.1 + Блок 6 / 6.x все закрыты в этой сессии. Build green на `linux-clang-debug`,
+`ProjectVTests` 1/1. Code state живёт в working tree, коммиты pending serialization с параллельной
+`session-2026-06-11-asset-pipeline-m0-m5` M4.
 
 **TAA tuning ladder contract (1.4):**
-- 5 new `InputAction` enum entries + биндинги в `src/app/InputActions.cpp`: `DecreaseTaaJitterScale` (SDL_SCANCODE_SEMICOLON), `IncreaseTaaJitterScale` (SDL_SCANCODE_APOSTROPHE), `DecreaseTaaBlend` (SDL_SCANCODE_MINUS), `IncreaseTaaBlend` (SDL_SCANCODE_EQUALS), `CycleTaaNeighbourhoodRadius` (SDL_SCANCODE_COMMA), `InvalidateTaaHistory` (SDL_SCANCODE_PERIOD). Оригинальный план `J`/`M`/`K`/`L` не реализуем — `J`/`M`/`K` уже заняты (walk auto-jump, pick material, exposure inc). Левая рука держит WASD/movement, правая — все 6 новых keys в одном кластере.
-- 5 new handlers в `AppUpdate.cpp` (все `*->taaHistoryValid = false` на change, кроме InvalidateTaaHistory который только это и делает). `CycleTaaNeighbourhoodRadius` цикл через `std::array<int32_t, 4>{1, 3, 5, 7}` через `std::find` + индексная арифметика, ищет текущее значение; если не найдено — defaults к `1`.
-- `taaJitterScale` (RenderState + DebugStats, default `1.0`, clamp `[0, 2]`, step `0.25`) — multiplier на `Halton(2,3)` output в `FramePreparation.cpp`. `0.0` freezes projection jitter, `1.0` matches pre-ladder, `2.0` full-pixel wander.
+
+- 5 new `InputAction` enum entries + биндинги в `src/app/InputActions.cpp`: `DecreaseTaaJitterScale` (
+  SDL_SCANCODE_SEMICOLON), `IncreaseTaaJitterScale` (SDL_SCANCODE_APOSTROPHE), `DecreaseTaaBlend` (SDL_SCANCODE_MINUS),
+  `IncreaseTaaBlend` (SDL_SCANCODE_EQUALS), `CycleTaaNeighbourhoodRadius` (SDL_SCANCODE_COMMA), `InvalidateTaaHistory` (
+  SDL_SCANCODE_PERIOD). Оригинальный план `J`/`M`/`K`/`L` не реализуем — `J`/`M`/`K` уже заняты (walk auto-jump, pick
+  material, exposure inc). Левая рука держит WASD/movement, правая — все 6 новых keys в одном кластере.
+- 5 new handlers в `AppUpdate.cpp` (все `*->taaHistoryValid = false` на change, кроме InvalidateTaaHistory который
+  только это и делает). `CycleTaaNeighbourhoodRadius` цикл через `std::array<int32_t, 4>{1, 3, 5, 7}` через
+  `std::find` + индексная арифметика, ищет текущее значение; если не найдено — defaults к `1`.
+- `taaJitterScale` (RenderState + DebugStats, default `1.0`, clamp `[0, 2]`, step `0.25`) — multiplier на `Halton(2,3)`
+  output в `FramePreparation.cpp`. `0.0` freezes projection jitter, `1.0` matches pre-ladder, `2.0` full-pixel wander.
 - `taaBlend` остался как был, default `0.10`, step `0.05`, clamp `[0, 1]`.
-- `taaNeighbourhoodRadius` (int32_t, default `1`, cycle через `1/3/5/7`) — `1` = original 3×3 (`-1, 0, +1`); `3` = 7×7; `5` = 11×11; `7` = 15×15.
-- **Shader contract change**: `VoxelSceneLighting::taaHistoryParams` `.w` slot был `reserved`, стал `neighbourhoodRadius`. Byte layout **не изменился** (всё ещё `vec4` на offset 592, см. `static_assert` в `voxel/VoxelMaterials.hpp:145`). Только `taa_resolve.frag` reads `.w`; 3 other shader TUs (`voxel.frag`, `voxel_shadow.vert`, `voxel_mesh.comp`) объявляют поле для std430 layout, но не используют — у них только comment update. `taa_resolve.frag` clamp'ит radius в `[1, 7]` и snap'ит к odd values через тернарный каскад: `(r >= 7) ? 7 : (r >= 5) ? 5 : (r >= 3) ? 3 : 1`. Это держит loop bound в safe GLSL range и предотвращает undefined behavior на stale values.
-- DebugHud detailed HUD line теперь: `TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s` (раньше было без `JSC` и `NHOOD`). Helper lines в detailed mode добавили 2 строки: `T TAA  ;' JIT  -= BLND` и `, NHOOD  . INVHIST`. Normal mode без TAA keys (только power-user).
-- ScreenshotCapture sidecar добавил `taa_jitter_scale` (после `taa_jitter_y`) и `taa_neighbourhood_radius` (после `taa_blend`). Существующие keys (`taa_enabled/jitter_x/jitter_y/blend/history_valid/clamp_color_space`) сохранены.
+- `taaNeighbourhoodRadius` (int32_t, default `1`, cycle через `1/3/5/7`) — `1` = original 3×3 (`-1, 0, +1`); `3` = 7×7;
+  `5` = 11×11; `7` = 15×15.
+- **Shader contract change**: `VoxelSceneLighting::taaHistoryParams` `.w` slot был `reserved`, стал
+  `neighbourhoodRadius`. Byte layout **не изменился** (всё ещё `vec4` на offset 592, см. `static_assert` в
+  `voxel/VoxelMaterials.hpp:145`). Только `taa_resolve.frag` reads `.w`; 3 other shader TUs (`voxel.frag`,
+  `voxel_shadow.vert`, `voxel_mesh.comp`) объявляют поле для std430 layout, но не используют — у них только comment
+  update. `taa_resolve.frag` clamp'ит radius в `[1, 7]` и snap'ит к odd values через тернарный каскад:
+  `(r >= 7) ? 7 : (r >= 5) ? 5 : (r >= 3) ? 3 : 1`. Это держит loop bound в safe GLSL range и предотвращает undefined
+  behavior на stale values.
+- DebugHud detailed HUD line теперь: `TAA %s JIT %.2f %.2f JSC %.2f BLND %.2f NHOOD %dx%d HIST %s` (раньше было без
+  `JSC` и `NHOOD`). Helper lines в detailed mode добавили 2 строки: `T TAA  ;' JIT  -= BLND` и `, NHOOD  . INVHIST`.
+  Normal mode без TAA keys (только power-user).
+- ScreenshotCapture sidecar добавил `taa_jitter_scale` (после `taa_jitter_y`) и `taa_neighbourhood_radius` (после
+  `taa_blend`). Существующие keys (`taa_enabled/jitter_x/jitter_y/blend/history_valid/clamp_color_space`) сохранены.
 
 **RenderDoc markers contract (5.1):**
-- `profiling::ScopedGpuDebugLabel` RAII в `src/debug/ProfilingGpu.hpp` — begin в конструкторе, end в деструкторе. Gated на `PROJECTV_ENABLE_RENDERDOC_MARKERS` (CMake option, Debug default ON, `linux-clang-debug` preset OFF). 2 macros: `PV_PROFILE_GPU_LABEL(cmd, name)` и `PV_PROFILE_GPU_LABEL_COLOR(cmd, name, r, g, b, a)`. Использует `__COUNTER__` для уникальных identifier'ов (несколько labels в одном scope не warning'ят).
-- Function pointers `vkCmdBeginDebugUtilsLabelEXT` / `vkCmdEndDebugUtilsLabelEXT` грузятся volk'ом автоматически (extension `VK_EXT_debug_utils` enabled unconditionally в `VulkanBootstrap.cpp:549`, volk's `volkLoadInstance` + `volkLoadDevice` подхватывают).
-- Hot sites: `RecordShadowCommands` ("Shadow Pass"), `RecordVoxelMeshingCommands` ("Voxel Meshing"), `RecordGraphicsCommands` ("Graphics Pass"), TAA resolve section в RecordGraphicsCommands ("TAA Resolve" + color 0.20/0.65/1.00 — distinct blue), `RecordDebugOverlayCommands` ("Debug Overlay"), `RecordDebugHudCommands` ("Debug HUD").
-- Pattern следует существующему `PV_PROFILE_GPU_ZONE` (Tracy VkZone), но обёрнут в RAII. Trivial для добавления на новые pass'ы.
+
+- `profiling::ScopedGpuDebugLabel` RAII в `src/debug/ProfilingGpu.hpp` — begin в конструкторе, end в деструкторе. Gated
+  на `PROJECTV_ENABLE_RENDERDOC_MARKERS` (CMake option, Debug default ON, `linux-clang-debug` preset OFF). 2 macros:
+  `PV_PROFILE_GPU_LABEL(cmd, name)` и `PV_PROFILE_GPU_LABEL_COLOR(cmd, name, r, g, b, a)`. Использует `__COUNTER__` для
+  уникальных identifier'ов (несколько labels в одном scope не warning'ят).
+- Function pointers `vkCmdBeginDebugUtilsLabelEXT` / `vkCmdEndDebugUtilsLabelEXT` грузятся volk'ом автоматически (
+  extension `VK_EXT_debug_utils` enabled unconditionally в `VulkanBootstrap.cpp:549`, volk's `volkLoadInstance` +
+  `volkLoadDevice` подхватывают).
+- Hot sites: `RecordShadowCommands` ("Shadow Pass"), `RecordVoxelMeshingCommands` ("Voxel Meshing"),
+  `RecordGraphicsCommands` ("Graphics Pass"), TAA resolve section в RecordGraphicsCommands ("TAA Resolve" + color
+  0.20/0.65/1.00 — distinct blue), `RecordDebugOverlayCommands` ("Debug Overlay"), `RecordDebugHudCommands` ("Debug
+  HUD").
+- Pattern следует существующему `PV_PROFILE_GPU_ZONE` (Tracy VkZone), но обёрнут в RAII. Trivial для добавления на новые
+  pass'ы.
 
 **VMA + glm fix во время сессии (build unblocking, не отдельный пункт плана):**
-- Root cause: asset-pipeline сессия добавила `#include "asset/MeshGpuResources.hpp"` в `core/Types.hpp:5` (M4 work). Транзитивно тянет `MeshBaker.hpp` → `AssetLoader.hpp` → `<glm/glm.hpp>`. glm находится в `external/glm/`, но `ProjectVTests` target не линковал `glm` (только `volk/fmt/flecs/Jolt/SDL3/VulkanMemoryAllocator`), поэтому INTERFACE include path не пропагировался. Build упал с `'glm/glm.hpp' file not found` на 8+ TUs.
-- Дополнительно: `VulkanBootstrap.cpp` имеет `vmaImportVulkanFunctionsFromVolk()` (real VMA API, line 755). VMA's header `vk_mem_alloc.h` объявляет эту функцию только при `#ifdef VOLK_HEADER_VERSION`. `volk.h` шёл в `core/Types.hpp:14` — **после** `#include "asset/MeshGpuResources.hpp"` (line 5), значит VMA header обработался без `VOLK_HEADER_VERSION` и `vmaImportVulkanFunctionsFromVolk` декларировался как no-op stub. Asset-pipeline пытался фиксить в `VulkanBootstrap.cpp:13` (`#include "volk.h"` после `core/Types.hpp`), но это уже поздно: `VulkanBootstrap.hpp` подключает `core/Types.hpp` на строке 1, VMA обработался.
-- Fix: перенёс `#include "volk.h"` на самый верх `core/Types.hpp` (до всех VMA-touching headers). Удалил дубликат на старом месте. 1 строка в `tests/CMakeLists.txt` — добавил `glm` в `ProjectVTests` link.
-- Working rule: **when a header is added to a shared file like `core/Types.hpp` (which includes VMA via `MeshGpuResources.hpp` etc.), the project's volk include must come first.** The order is volk.h → SDL3.h → project headers → VMA transitively. If future modules add new VMA-touching headers to `core/Types.hpp`, volk.h position is preserved by the existing top-of-file placement.
-- Working rule: **when a target adds asset-pipeline code that pulls in glm (or any header-only dep with INTERFACE include dirs), all sibling targets that include the same shared header must also link the new dep.** `ProjectVTests` was the one that broke first because it has the smallest link line; the fix is to add `glm` (1 line) — not to add glm to a global INTERFACE option, which would also drag it into targets that don't need it.
+
+- Root cause: asset-pipeline сессия добавила `#include "asset/MeshGpuResources.hpp"` в `core/Types.hpp:5` (M4 work).
+  Транзитивно тянет `MeshBaker.hpp` → `AssetLoader.hpp` → `<glm/glm.hpp>`. glm находится в `external/glm/`, но
+  `ProjectVTests` target не линковал `glm` (только `volk/fmt/flecs/Jolt/SDL3/VulkanMemoryAllocator`), поэтому INTERFACE
+  include path не пропагировался. Build упал с `'glm/glm.hpp' file not found` на 8+ TUs.
+- Дополнительно: `VulkanBootstrap.cpp` имеет `vmaImportVulkanFunctionsFromVolk()` (real VMA API, line 755). VMA's header
+  `vk_mem_alloc.h` объявляет эту функцию только при `#ifdef VOLK_HEADER_VERSION`. `volk.h` шёл в `core/Types.hpp:14` — *
+  *после** `#include "asset/MeshGpuResources.hpp"` (line 5), значит VMA header обработался без `VOLK_HEADER_VERSION` и
+  `vmaImportVulkanFunctionsFromVolk` декларировался как no-op stub. Asset-pipeline пытался фиксить в
+  `VulkanBootstrap.cpp:13` (`#include "volk.h"` после `core/Types.hpp`), но это уже поздно: `VulkanBootstrap.hpp`
+  подключает `core/Types.hpp` на строке 1, VMA обработался.
+- Fix: перенёс `#include "volk.h"` на самый верх `core/Types.hpp` (до всех VMA-touching headers). Удалил дубликат на
+  старом месте. 1 строка в `tests/CMakeLists.txt` — добавил `glm` в `ProjectVTests` link.
+- Working rule: **when a header is added to a shared file like `core/Types.hpp` (which includes VMA
+  via `MeshGpuResources.hpp` etc.), the project's volk include must come first.** The order is volk.h → SDL3.h → project
+  headers → VMA transitively. If future modules add new VMA-touching headers to `core/Types.hpp`, volk.h position is
+  preserved by the existing top-of-file placement.
+- Working rule: **when a target adds asset-pipeline code that pulls in glm (or any header-only dep with INTERFACE
+  include dirs), all sibling targets that include the same shared header must also link the new dep.** `ProjectVTests`
+  was the one that broke first because it has the smallest link line; the fix is to add `glm` (1 line) — not to add glm
+  to a global INTERFACE option, which would also drag it into targets that don't need it.
 
 ## 10.19 M5.2 color-distance rejection threshold bump + model pipeline dual-MRT fix (`2026-06-12`)
 
 Два последовательных фикса, оба преследуют один визуальный симптом: "модель невидима с TAA on, half in blocks".
 
-**Фикс 1: `kTaaColorDistanceRejectionThreshold` 0.20 → 0.40 в `src/shaders/taa_resolve.frag:79`.** Euclidean distance от current sample до neighborhood centroid в YCoCg space. `model.frag:62-67` 4×4 procedural UV checker даёт два tint-варианта после ambient + direct-sun: yellow `vec3(0.85, 0.62, 0.38)` × albedo → YCoCg distance ≈ 0.27 (проходит rejection), blue `vec3(0.60, 0.55, 0.45)` × albedo → distance ≈ 0.16 (НЕ проходит — clamped в voxel range, invisible). 0.40 ловит оба. False-positive risk bounded: voxel surfaces обычно в пределах 0.05 YCoCg от своего 3×3 mean. Build green, ctest 6/6, SPV скопирован в `bin/` per §10.16 working rule.
+**Фикс 1: `kTaaColorDistanceRejectionThreshold` 0.20 → 0.40 в `src/shaders/taa_resolve.frag:79`.** Euclidean distance от
+current sample до neighborhood centroid в YCoCg space. `model.frag:62-67` 4×4 procedural UV checker даёт два
+tint-варианта после ambient + direct-sun: yellow `vec3(0.85, 0.62, 0.38)` × albedo → YCoCg distance ≈ 0.27 (проходит
+rejection), blue `vec3(0.60, 0.55, 0.45)` × albedo → distance ≈ 0.16 (НЕ проходит — clamped в voxel range, invisible).
+0.40 ловит оба. False-positive risk bounded: voxel surfaces обычно в пределах 0.05 YCoCg от своего 3×3 mean. Build
+green, ctest 6/6, SPV скопирован в `bin/` per §10.16 working rule.
 
-**Фикс 2: model pipeline dual-MRT attachment declaration в `src/asset/ModelPass.cpp:200-224`.** **Это и был настоящий root cause невидимости с TAA on.** `ModelPass.cpp:202` (pre-fix) объявлял `VkPipelineRenderingCreateInfo.colorAttachmentCount = 1` с одним format (swapchain). Но `model.frag:33` для TAA-on пишет в `layout(location = 1) out vec4 outSceneColor` — TAA scene color. Main pass `vkCmdBeginRendering` (Renderer.cpp:735) имеет 2 attachments (Location 0 = swapchain, Location 1 = TAA scene color). Model pipeline объявлял только 1 → write в Location 1 — undefined behavior. `VK_KHR_dynamic_rendering_unused_attachments` позволяет rendering иметь БОЛЬШЕ attachments чем pipeline, но не наоборот. Validation layers не стоят, драйвер silently дропал write → `taaSceneColorTarget` оставался пустым в model pixels → resolve pass сэмплил пустоту → модель невидима несмотря на правильный threshold.
+**Фикс 2: model pipeline dual-MRT attachment declaration в `src/asset/ModelPass.cpp:200-224`.** **Это и был настоящий
+root cause невидимости с TAA on.** `ModelPass.cpp:202` (pre-fix) объявлял
+`VkPipelineRenderingCreateInfo.colorAttachmentCount = 1` с одним format (swapchain). Но `model.frag:33` для TAA-on пишет
+в `layout(location = 1) out vec4 outSceneColor` — TAA scene color. Main pass `vkCmdBeginRendering` (Renderer.cpp:735)
+имеет 2 attachments (Location 0 = swapchain, Location 1 = TAA scene color). Model pipeline объявлял только 1 → write в
+Location 1 — undefined behavior. `VK_KHR_dynamic_rendering_unused_attachments` позволяет rendering иметь БОЛЬШЕ
+attachments чем pipeline, но не наоборот. Validation layers не стоят, драйвер silently дропал write →
+`taaSceneColorTarget` оставался пустым в model pixels → resolve pass сэмплил пустоту → модель невидима несмотря на
+правильный threshold.
 
-Фикс: model pipeline теперь объявляет 2 attachments через `const VkFormat modelColorAttachmentFormats[2] = { colorFormat, projectv::taa::kTaaSceneColorFormat };` (последний — `B10G11R11_UFLOAT_PACK32` per TAA-agent 1.7 centralization в `TaaRenderTargets.hpp:52`). `kTaaSceneColorFormat` consumed also в `TaaRenderTargets.cpp:86` (image allocation) и `VulkanGraphicsPipeline.cpp:1794` (main graphics pipeline declaration) — single source of truth, нельзя drift'нуть.
+Фикс: model pipeline теперь объявляет 2 attachments через
+`const VkFormat modelColorAttachmentFormats[2] = { colorFormat, projectv::taa::kTaaSceneColorFormat };` (последний —
+`B10G11R11_UFLOAT_PACK32` per TAA-agent 1.7 centralization в `TaaRenderTargets.hpp:52`). `kTaaSceneColorFormat` consumed
+also в `TaaRenderTargets.cpp:86` (image allocation) и `VulkanGraphicsPipeline.cpp:1794` (main graphics pipeline
+declaration) — single source of truth, нельзя drift'нуть.
 
-**Иерархия фиксов:** фикс 1 (threshold) был необходим для partial-visibility symptom (yellow tint 4×4 проходил, blue нет). Фикс 2 (dual-MRT) — для полной невидимости с TAA on. Оба нужны: без фикса 2 модель вообще не пишется в scene color target независимо от rejection threshold. Без фикса 1 часть model pixels clamped даже с dual-MRT write.
+**Иерархия фиксов:** фикс 1 (threshold) был необходим для partial-visibility symptom (yellow tint 4×4 проходил, blue
+нет). Фикс 2 (dual-MRT) — для полной невидимости с TAA on. Оба нужны: без фикса 2 модель вообще не пишется в scene color
+target независимо от rejection threshold. Без фикса 1 часть model pixels clamped даже с dual-MRT write.
 
 **Working rules:**
-- Каждый Vulkan pipeline, используемый в `vkCmdBeginRendering(...)` с N attachments, должен объявлять все N в `VkPipelineRenderingCreateInfo::pColorAttachmentFormats`. Иначе write в undeclared attachment — undefined. `VK_KHR_dynamic_rendering_unused_attachments` идёт только в одну сторону (rendering ≥ pipeline).
-- `kTaaSceneColorFormat` — single source of truth для TAA offscreen color format. Не хардкодить `R16G16B16A16_SFLOAT` или `B10G11R11_UFLOAT_PACK32` в pipeline declarations.
-- M5.2 threshold — lever для "маленькая surface окружённая большой different surface". Бампить по тому же принципу, если будущие materials не проходят rejection.
+
+- Каждый Vulkan pipeline, используемый в `vkCmdBeginRendering(...)` с N attachments, должен объявлять все N в
+  `VkPipelineRenderingCreateInfo::pColorAttachmentFormats`. Иначе write в undeclared attachment — undefined.
+  `VK_KHR_dynamic_rendering_unused_attachments` идёт только в одну сторону (rendering ≥ pipeline).
+- `kTaaSceneColorFormat` — single source of truth для TAA offscreen color format. Не хардкодить `R16G16B16A16_SFLOAT`
+  или `B10G11R11_UFLOAT_PACK32` в pipeline declarations.
+- M5.2 threshold — lever для "маленькая surface окружённая большой different surface". Бампить по тому же принципу, если
+  будущие materials не проходят rejection.
 
 ## 10.20 Model procedural UV checker → triplanar on `inWorldPosition` (`2026-06-12`)
 
-`src/shaders/model.frag:50-90` — заменил `inUv`-based 4×4 procedural UV checker на **triplanar projection on `inWorldPosition`**, picked by dominant face normal axis. Build green, ctest 6/6, `model.frag.spv` + `model.frag.taa_on.spv` скопированы в `bin/` per §10.16.
+`src/shaders/model.frag:50-90` — заменил `inUv`-based 4×4 procedural UV checker на **triplanar projection
+on `inWorldPosition`**, picked by dominant face normal axis. Build green, ctest 6/6, `model.frag.spv` +
+`model.frag.taa_on.spv` скопированы в `bin/` per §10.16.
 
-**Почему.** `box.glb` (default model-pipeline test fixture, 1664 B) **не имеет `TEXCOORD_0` accessor**. `model.frag:62` pre-fix использовал `const vec2 checkerUv = floor(inUv * 4.0);` — но `inUv` defaults to `(0, 0)` на всех face → `floor((0,0) * 4) = (0,0)` → `checkerMask = 0` всегда → один tint на весь куб → uniform beige. Symptom: "block наполовину в текстурах" — model visible (после M5.2 dual-MRT fix от TAA-agent), но procedural 4×4 UV checker pattern не виден, потому что UV stream пустой. Pre-fix код явно признавал это в comment: "If the UV stream is missing (e.g. `box.glb` has no TEXCOORD_0 accessor), the input defaults to (0, 0) and the whole box is uniform." Оператор явно попросил фикс: "Теперь чини то, что она наполовину в текстурах."
+**Почему.** `box.glb` (default model-pipeline test fixture, 1664 B) **не имеет `TEXCOORD_0` accessor**. `model.frag:62`
+pre-fix использовал `const vec2 checkerUv = floor(inUv * 4.0);` — но `inUv` defaults to `(0, 0)` на всех face →
+`floor((0,0) * 4) = (0,0)` → `checkerMask = 0` всегда → один tint на весь куб → uniform beige. Symptom: "block
+наполовину в текстурах" — model visible (после M5.2 dual-MRT fix от TAA-agent), но procedural 4×4 UV checker pattern не
+виден, потому что UV stream пустой. Pre-fix код явно признавал это в comment: "If the UV stream is missing (e.g.
+`box.glb` has no TEXCOORD_0 accessor), the input defaults to (0, 0) and the whole box is uniform." Оператор явно
+попросил фикс: "Теперь чини то, что она наполовину в текстурах."
 
 **Фикс — triplanar projection:**
+
 ```glsl
 const vec3 absNormal = abs(normal);
 vec2 checkerUv;
@@ -565,13 +731,21 @@ if (absNormal.y >= absNormal.x && absNormal.y >= absNormal.z) {
 const float checkerMask = mod(checkerUv.x + checkerUv.y, 2.0);
 ```
 
-**Trade-off vs per-face UVs.** Pre-fix UV-based: каждая face имеет свой 0..1 range → checker 4×4 на каждой face независимо. Post-fix triplanar: world-space coordinate shared across faces — две смежные face'ы на одной wall (например, top + front) показывают **continuation** одного pattern через edge, не два независимых checker'а. Visually slightly different, но "block has a visible checker on every face regardless of which fixture operator loads" contract выполнен.
+**Trade-off vs per-face UVs.** Pre-fix UV-based: каждая face имеет свой 0..1 range → checker 4×4 на каждой face
+независимо. Post-fix triplanar: world-space coordinate shared across faces — две смежные face'ы на одной wall (например,
+top + front) показывают **continuation** одного pattern через edge, не два независимых checker'а. Visually slightly
+different, но "block has a visible checker on every face regardless of which fixture operator loads" contract выполнен.
 
-**Когда станет UV-friendly path again:** M6+ заменит triplanar на real `sampler2D baseColor` + per-face UVs (TODO §5 / handoff M6+). Тогда triplanar revertнется.
+**Когда станет UV-friendly path again:** M6+ заменит triplanar на real `sampler2D baseColor` + per-face UVs (TODO §5 /
+handoff M6+). Тогда triplanar revertнется.
 
 **Working rules:**
-- Procedural patterns / dummy textures в shaders, которые зависят от UV, нужно либо (a) проверять на fixtures БЕЗ UV (`box.glb` default) либо (b) использовать world-space / triplanar / object-space координаты как UV-free fallback. `box.glb` test fixture — de-facto minimum-fixture для model pass; всё, что в нём не работает, сломает visual verify.
-- "Half in textures" / "uniform color" / "model looks like single tint" на тестовом fixture → почти всегда UV-less mesh, не shader bug. Triplanar / object-space projection — robust fallback.
+
+- Procedural patterns / dummy textures в shaders, которые зависят от UV, нужно либо (a) проверять на fixtures БЕЗ UV (
+  `box.glb` default) либо (b) использовать world-space / triplanar / object-space координаты как UV-free fallback.
+  `box.glb` test fixture — de-facto minimum-fixture для model pass; всё, что в нём не работает, сломает visual verify.
+- "Half in textures" / "uniform color" / "model looks like single tint" на тестовом fixture → почти всегда UV-less mesh,
+  не shader bug. Triplanar / object-space projection — robust fallback.
 
 ## 10.21 TAA Блок 1 / 1.5 — per-layer (CTSH/AOCC/LOCL) anti-flicker via mini-TAA history attachment (`2026-06-12`)
 
@@ -632,6 +806,7 @@ Params) == 608)` enforces byte layout invariance — same pattern что
 `inline constexpr VkFormat kTaaLayerHistoryColorFormat =
 VK_FORMAT_R8G8B8A8_UNORM` в `projectv::taa` namespace
 (`src/render/TaaRenderTargets.hpp`). Consumed by:
+
 - `CreateOrRecreateTaaRenderTargets` (image allocation для обоих
   layer scene color и layer history)
 - `VulkanGraphicsPipeline.cpp` (`pColorAttachmentFormats[2]`
@@ -751,9 +926,9 @@ hardcoded `SHADER_READ_ONLY` (VUID-VkImageMemoryBarrier2-oldLayout-
 
 - **`initialLayout` must be `UNDEFINED` / `PREINITIALIZED` /
   `ZERO_INITIALIZED`** per VUID-VkImageCreateInfo-initialLayout-
-  00993. Can't use `SHADER_READ_ONLY_OPTIMAL` directly. First-frame
-  per-frame transition in `Renderer.cpp` is the only way to get
-  image into read layout.
+    00993. Can't use `SHADER_READ_ONLY_OPTIMAL` directly. First-frame
+           per-frame transition in `Renderer.cpp` is the only way to get
+           image into read layout.
 
 - **Per-frame transitions use layout tracker as `oldLayout`, not
   hardcoded.** Actual GPU state may be `COLOR_ATTACHMENT_OPTIMAL`
@@ -980,12 +1155,12 @@ choice.**
 **Vertex shader scale helper — `ApplyGreedyScale`.**
 
 - For each face, maps in-plane channels to `(width, height)`:
-  - face 0/1 (X±): in-plane = (Y, Z). `unit.y * width`,
-    `unit.z * height`.
-  - face 2/3 (Y±): in-plane = (X, Z). `unit.x * width`,
-    `unit.z * height`.
-  - face 4/5 (Z±): in-plane = (X, Y). `unit.x * width`,
-    `unit.y * height`.
+    - face 0/1 (X±): in-plane = (Y, Z). `unit.y * width`,
+      `unit.z * height`.
+    - face 2/3 (Y±): in-plane = (X, Z). `unit.x * width`,
+      `unit.z * height`.
+    - face 4/5 (Z±): in-plane = (X, Y). `unit.x * width`,
+      `unit.y * height`.
 - Normal-axis channel stays 0/1 — face plane is
   `localVoxelCoord + normal_offset`, not multiplied.
 - For unit quads the helper is no-op. **Critical:** не
@@ -1059,72 +1234,215 @@ contract), `TODO.md §4` (greedy meshing closed) + §4.5
 `agent/active-sessions.md`
 session-2026-06-12-greedy-meshing (closed).
 
-
 ## 10.23 Frame-step / slow-motion landed (`2026-06-12`)
 
-Live runtime debug controls for visual debugging. Additive, no TAA/meshing/render-pipeline impact. Implementation in `src/app/AppUpdate.cpp:600-650` (input handlers + accumulator override) and `src/app/InputActions.cpp:171-175` (4 `BindAction` calls).
+Live runtime debug controls for visual debugging. Additive, no TAA/meshing/render-pipeline impact. Implementation in
+`src/app/AppUpdate.cpp:600-650` (input handlers + accumulator override) and `src/app/InputActions.cpp:171-175` (4
+`BindAction` calls).
 
 **Working rules:**
 
-- **4 `InputAction` entries (tail of enum, before `Count`):** `DecreaseTimeScale` (`SDL_SCANCODE_LEFTBRACKET` / `[`), `IncreaseTimeScale` (`SDL_SCANCODE_RIGHTBRACKET` / `]`), `StepSingleFrame` (`SDL_SCANCODE_BACKSLASH` / `\`), `ResetTimeScale` (`SDL_SCANCODE_GRAVE` / `` ` ``). The bracket and backslash / backtick keys have no glyph in the HUD font (only A-Z, 0-9, `.`, `-`, `:` per `DebugHud.cpp::GetGlyphRows`) — the helper panel spells them out as `TIMECTL DOWN UP` and `TIMESTEP STEP RESET 1X`.
-- **`timeScale` ladder: `0`, `0.5`, `1.0`, `2.0`, `4.0`.** `[` halves with snap to `0` below `0.01`; `]` doubles with `timeScale <= 0` → `0.5` escape, clamped to `4.0`; `` ` `` resets to `1.0`. The snap thresholds exist so a half-step into `0.0078` doesn't crawl the sim unexpectedly.
-- **`effectivePaused = simulation->paused && !frameStepRequestedNow`.** Three `simulation->paused` references in `AppUpdate.cpp::UpdateApp` switched to `effectivePaused` (lines 626 `cameraCanUpdate`, 656 accumulator gate, 666 while-loop condition, 716 paused+spectator camera tick). The `TogglePause` handler at line 333 is **unchanged** — `paused` and `timeScale` are independent runtime axes per `decisions.md §26`.
-- **Time scale is applied after `ComputeFrameDeltaSeconds`** (line 638: `simulation->frameDeltaSeconds *= simulation->timeScale;`). The wall-clock `framesPerSecond` / `frameTimeMilliseconds` stats at lines 307-308 still report real-time even at `timeScale = 0`; input replay recording also records wall-clock delta (the `RecordInputReplayFrame` call at line 313 happens before the scaling).
-- **Frame-step accumulator override at lines 645-655** sets `simulation->simulationAccumulatorSeconds = simulation->fixedSimulationDeltaSeconds` when `frameStepRequestedNow`, AFTER the `timeScale` multiplication, so a non-zero `timeScale` doesn't double-apply. The while loop runs exactly one iteration per `\` press.
-- **Frame-step does NOT invalidate TAA history.** Unlike world reload / swapchain resize / TAA toggle, the `frameStepRequested` event does not touch `taaHistoryValid` or `taaLayerHistoryValid` — TAA's reprojection is per-frame and `\` is per-frame, so a single step appears as a single frame in the TAA history chain. The existing camera-cut detector (1.2) handles any visible-artifact edge case.
-- **HUD surfaces:** `TIME x.xx` line always emitted (default `TIME 1.00`), one-frame `STEP` line only on the press frame. Both are after the `MODE / PAUSE / AIR` line in `BuildStatsLines` so the two pause-related runtime axes read as a group.
+- **4 `InputAction` entries (tail of enum, before `Count`):** `DecreaseTimeScale` (`SDL_SCANCODE_LEFTBRACKET` / `[`),
+  `IncreaseTimeScale` (`SDL_SCANCODE_RIGHTBRACKET` / `]`), `StepSingleFrame` (`SDL_SCANCODE_BACKSLASH` / `\`),
+  `ResetTimeScale` (`SDL_SCANCODE_GRAVE` / `` ` ``). The bracket and backslash / backtick keys have no glyph in the HUD
+  font (only A-Z, 0-9, `.`, `-`, `:` per `DebugHud.cpp::GetGlyphRows`) — the helper panel spells them out as
+  `TIMECTL DOWN UP` and `TIMESTEP STEP RESET 1X`.
+- **`timeScale` ladder: `0`, `0.5`, `1.0`, `2.0`, `4.0`.** `[` halves with snap to `0` below `0.01`; `]` doubles with
+  `timeScale <= 0` → `0.5` escape, clamped to `4.0`; `` ` `` resets to `1.0`. The snap thresholds exist so a half-step
+  into `0.0078` doesn't crawl the sim unexpectedly.
+- **`effectivePaused = simulation->paused && !frameStepRequestedNow`.** Three `simulation->paused` references in
+  `AppUpdate.cpp::UpdateApp` switched to `effectivePaused` (lines 626 `cameraCanUpdate`, 656 accumulator gate, 666
+  while-loop condition, 716 paused+spectator camera tick). The `TogglePause` handler at line 333 is **unchanged** —
+  `paused` and `timeScale` are independent runtime axes per `decisions.md §26`.
+- **Time scale is applied after `ComputeFrameDeltaSeconds`** (line 638:
+  `simulation->frameDeltaSeconds *= simulation->timeScale;`). The wall-clock `framesPerSecond` / `frameTimeMilliseconds`
+  stats at lines 307-308 still report real-time even at `timeScale = 0`; input replay recording also records wall-clock
+  delta (the `RecordInputReplayFrame` call at line 313 happens before the scaling).
+- **Frame-step accumulator override at lines 645-655** sets
+  `simulation->simulationAccumulatorSeconds = simulation->fixedSimulationDeltaSeconds` when `frameStepRequestedNow`,
+  AFTER the `timeScale` multiplication, so a non-zero `timeScale` doesn't double-apply. The while loop runs exactly one
+  iteration per `\` press.
+- **Frame-step does NOT invalidate TAA history.** Unlike world reload / swapchain resize / TAA toggle, the
+  `frameStepRequested` event does not touch `taaHistoryValid` or `taaLayerHistoryValid` — TAA's reprojection is
+  per-frame and `\` is per-frame, so a single step appears as a single frame in the TAA history chain. The existing
+  camera-cut detector (1.2) handles any visible-artifact edge case.
+- **HUD surfaces:** `TIME x.xx` line always emitted (default `TIME 1.00`), one-frame `STEP` line only on the press
+  frame. Both are after the `MODE / PAUSE / AIR` line in `BuildStatsLines` so the two pause-related runtime axes read as
+  a group.
 
-**Files touched:** `src/core/Types.hpp` (4 `InputAction` + 2 `SimulationState` + 2 `DebugStats`), `src/app/InputActions.cpp` (4 `BindAction`), `src/app/AppUpdate.cpp` (4 handlers + accumulator override + 3 `effectivePaused` refactors + 2 stats mirrors), `src/debug/DebugHud.cpp` (1 stats line + 2 helper lines).
+**Files touched:** `src/core/Types.hpp` (4 `InputAction` + 2 `SimulationState` + 2 `DebugStats`),
+`src/app/InputActions.cpp` (4 `BindAction`), `src/app/AppUpdate.cpp` (4 handlers + accumulator override + 3
+`effectivePaused` refactors + 2 stats mirrors), `src/debug/DebugHud.cpp` (1 stats line + 2 helper lines).
 
-**Test impact:** additive fields — existing `simulation.paused` tests at `tests/VoxelWorldTests.cpp:2211, 2541, 2570` continue to pass. `ctest 6/6` baseline preserved at `1.50s` wall clock on `linux-clang-debug`.
+**Test impact:** additive fields — existing `simulation.paused` tests at `tests/VoxelWorldTests.cpp:2211, 2541, 2570`
+continue to pass. `ctest 6/6` baseline preserved at `1.50s` wall clock on `linux-clang-debug`.
 
 ## 10.24 Per-pass CPU timings landed (`2026-06-12`)
 
-CPU-side per-pass timing aggregation for visual debugging / TODO §4.5 perf-budget analysis. Foundation for follow-up perf work (halve-res AO/contact upscale, VRS, bloom) — operator can now see which sub-pass dominates a frame instead of guessing.
+CPU-side per-pass timing aggregation for visual debugging / TODO §4.5 perf-budget analysis. Foundation for follow-up
+perf work (halve-res AO/contact upscale, VRS, bloom) — operator can now see which sub-pass dominates a frame instead of
+guessing.
 
 **Working rules:**
 
-- **6 measured fields, 1 derived.** `shadowMs`, `meshingMs`, `graphicsMs`, `taaResolveMs`, `debugOverlayMs`, `debugHudMs` measured with `SDL_GetPerformanceCounter` via `ScopedPassTimer` RAII (in `Renderer.cpp` anonymous namespace). `otherMs` derived in `AppUpdate.cpp` as `frameTimeMs - graphicsMs`. `dirtyChunkRebuiltCount` snapshot of `frameRenderData.dirtyChunkCount` at the start of `RecordVoxelMeshingCommands` (so the value is what was requested, even on early return).
-- **`ScopedPassTimer` placement.** Each `Record*Commands` function gets one `ScopedPassTimer timer(render.renderPassTimings.XxxMs);` at the very top, before the first `PV_PROFILE_ZONE_N` / `PV_PROFILE_GPU_LABEL`. The RAII destructor writes the ms value at function exit, including early-return paths. Without RAII, each `if (X == VK_NULL_HANDLE) return;` would need its own `writeTiming()` call site, and one missed call would silently leave the previous frame's stale number on the HUD.
-- **Manual timer for the inlined TAA resolve block.** `RecordGraphicsCommands` line ~1153-1200: `taaResolveStartCounter = SDL_GetPerformanceCounter()` right after the `PV_PROFILE_GPU_LABEL_COLOR`, manual `endCounter - startCounter` conversion at the end of the block. The block is too small / too deeply nested for `ScopedPassTimer` (would need a helper struct), and the alternative — wrapping the whole `RecordGraphicsCommands` — would lose the sub-pass breakdown.
-- **Sub-passes are subsets of `graphicsMs`.** `shadowMs + meshingMs + taaResolveMs + debugOverlayMs + debugHudMs` all happen inside `RecordGraphicsCommands`, so they are not additive to `graphicsMs`. The HUD shows `GFX` (total) and the breakdown lines below it; summing the breakdown double-counts the `RecordGraphicsCommands` body. This is intentional — `graphicsMs` is the "time spent in the renderer" total, the sub-passes are the breakdown within it.
-- **HUD placement is detailed-only.** First iteration put the lines in the basic section (before `if (!detailedHudVisible) return`), which pushed both basic and detailed above the 65536-vertex test buffer cap and broke `detailedVertexCount > basicVertexCount`. Moved to detailed-only after the test failure; this is also semantically more correct (per-pass timings are diagnostic, not always-on). `kMaxStatsLineCount = 38` (was 36) to accommodate the 2 new lines.
-- **Sidecar metadata split into 2 `fmt::format` calls.** `SaveScreenshotCaptureMetadata` already used 99 args in the main format string (the `fmt` 99-arg compile-time checker's hard limit). The 7 new per-pass keys + 1 count get a second `stream << fmt::format(...)` call concatenated to the same sidecar file. New keys (`render_pass_shadow_ms` through `render_pass_debug_hud_ms` + `render_pass_dirty_chunk_rebuilt_count`) at the end of the file, existing parsers unaffected (look for specific `key=value` substrings).
-- **Production vs test buffer size.** Production uses `DEBUG_HUD_MAX_VERTEX_COUNT = 262144` (VMA-allocated, set in `core/Types.hpp:304`). The test harness uses 65536. The per-pass lines fit in production easily; in the test, the detailed HUD was already near the 65536 cap, which is why the lines have to live in the detailed-only section.
-- **GPU-side timestamps are a follow-up, not a parallel implementation.** CPU-side accuracy is sufficient for the "where is my budget going" question. If the operator later wants to distinguish "CPU stalled in `vkCmdDraw`" from "GPU stalled in pipeline execution", add `vkCmdWriteTimestamp` queries inside each `Record*Commands` function; the per-pass struct already has the right shape to add a `*GpuMs` field next to the existing `*Ms`.
+- **6 measured fields, 1 derived.** `shadowMs`, `meshingMs`, `graphicsMs`, `taaResolveMs`, `debugOverlayMs`,
+  `debugHudMs` measured with `SDL_GetPerformanceCounter` via `ScopedPassTimer` RAII (in `Renderer.cpp` anonymous
+  namespace). `otherMs` derived in `AppUpdate.cpp` as `frameTimeMs - graphicsMs`. `dirtyChunkRebuiltCount` snapshot of
+  `frameRenderData.dirtyChunkCount` at the start of `RecordVoxelMeshingCommands` (so the value is what was requested,
+  even on early return).
+- **`ScopedPassTimer` placement.** Each `Record*Commands` function gets one
+  `ScopedPassTimer timer(render.renderPassTimings.XxxMs);` at the very top, before the first `PV_PROFILE_ZONE_N` /
+  `PV_PROFILE_GPU_LABEL`. The RAII destructor writes the ms value at function exit, including early-return paths.
+  Without RAII, each `if (X == VK_NULL_HANDLE) return;` would need its own `writeTiming()` call site, and one missed
+  call would silently leave the previous frame's stale number on the HUD.
+- **Manual timer for the inlined TAA resolve block.** `RecordGraphicsCommands` line ~1153-1200:
+  `taaResolveStartCounter = SDL_GetPerformanceCounter()` right after the `PV_PROFILE_GPU_LABEL_COLOR`, manual
+  `endCounter - startCounter` conversion at the end of the block. The block is too small / too deeply nested for
+  `ScopedPassTimer` (would need a helper struct), and the alternative — wrapping the whole `RecordGraphicsCommands` —
+  would lose the sub-pass breakdown.
+- **Sub-passes are subsets of `graphicsMs`.** `shadowMs + meshingMs + taaResolveMs + debugOverlayMs + debugHudMs` all
+  happen inside `RecordGraphicsCommands`, so they are not additive to `graphicsMs`. The HUD shows `GFX` (total) and the
+  breakdown lines below it; summing the breakdown double-counts the `RecordGraphicsCommands` body. This is intentional —
+  `graphicsMs` is the "time spent in the renderer" total, the sub-passes are the breakdown within it.
+- **HUD placement is detailed-only.** First iteration put the lines in the basic section (before
+  `if (!detailedHudVisible) return`), which pushed both basic and detailed above the 65536-vertex test buffer cap and
+  broke `detailedVertexCount > basicVertexCount`. Moved to detailed-only after the test failure; this is also
+  semantically more correct (per-pass timings are diagnostic, not always-on). `kMaxStatsLineCount = 38` (was 36) to
+  accommodate the 2 new lines.
+- **Sidecar metadata split into 2 `fmt::format` calls.** `SaveScreenshotCaptureMetadata` already used 99 args in the
+  main format string (the `fmt` 99-arg compile-time checker's hard limit). The 7 new per-pass keys + 1 count get a
+  second `stream << fmt::format(...)` call concatenated to the same sidecar file. New keys (`render_pass_shadow_ms`
+  through `render_pass_debug_hud_ms` + `render_pass_dirty_chunk_rebuilt_count`) at the end of the file, existing parsers
+  unaffected (look for specific `key=value` substrings).
+- **Production vs test buffer size.** Production uses `DEBUG_HUD_MAX_VERTEX_COUNT = 262144` (VMA-allocated, set in
+  `core/Types.hpp:304`). The test harness uses 65536. The per-pass lines fit in production easily; in the test, the
+  detailed HUD was already near the 65536 cap, which is why the lines have to live in the detailed-only section.
+- **GPU-side timestamps are a follow-up, not a parallel implementation.** CPU-side accuracy is sufficient for the "where
+  is my budget going" question. If the operator later wants to distinguish "CPU stalled in `vkCmdDraw`" from "GPU
+  stalled in pipeline execution", add `vkCmdWriteTimestamp` queries inside each `Record*Commands` function; the per-pass
+  struct already has the right shape to add a `*GpuMs` field next to the existing `*Ms`.
 
-**Files touched:** `src/core/Types.hpp` (`RenderPassTimings` struct + `RenderState::renderPassTimings` field + 8 `DebugStats` mirrors), `src/render/Renderer.cpp` (`ScopedPassTimer` class + 5 timer placements + 1 inline manual timer for TAA resolve), `src/app/AppUpdate.cpp` (8 stats mirrors + 1 derived `otherMs`), `src/debug/DebugHud.cpp` (2 detailed-only HUD lines + `kMaxStatsLineCount = 38`), `src/render/ScreenshotCapture.cpp` (7 new sidecar keys in a second `fmt::format` call).
+**Files touched:** `src/core/Types.hpp` (`RenderPassTimings` struct + `RenderState::renderPassTimings` field + 8
+`DebugStats` mirrors), `src/render/Renderer.cpp` (`ScopedPassTimer` class + 5 timer placements + 1 inline manual timer
+for TAA resolve), `src/app/AppUpdate.cpp` (8 stats mirrors + 1 derived `otherMs`), `src/debug/DebugHud.cpp` (2
+detailed-only HUD lines + `kMaxStatsLineCount = 38`), `src/render/ScreenshotCapture.cpp` (7 new sidecar keys in a second
+`fmt::format` call).
 
-**Test impact:** Additive struct + fields, no field offsets shift, no shader edits, no descriptor binding changes, no pipeline changes. `ctest 6/6` baseline preserved at `1.47s` wall clock. The `BuildDebugHudVertices` test's 65536-vertex buffer was at the cap with the original code; the new lines had to live in detailed-only to avoid overflow.
+**Test impact:** Additive struct + fields, no field offsets shift, no shader edits, no descriptor binding changes, no
+pipeline changes. `ctest 6/6` baseline preserved at `1.47s` wall clock. The `BuildDebugHudVertices` test's 65536-vertex
+buffer was at the cap with the original code; the new lines had to live in detailed-only to avoid overflow.
 
 ## 10.26 Audio engine landed (miniaudio, `2026-06-12`)
 
-miniaudio is now wired into the build (`src/CMakeLists.txt` `add_subdirectory(external/miniaudio)` + link `pthread dl m` on Linux). The `AudioEngine` class lives at `src/audio/AudioEngine.{hpp,cpp}` and is a singleton on `AppState` (mirrors `physics` / `ecs` / `render`). Single `ma_engine` + one `ma_sound_group` (for music bus-level volume) + one `ma_sound` (current track). Built-in MP3 decoder handles `.mp3` directly; OGG/WAV/FLAC would need `extras/decoders/libvorbis` / `libopus` linked separately (deferred).
+miniaudio is now wired into the build (`src/CMakeLists.txt` `add_subdirectory(external/miniaudio)` + link `pthread dl m`
+on Linux). The `AudioEngine` class lives at `src/audio/AudioEngine.{hpp,cpp}` and is a singleton on `AppState` (mirrors
+`physics` / `ecs` / `render`). Single `ma_engine` + one `ma_sound_group` (for music bus-level volume) + one `ma_sound` (
+current track). Built-in MP3 decoder handles `.mp3` directly; OGG/WAV/FLAC would need `extras/decoders/libvorbis` /
+`libopus` linked separately (deferred).
 
 **Working rules:**
 
-- **Linux audio routing = PulseAudio → pipewire-pulse → PipeWire.** miniaudio's `find_package(PulseAudio)` resolves `libpulse.so.0`; on this host the actual server is PipeWire (verified via `pactl info` → `Server String: /run/user/1000/pulse/native`). No direct PipeWire backend in miniaudio. The user's "выход pipewire pcm" is satisfied by this chain.
-- **`MusicState` enum: `Stopped | Playing | Paused`.** Three-valued. **Cursor semantics, 2026-06-13 fix:** `ma_sound_stop` (called by both `pauseImpl()` and `stop()`) preserves the cursor in-place — it only sets the node state to stopped (miniaudio.h:78774), the `pSound->cursor` field is untouched. A subsequent `ma_sound_start` resumes from that cursor. So v1 **does** have true pause/resume without any custom decoder wrapper. The earlier "v1 pause = stop + forget cursor" claim was wrong: the bug was in the 2026-06-12 code (Paused branch of `togglePlayPause` unconditionally called `loadCurrentTrack()` which unloaded the sound and re-init'd from disk, always resetting the cursor to 0). The 2026-06-13 fix adds the `if (!m_soundLoaded)` guard to the Paused branch (mirroring the Stopped branch) so the cursor is preserved across pause → resume. `m_pausedCursorMs` is **dead code** since `ma_sound_stop` already preserves the cursor naturally; kept for field-shape stability, candidate for v2 cleanup.
-- **miniaudio 0.11+ has NO `ma_sound_set_time` API** (removed in 0.10+). The absence of `ma_sound_set_time` means we can't SEEK to an arbitrary position, but it does NOT prevent pause/resume (the stop/start cycle preserves the cursor naturally — see above). For a "remember-cursor-across-shutdown" feature (different from pause/resume), we'd need a custom decoder wrapper or a different miniaudio API surface. v1 doesn't need either — pause/resume works out of the box.
-- **`ma_engine_config` doesn't have a `playback` substruct** — that field is `ma_device_config`-only. The engine config exposes `sampleRate` and `channels` directly; the engine picks the device's native format (typically `ma_format_s16` on built-in Linux audio). The user-spec "16/44100" is satisfied at the engine level (44.1 kHz sample rate) + the typical device-native 16-bit s16 on the device level. To force a specific format, the renderer would need to drop to `ma_device` API; out of v1 scope.
-- **`AudioEnginePtr` uses a function-pointer deleter at global scope** (not the default `std::default_delete<T>`), matching the `DestroyEcsState` / `DestroyPhysicsState` pattern in `core/Types.hpp`. This is because `~AppState()` instantiates the deleter in the header, and `default_delete<T>` requires `T` to be complete at the instantiation point. The custom function-pointer deleter defers the `delete` to the deleter's TU (`audio/AudioEngine.cpp`) where `AudioEngine` is complete. Cost: the deleter is a function call instead of an inline `delete`; not measurable.
-- **`MusicDirectoryPath` resolution chain (v1 final, `2026-06-12`):** `PROJECTV_MUSIC_DIR` env → **walk up from `SDL_GetBasePath()` for the repo root** (`.git/` + `AGENTS.md` markers) → CWD-relative `./music` (only if it exists) → `SDL_GetBasePath()/music` → last-ditch CWD-relative `./music`. The **repo-root walk-up is the primary fallback** so the operator can launch the binary by absolute path from anywhere (`/home/le1t/Projects/ProjectV/build/.../bin/ProjectV` from a shell prompt at `/tmp` or `/home/le1t`, or an IDE run button) and still find `<repo_root>/music/`. The walk-up passes `bin/` → `linux-clang-debug/` → `build/` → `<repo_root>` (which has both `.git/` and `AGENTS.md`, the "both markers" check is more specific than `.git` alone and more reliable than `CMakeLists.txt` alone). The CWD-relative fallback handles the case where the repo walk-up fails (e.g. `.git` stripped, system-installed binary, build tree copied without the repo). The SDL_GetBasePath-last-resort handles the case where both fail (binary run from a scratch dir with no `./music` in CWD). **`is_directory` is the discriminator**, not just `exists()` — an empty `music/` directory the engine just created still counts as "exists" and the engine will scan it (finding 0 tracks), which is the correct user-facing behavior ("you have 0 tracks").
-  - **v1 history (rejected orderings):** first cut put `SDL_GetBasePath()/music` first (mirroring the screenshot/snapshot pattern); the operator's smoke test from a CWD other than the repo root found 0 tracks in the build-dir music folder (which the engine had helpfully auto-created as empty). Second cut swapped to CWD-relative `./music` first; that worked when the operator ran from the repo root but broke when running by absolute path from elsewhere. Third cut (current) added the repo-root walk-up as the primary fallback. The walk-up is robust: it works for both the "run from repo root" case (where the walk-up lands at the same place the CWD-relative would have) AND the "run by absolute path from /tmp" case.
-- **Track switching, 2026-06-12 (follow-up slice).** `AudioEngine::nextTrack()` / `previousTrack()` cycle through the playlist with wrap-around. `nextTrack` of last index → 0; `previousTrack` of index 0 → `playlist.size() - 1`. Both are no-ops on an empty playlist. Internal `goToTrack(size_t newIndex)` clamps + updates `m_currentIndex` and the cached `m_currentTrackName`, then re-loads the sound per the current state: **Playing** = stop + reload + start (interrupts current track — what the user expects when they press Next mid-playback); **Paused** = stop + reload (state stays Paused; the new track is loaded but not playing, so the next `Q` press plays the new track); **Stopped** = just update the index (no sound to reload; the next `Q` will `loadCurrentTrack()` at the new index). The `m_pausedCursorMs` field is reset to 0 on every track switch (the new track's cursor is 0; no resume-from-cursor in v1). Hotkeys: `9` = next, `0` = previous. The 9/0 pair is the only adjacent free digit pair in the existing `InputAction` table (7/8 went to volume-down / volume-up in the audio-engine slice).
-- **Cycling math is unsigned-safe.** `nextTrack()` does `(m_currentIndex + 1u) % m_playlist.size()`. `previousTrack()` does `(m_currentIndex + m_playlist.size() - 1u) % m_playlist.size()`. The `+ m_playlist.size()` in the previous-track case is the key — without it, `(0u + 0u - 1u)` would underflow to `UINT_MAX` and the modulo would land at a nonsense index. With it, `(0u + N - 1u) % N = (N-1) % N = N-1` (the last track), which is the correct wrap-around.
-- **5-second playlist refresh.** `tick()` is called from `UpdateApp` after the input handlers. Cheap when `m_lastPlaylistRefresh` is recent (just one `steady_clock::now()` call). If the currently-loaded track is still in the new playlist, the index is remapped to its new position. If gone, the sound is unloaded and state transitions to `Stopped`.
-- **Playlist is `std::vector<std::filesystem::path>` sorted alphabetically via `std::sort` + `path::compare`** (case-sensitive per platform `std::filesystem` semantics). `.mp3` extension match is case-insensitive (`std::tolower` on the extension string).
-- **`MA_SOUND_FLAG_STREAM` for the file loader.** MP3 is streamed from disk rather than pre-decoded to RAM. For typical music files (3-10 MB) this is a small saving, but the right semantic for "playlist that can change every 5 seconds."
-- **Loop = `MA_TRUE` for v1.** Music loops forever; the operator stops manually. Future SFX layer would use the default `MA_FALSE`.
-- **Volume via `ma_sound_group_set_volume` (bus-level), not per-sound.** Allows future SFX/Ambient groups to have their own bus-level volumes without cross-contamination. Also `ma_sound_set_volume` is called belt-and-suspenders in `applyVolume()` so a future "no group" path would still respect the volume.
-- **4 v1 hotkeys: `Q` play/pause, `E` stop, `7` vol-, `8` vol+.** Per the operator's note "надо переназначить все кнопки ... но это потом. Сейчас назначай там, где свободно." Q/E/7/8 are the only free letters/digits in the existing `InputAction` enum. Full rebind is the follow-up slice.
-- **Sidecar `music_*` keys write `initialized=0` for v1.** The screenshot capture path doesn't have a direct pointer to `AppState::audio` (the renderer is reached via `DrawFrame` → `RecordGraphicsCommands` → `SaveRequestedScreenshot` → `SaveScreenshotCaptureMetadata`, none of which take an audio pointer). Plumb the audio engine pointer through `FrameRenderData` (or via a `RenderContext` struct) is a follow-up slice. The HUD's `MUSIC <STATE> VOL 0.80 TRK <name>` is the authoritative live view.
+- **Linux audio routing = PulseAudio → pipewire-pulse → PipeWire.** miniaudio's `find_package(PulseAudio)` resolves
+  `libpulse.so.0`; on this host the actual server is PipeWire (verified via `pactl info` →
+  `Server String: /run/user/1000/pulse/native`). No direct PipeWire backend in miniaudio. The user's "выход pipewire
+  pcm" is satisfied by this chain.
+- **`MusicState` enum: `Stopped | Playing | Paused`.** Three-valued. **Cursor semantics, 2026-06-13 fix:**
+  `ma_sound_stop` (called by both `pauseImpl()` and `stop()`) preserves the cursor in-place — it only sets the node
+  state to stopped (miniaudio.h:78774), the `pSound->cursor` field is untouched. A subsequent `ma_sound_start` resumes
+  from that cursor. So v1 **does** have true pause/resume without any custom decoder wrapper. The earlier "v1 pause =
+  stop + forget cursor" claim was wrong: the bug was in the 2026-06-12 code (Paused branch of `togglePlayPause`
+  unconditionally called `loadCurrentTrack()` which unloaded the sound and re-init'd from disk, always resetting the
+  cursor to 0). The 2026-06-13 fix adds the `if (!m_soundLoaded)` guard to the Paused branch (mirroring the Stopped
+  branch) so the cursor is preserved across pause → resume. `m_pausedCursorMs` is **dead code** since `ma_sound_stop`
+  already preserves the cursor naturally; kept for field-shape stability, candidate for v2 cleanup.
+- **miniaudio 0.11+ has NO `ma_sound_set_time` API** (removed in 0.10+). The absence of `ma_sound_set_time` means we
+  can't SEEK to an arbitrary position, but it does NOT prevent pause/resume (the stop/start cycle preserves the cursor
+  naturally — see above). For a "remember-cursor-across-shutdown" feature (different from pause/resume), we'd need a
+  custom decoder wrapper or a different miniaudio API surface. v1 doesn't need either — pause/resume works out of the
+  box.
+- **`ma_engine_config` doesn't have a `playback` substruct** — that field is `ma_device_config`-only. The engine config
+  exposes `sampleRate` and `channels` directly; the engine picks the device's native format (typically `ma_format_s16`
+  on built-in Linux audio). The user-spec "16/44100" is satisfied at the engine level (44.1 kHz sample rate) + the
+  typical device-native 16-bit s16 on the device level. To force a specific format, the renderer would need to drop to
+  `ma_device` API; out of v1 scope.
+- **`AudioEnginePtr` uses a function-pointer deleter at global scope** (not the default `std::default_delete<T>`),
+  matching the `DestroyEcsState` / `DestroyPhysicsState` pattern in `core/Types.hpp`. This is because `~AppState()`
+  instantiates the deleter in the header, and `default_delete<T>` requires `T` to be complete at the instantiation
+  point. The custom function-pointer deleter defers the `delete` to the deleter's TU (`audio/AudioEngine.cpp`) where
+  `AudioEngine` is complete. Cost: the deleter is a function call instead of an inline `delete`; not measurable.
+- **`MusicDirectoryPath` resolution chain (v1 final, `2026-06-12`):** `PROJECTV_MUSIC_DIR` env → **walk up
+  from `SDL_GetBasePath()` for the repo root** (`.git/` + `AGENTS.md` markers) → CWD-relative `./music` (only if it
+  exists) → `SDL_GetBasePath()/music` → last-ditch CWD-relative `./music`. The **repo-root walk-up is the primary
+  fallback** so the operator can launch the binary by absolute path from anywhere (
+  `/home/le1t/Projects/ProjectV/build/.../bin/ProjectV` from a shell prompt at `/tmp` or `/home/le1t`, or an IDE run
+  button) and still find `<repo_root>/music/`. The walk-up passes `bin/` → `linux-clang-debug/` → `build/` →
+  `<repo_root>` (which has both `.git/` and `AGENTS.md`, the "both markers" check is more specific than `.git` alone and
+  more reliable than `CMakeLists.txt` alone). The CWD-relative fallback handles the case where the repo walk-up fails (
+  e.g. `.git` stripped, system-installed binary, build tree copied without the repo). The SDL_GetBasePath-last-resort
+  handles the case where both fail (binary run from a scratch dir with no `./music` in CWD). **`is_directory` is the
+  discriminator**, not just `exists()` — an empty `music/` directory the engine just created still counts as "exists"
+  and the engine will scan it (finding 0 tracks), which is the correct user-facing behavior ("you have 0 tracks").
+    - **v1 history (rejected orderings):** first cut put `SDL_GetBasePath()/music` first (mirroring the
+      screenshot/snapshot pattern); the operator's smoke test from a CWD other than the repo root found 0 tracks in the
+      build-dir music folder (which the engine had helpfully auto-created as empty). Second cut swapped to CWD-relative
+      `./music` first; that worked when the operator ran from the repo root but broke when running by absolute path from
+      elsewhere. Third cut (current) added the repo-root walk-up as the primary fallback. The walk-up is robust: it
+      works for both the "run from repo root" case (where the walk-up lands at the same place the CWD-relative would
+      have) AND the "run by absolute path from /tmp" case.
+- **Track switching, 2026-06-12 (follow-up slice).** `AudioEngine::nextTrack()` / `previousTrack()` cycle through the
+  playlist with wrap-around. `nextTrack` of last index → 0; `previousTrack` of index 0 → `playlist.size() - 1`. Both are
+  no-ops on an empty playlist. Internal `goToTrack(size_t newIndex)` clamps + updates `m_currentIndex` and the cached
+  `m_currentTrackName`, then re-loads the sound per the current state: **Playing** = stop + reload + start (interrupts
+  current track — what the user expects when they press Next mid-playback); **Paused** = stop + reload (state stays
+  Paused; the new track is loaded but not playing, so the next `Q` press plays the new track); **Stopped** = just update
+  the index (no sound to reload; the next `Q` will `loadCurrentTrack()` at the new index). The `m_pausedCursorMs` field
+  is reset to 0 on every track switch (the new track's cursor is 0; no resume-from-cursor in v1). Hotkeys: `9` = next,
+  `0` = previous. The 9/0 pair is the only adjacent free digit pair in the existing `InputAction` table (7/8 went to
+  volume-down / volume-up in the audio-engine slice).
+- **Cycling math is unsigned-safe.** `nextTrack()` does `(m_currentIndex + 1u) % m_playlist.size()`. `previousTrack()`
+  does `(m_currentIndex + m_playlist.size() - 1u) % m_playlist.size()`. The `+ m_playlist.size()` in the previous-track
+  case is the key — without it, `(0u + 0u - 1u)` would underflow to `UINT_MAX` and the modulo would land at a nonsense
+  index. With it, `(0u + N - 1u) % N = (N-1) % N = N-1` (the last track), which is the correct wrap-around.
+- **5-second playlist refresh.** `tick()` is called from `UpdateApp` after the input handlers. Cheap when
+  `m_lastPlaylistRefresh` is recent (just one `steady_clock::now()` call). If the currently-loaded track is still in the
+  new playlist, the index is remapped to its new position. If gone, the sound is unloaded and state transitions to
+  `Stopped`.
+- **Playlist is `std::vector<std::filesystem::path>` sorted alphabetically via `std::sort` + `path::compare`** (
+  case-sensitive per platform `std::filesystem` semantics). `.mp3` extension match is case-insensitive (`std::tolower`
+  on the extension string).
+- **`MA_SOUND_FLAG_STREAM` for the file loader.** MP3 is streamed from disk rather than pre-decoded to RAM. For typical
+  music files (3-10 MB) this is a small saving, but the right semantic for "playlist that can change every 5 seconds."
+- **Loop = `MA_TRUE` for v1.** Music loops forever; the operator stops manually. Future SFX layer would use the default
+  `MA_FALSE`.
+- **Volume via `ma_sound_group_set_volume` (bus-level), not per-sound.** Allows future SFX/Ambient groups to have their
+  own bus-level volumes without cross-contamination. Also `ma_sound_set_volume` is called belt-and-suspenders in
+  `applyVolume()` so a future "no group" path would still respect the volume.
+- **4 v1 hotkeys: `Q` play/pause, `E` stop, `7` vol-, `8` vol+.** Per the operator's note "надо переназначить все
+  кнопки ... но это потом. Сейчас назначай там, где свободно." Q/E/7/8 are the only free letters/digits in the existing
+  `InputAction` enum. Full rebind is the follow-up slice.
+- **Sidecar `music_*` keys write `initialized=0` for v1.** The screenshot capture path doesn't have a direct pointer to
+  `AppState::audio` (the renderer is reached via `DrawFrame` → `RecordGraphicsCommands` → `SaveRequestedScreenshot` →
+  `SaveScreenshotCaptureMetadata`, none of which take an audio pointer). Plumb the audio engine pointer through
+  `FrameRenderData` (or via a `RenderContext` struct) is a follow-up slice. The HUD's
+  `MUSIC <STATE> VOL 0.80 TRK <name>` is the authoritative live view.
 
-**Files touched:** `src/CMakeLists.txt` (`add_subdirectory(external/miniaudio)` + `pthread dl m`), `tests/CMakeLists.txt` (added `miniaudio` to test link line + `audio/AudioEngine.cpp` to test source list), `src/audio/AudioEngine.{hpp,cpp}` (NEW, ~440 lines), `src/audio/MusicDirectoryPath.{hpp,cpp}` (NEW, ~50 lines), `src/core/Types.hpp` (4 `InputAction` + 5 `DebugStats` mirrors + forward decls + `AudioEnginePtr` typedef + `DestroyAudioEngine` decl + `AppState::audio` field), `src/app/AppUpdate.hpp` + `src/app/AppUpdate.cpp` (10th `audio` parameter + 4 input handlers + 5 stats mirrors), `src/app/InputActions.cpp` (4 `BindAction`), `src/app/main.cpp` (init + first playlist scan), `src/debug/DebugHud.cpp` (1 regular HUD line + 2 detailed helper lines), `src/render/ScreenshotCapture.cpp` (6 default-`OFF` sidecar keys), `music/.gitkeep` (empty music folder at repo root).
+**Files touched:** `src/CMakeLists.txt` (`add_subdirectory(external/miniaudio)` + `pthread dl m`),
+`tests/CMakeLists.txt` (added `miniaudio` to test link line + `audio/AudioEngine.cpp` to test source list),
+`src/audio/AudioEngine.{hpp,cpp}` (NEW, ~440 lines), `src/audio/MusicDirectoryPath.{hpp,cpp}` (NEW, ~50 lines),
+`src/core/Types.hpp` (4 `InputAction` + 5 `DebugStats` mirrors + forward decls + `AudioEnginePtr` typedef +
+`DestroyAudioEngine` decl + `AppState::audio` field), `src/app/AppUpdate.hpp` + `src/app/AppUpdate.cpp` (10th `audio`
+parameter + 4 input handlers + 5 stats mirrors), `src/app/InputActions.cpp` (4 `BindAction`), `src/app/main.cpp` (init +
+first playlist scan), `src/debug/DebugHud.cpp` (1 regular HUD line + 2 detailed helper lines),
+`src/render/ScreenshotCapture.cpp` (6 default-`OFF` sidecar keys), `music/.gitkeep` (empty music folder at repo root).
 
-**Test impact:** `ctest 6/6` (1.48s wall clock) preserved. The audio engine itself isn't tested in `tests/VoxelWorldTests.cpp` because it would need an actual PulseAudio device; the test path passes `nullptr` for the engine. `runtime::LogRuntimeFailure` is the failure surface.
+**Test impact:** `ctest 6/6` (1.48s wall clock) preserved. The audio engine itself isn't tested in
+`tests/VoxelWorldTests.cpp` because it would need an actual PulseAudio device; the test path passes `nullptr` for the
+engine. `runtime::LogRuntimeFailure` is the failure surface.
 
-**User-content note:** `music/` is intentionally not auto-populated. The operator drops `.mp3` files in; `PROJECTV_MUSIC_DIR` overrides the path. On a fresh clone, `music/.gitkeep` is the only file; the engine reports `0 mp3 track(s)`, HUD shows `MUSIC STOP VOL 0.80 NO TRACKS`, hotkeys are no-ops. The directory is created on disk by `loadMusicFolder` if it doesn't exist, so the operator can `cd` into it and drop files without pre-creating.
+**User-content note:** `music/` is intentionally not auto-populated. The operator drops `.mp3` files in;
+`PROJECTV_MUSIC_DIR` overrides the path. On a fresh clone, `music/.gitkeep` is the only file; the engine reports
+`0 mp3 track(s)`, HUD shows `MUSIC STOP VOL 0.80 NO TRACKS`, hotkeys are no-ops. The directory is created on disk by
+`loadMusicFolder` if it doesn't exist, so the operator can `cd` into it and drop files without pre-creating.
 
 ---
 

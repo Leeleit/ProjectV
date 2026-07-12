@@ -22,7 +22,8 @@ struct PhysicsSystem {
 };
 } // namespace JPH
 namespace std {
-template <> struct hash<JPH::BodyID> {
+template <>
+struct hash<JPH::BodyID> {
 	size_t operator()(const JPH::BodyID &b) const { return b.id; }
 };
 } // namespace std

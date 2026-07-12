@@ -556,24 +556,28 @@ private:
 ### Рекомендации для ProjectV
 
 1. **Управление воксельными чанками**
-  - Используйте пулы (`VmaPool`) для чанков фиксированного размера
-  - Batch-аллокации: выделяйте память для нескольких чанков за один вызов
-  - Рассмотрите стратегию `VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT` для долгоживущих чанков
+
+- Используйте пулы (`VmaPool`) для чанков фиксированного размера
+- Batch-аллокации: выделяйте память для нескольких чанков за один вызов
+- Рассмотрите стратегию `VMA_ALLOCATION_CREATE_STRATEGY_MIN_MEMORY_BIT` для долгоживущих чанков
 
 2. **Текстуры и атласы текстур**
-  - Device-local изображения с `VK_IMAGE_TILING_OPTIMAL`
-  - Staging один раз, использование много раз
-  - Mipmaps через compute shaders или готовые через staging
+
+- Device-local изображения с `VK_IMAGE_TILING_OPTIMAL`
+- Staging один раз, использование много раз
+- Mipmaps через compute shaders или готовые через staging
 
 3. **Compute buffers для воксельных алгоритмов**
-  - Storage buffers для compute shaders
-  - GPU-only для частых обновлений
-  - Persistent mapping для параметров генерации
+
+- Storage buffers для compute shaders
+- GPU-only для частых обновлений
+- Persistent mapping для параметров генерации
 
 4. **Uniform buffers для камеры и трансформаций**
-  - Triple buffering для избежания конфликтов CPU-GPU
-  - Persistent mapping с `VMA_ALLOCATION_CREATE_MAPPED_BIT`
-  - Выравнивание по 256 байт
+
+- Triple buffering для избежания конфликтов CPU-GPU
+- Persistent mapping с `VMA_ALLOCATION_CREATE_MAPPED_BIT`
+- Выравнивание по 256 байт
 
 ---
 

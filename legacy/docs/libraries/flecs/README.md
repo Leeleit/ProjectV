@@ -118,16 +118,16 @@ flowchart TD
 
 ## Структура заголовков
 
-| Файл                                                                                              | Назначение                                                                                                   |
-|---------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| Файл                                                                                                    | Назначение                                                                                                         |
+|---------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
 | [flecs.h](../../../../external/flecs/include/flecs.h)                                                   | Точка входа. C API; при C++ подтягивает [flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp) |
-| [flecs/addons/flecs_c.h](../../../../external/flecs/include/flecs/addons/flecs_c.h)                     | C макросы: ECS_COMPONENT, ECS_SYSTEM, ecs_set, ecs_each                                                      |
-| [flecs/addons/cpp/flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp)             | C++ точка входа                                                                                              |
-| [flecs/addons/cpp/entity.hpp](../../../../external/flecs/include/flecs/addons/cpp/entity.hpp)           | flecs::entity                                                                                                |
-| [flecs/addons/cpp/mixins/query](../../../../external/flecs/include/flecs/addons/cpp/mixins/query)       | query, query_builder                                                                                         |
-| [flecs/addons/cpp/mixins/system](../../../../external/flecs/include/flecs/addons/cpp/mixins/system)     | system, system_builder                                                                                       |
-| [flecs/addons/cpp/mixins/observer](../../../../external/flecs/include/flecs/addons/cpp/mixins/observer) | observer                                                                                                     |
-| [flecs/addons/system.h](../../../../external/flecs/include/flecs/addons/system.h)                       | ecs_system_desc_t                                                                                            |
+| [flecs/addons/flecs_c.h](../../../../external/flecs/include/flecs/addons/flecs_c.h)                     | C макросы: ECS_COMPONENT, ECS_SYSTEM, ecs_set, ecs_each                                                            |
+| [flecs/addons/cpp/flecs.hpp](../../../../external/flecs/include/flecs/addons/cpp/flecs.hpp)             | C++ точка входа                                                                                                    |
+| [flecs/addons/cpp/entity.hpp](../../../../external/flecs/include/flecs/addons/cpp/entity.hpp)           | flecs::entity                                                                                                      |
+| [flecs/addons/cpp/mixins/query](../../../../external/flecs/include/flecs/addons/cpp/mixins/query)       | query, query_builder                                                                                               |
+| [flecs/addons/cpp/mixins/system](../../../../external/flecs/include/flecs/addons/cpp/mixins/system)     | system, system_builder                                                                                             |
+| [flecs/addons/cpp/mixins/observer](../../../../external/flecs/include/flecs/addons/cpp/mixins/observer) | observer                                                                                                           |
+| [flecs/addons/system.h](../../../../external/flecs/include/flecs/addons/system.h)                       | ecs_system_desc_t                                                                                                  |
 
 ---
 

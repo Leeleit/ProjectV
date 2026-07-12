@@ -4,7 +4,8 @@
 
 > **Связь с философией:** Этот документ дополняет [10_cpp23-26-features.md](10_cpp23-26-features.md). Здесь фокус на
 > практическом применении Modern C++, там — реалистичный взгляд на поддержку компиляторов. См.
-> также [02_zero-cost-abstractions.md](../../philosophy/02_paradigms/01_zero-cost-abstractions.md) — новые стандарты должны давать
+> также [02_zero-cost-abstractions.md](../../philosophy/02_paradigms/01_zero-cost-abstractions.md) — новые стандарты
+> должны давать
 > измеримую пользу.
 
 ## Оглавление

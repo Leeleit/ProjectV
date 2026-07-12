@@ -86,11 +86,11 @@ flowchart TD
 - **C++11** или новее (рекомендуется C++17+)
 - **CMake 3.10+** (для интеграции через CMake)
 - **Поддерживаемые платформы:**
-  - Windows (x86/x64)
-  - Linux (x86/x64, ARM)
-  - macOS (x64, ARM)
-  - Android (ARM, ARM64)
-  - *BSD
+    - Windows (x86/x64)
+    - Linux (x86/x64, ARM)
+    - macOS (x64, ARM)
+    - Android (ARM, ARM64)
+    - *BSD
 - **Графические API:** Vulkan 1.1+, OpenGL 3.3+, Direct3D 11/12, Metal
 - **Для сервера:** Браузер с поддержкой WebGL2 (Chrome, Firefox, Edge) или нативный клиент
 

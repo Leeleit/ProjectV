@@ -1,0 +1,40 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D srcBloom;
+layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D dstBloom;
+
+layout(push_constant) uniform PushConstants {
+    vec4 params0; // x=threshold, y=softKnee, z=bloomIntensity, w=mipLevel
+    vec4 params1;
+    vec4 params2;
+    vec4 params3;
+} pushConstants;
+
+void main()
+{
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 dstSize = imageSize(dstBloom);
+    if (any(greaterThanEqual(coord, dstSize))) {
+        return;
+    }
+
+    const vec2 uv = (vec2(coord) + 0.5) / vec2(dstSize);
+    const vec2 texel = 1.0 / vec2(dstSize);
+
+    // 13-tap Kawase-style downsample.
+    vec3 color = vec3(0.0);
+    color += textureLod(srcBloom, uv + vec2(-2.0, -2.0) * texel, pushConstants.params0.w).rgb;
+    color += textureLod(srcBloom, uv + vec2( 0.0, -2.0) * texel, pushConstants.params0.w).rgb * 2.0;
+    color += textureLod(srcBloom, uv + vec2( 2.0, -2.0) * texel, pushConstants.params0.w).rgb;
+    color += textureLod(srcBloom, uv + vec2(-2.0,  0.0) * texel, pushConstants.params0.w).rgb * 2.0;
+    color += textureLod(srcBloom, uv + vec2( 0.0,  0.0) * texel, pushConstants.params0.w).rgb * 4.0;
+    color += textureLod(srcBloom, uv + vec2( 2.0,  0.0) * texel, pushConstants.params0.w).rgb * 2.0;
+    color += textureLod(srcBloom, uv + vec2(-2.0,  2.0) * texel, pushConstants.params0.w).rgb;
+    color += textureLod(srcBloom, uv + vec2( 0.0,  2.0) * texel, pushConstants.params0.w).rgb * 2.0;
+    color += textureLod(srcBloom, uv + vec2( 2.0,  2.0) * texel, pushConstants.params0.w).rgb;
+    color /= 16.0;
+
+    imageStore(dstBloom, coord, vec4(color, 1.0));
+}

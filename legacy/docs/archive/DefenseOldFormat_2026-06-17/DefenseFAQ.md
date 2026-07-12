@@ -12,8 +12,12 @@
 
 ### 1.1. Почему C++26, а не Rust/Zig/Go?
 
-1. **Экосистема и совместимость:** Все используемые нами тяжёлые библиотеки (Jolt Physics, fastgltf, VulkanMemoryAllocator, Draco, Flecs) написаны на C/C++ и предоставляют нативный C++ API. Написание Rust-биндингов для Jolt или VMA заняло бы больше времени, чем вся разработка MVP.
-2. **Возможности стандарта:** C++26 даёт нам критически важные фичи: `std::expected` для безопасной обработки ошибок на холодных путях (загрузка ассетов, парсинг конфигов), `std::simd` для векторных расчётов, модули (наши `Math.ixx` и `StringId.ixx` для ускорения инкрементальной сборки) и развитый `constexpr`.
+1. **Экосистема и совместимость:** Все используемые нами тяжёлые библиотеки (Jolt Physics, fastgltf,
+   VulkanMemoryAllocator, Draco, Flecs) написаны на C/C++ и предоставляют нативный C++ API. Написание Rust-биндингов для
+   Jolt или VMA заняло бы больше времени, чем вся разработка MVP.
+2. **Возможности стандарта:** C++26 даёт нам критически важные фичи: `std::expected` для безопасной обработки ошибок на
+   холодных путях (загрузка ассетов, парсинг конфигов), `std::simd` для векторных расчётов, модули (наши `Math.ixx` и
+   `StringId.ixx` для ускорения инкрементальной сборки) и развитый `constexpr`.
 
 ### 1.2. Почему Vulkan 1.4, а не OpenGL/DirectX 12/Metal?
 
@@ -27,7 +31,10 @@ Vulkan — кроссплатформенный (Windows + Linux + будущи�
 
 ### 1.3. Почему Jolt Physics, а не PhysX или Bullet?
 
-Jolt Physics — современный, детерминированный физический движок с открытым исходным кодом (лицензия MIT). Он изначально разрабатывался с прицелом на многопоточность и SIMD-оптимизацию на CPU. Bullet морально устарел и сложен в оптимизации, а PhysX от NVIDIA избыточен по размеру и имеет закрытые части. Наш walk-контроллер на базе `CharacterVirtual` от Jolt идеально справляется со скольжением по углам воксельных плит.
+Jolt Physics — современный, детерминированный физический движок с открытым исходным кодом (лицензия MIT). Он изначально
+разрабатывался с прицелом на многопоточность и SIMD-оптимизацию на CPU. Bullet морально устарел и сложен в оптимизации,
+а PhysX от NVIDIA избыточен по размеру и имеет закрытые части. Наш walk-контроллер на базе `CharacterVirtual` от Jolt
+идеально справляется со скольжением по углам воксельных плит.
 
 ### 1.4. Почему Flecs, а не EnTT/Bevy ECS/DOTS Unity?
 
@@ -46,6 +53,7 @@ Flecs — header-only C++ ECS с отличной поддержкой идио�
 Data-Oriented Design — подход, при котором данные организованы для эффективной обработки
 CPU (cache-friendly, SIMD-friendly), а не для удобства иерархии ООП. Конкретные применения
 в ProjectV:
+
 - `VoxelChunk` — структура массивов в плотном `voxels` (8-битный material на воксель);
 - кеш видимости чанков — единый непрерывный буфер, а не массив указателей;
 - предварительно зарезервированные горячие пути: `pendingChunkRebuildIndices`, `ChunkVisibilityCache.commands` —
@@ -62,24 +70,43 @@ CPU (cache-friendly, SIMD-friendly), а не для удобства иерар�
 ### 2.2. Как устроена связь между ECS и VoxelWorld?
 
 Мы строго следуем паттерну «один источник истины» (Single Source of Truth):
-*   `VoxelWorld` — единственный владелец и валидатор воксельной сетки. Все изменения (размещение/удаление блоков) происходят только через его методы.
-*   ECS-мир (Flecs) является *пассивным зеркалом*. Раз в кадр система `SyncEcsWorldState` считывает изменившиеся чанки из `VoxelWorld` и обновляет сущности `ChunkState` в ECS-мире. Геймплейные системы и диагностический HUD читают данные из ECS-зеркала в режиме read-only, что исключает состояние гонки (race conditions) между физикой и рендером.
+
+* `VoxelWorld` — единственный владелец и валидатор воксельной сетки. Все изменения (размещение/удаление блоков)
+  происходят только через его методы.
+* ECS-мир (Flecs) является *пассивным зеркалом*. Раз в кадр система `SyncEcsWorldState` считывает изменившиеся чанки из
+  `VoxelWorld` и обновляет сущности `ChunkState` в ECS-мире. Геймплейные системы и диагностический HUD читают данные из
+  ECS-зеркала в режиме read-only, что исключает состояние гонки (race conditions) между физикой и рендером.
 
 ### 2.3. Как вы боретесь с накладными расходами на обработку ошибок?
 
 Мы используем гибридный подход, зафиксированный в `decisions.md §29`:
-*   **На холодных путях (Cold Path):** Инициализация Vulkan, загрузка glTF-моделей, чтение сейвов с диска. Здесь мы используем современный стандарт **`std::expected`** [Types.hpp]. Он обеспечивает строгое, безопасное ветвление и возвращает детальные коды ошибок (например, `VoxelSnapshotError::MagicMismatch`), исключая падения приложения. Небольшие накладные расходы `std::expected` на холодных путях не влияют на общую производительность.
-*   **На горячих путях (Hot Path):** Обновление физики, выборка вокселей, рендеринг кадра. Здесь использование `std::expected` запрещено. Ошибки обрабатываются через быстрые возвраты `bool` и макросы жестких проверок `CORE_ASSERT`, которые полностью вырезаются в релизной сборке, обеспечивая максимальную скорость выполнения.
+
+* **На холодных путях (Cold Path):** Инициализация Vulkan, загрузка glTF-моделей, чтение сейвов с диска. Здесь мы
+  используем современный стандарт **`std::expected`** [Types.hpp]. Он обеспечивает строгое, безопасное ветвление и
+  возвращает детальные коды ошибок (например, `VoxelSnapshotError::MagicMismatch`), исключая падения приложения.
+  Небольшие накладные расходы `std::expected` на холодных путях не влияют на общую производительность.
+* **На горячих путях (Hot Path):** Обновление физики, выборка вокселей, рендеринг кадра. Здесь использование
+  `std::expected` запрещено. Ошибки обрабатываются через быстрые возвраты `bool` и макросы жестких проверок
+  `CORE_ASSERT`, которые полностью вырезаются в релизной сборке, обеспечивая максимальную скорость выполнения.
 
 ### 2.4. Что такое greedy meshing и зачем оно нужно?
 
-Даже современные GPU теряют производительность, если вызывать `vkCmdDraw` на каждый отдельный воксель (CPU bottleneck на стороне драйвера).
-Жадный мешинг (Greedy Meshing) решает эту проблему на этапе генерации геометрии: он объединяет компланарные грани вокселей одного материала в один большой вытянутый прямоугольник (quad). Это снижает количество генерируемых вершин на **30–50%** на плотных сценах. В сочетании с непрямым рендерингом (Indirect Draw) мы отправляем всю сцену на отрисовку буквально несколькими вызовами отрисовки, разгружая CPU.
+Даже современные GPU теряют производительность, если вызывать `vkCmdDraw` на каждый отдельный воксель (CPU bottleneck на
+стороне драйвера).
+Жадный мешинг (Greedy Meshing) решает эту проблему на этапе генерации геометрии: он объединяет компланарные грани
+вокселей одного материала в один большой вытянутый прямоугольник (quad). Это снижает количество генерируемых вершин на *
+*30–50%** на плотных сценах. В сочетании с непрямым рендерингом (Indirect Draw) мы отправляем всю сцену на отрисовку
+буквально несколькими вызовами отрисовки, разгружая CPU.
 
 ### 2.5. В чем разница между вашим сценарным кэшем видимости и обычным фрустум-кулингом?
 
-Обычный фрустум-кулинг выполняется каждый кадр: CPU берёт AABB каждого чанка и тестирует его против 6 плоскостей пирамиды видимости камеры (что на сцене из 300 чанков даёт 1500+ скалярных произведений каждый кадр).
-Наш **двухуровневый кэш видимости** (`ChunkVisibilityCache`) решает эту проблему: если камера статична (или её микродвижения лежат в пределах квантования 0.25 вокселя по позиции и 0.005 forward ≈ 0.3°), **кастомный XOR-fold хэш со splitmix64-style avalanche** совпадает с предыдущим кадром. CPU полностью пропускает цикл прохода по чанкам и мгновенно копирует готовые команды отрисовки из кэша в GPU-буфер. Второй уровень — фрустум-кулинг через C/AVX2 ядро (scalar 3.7-3.9×, AVX2 2.5-2.7× vs C++ baseline).
+Обычный фрустум-кулинг выполняется каждый кадр: CPU берёт AABB каждого чанка и тестирует его против 6 плоскостей
+пирамиды видимости камеры (что на сцене из 300 чанков даёт 1500+ скалярных произведений каждый кадр).
+Наш **двухуровневый кэш видимости** (`ChunkVisibilityCache`) решает эту проблему: если камера статична (или её
+микродвижения лежат в пределах квантования 0.25 вокселя по позиции и 0.005 forward ≈ 0.3°), **кастомный XOR-fold хэш со
+splitmix64-style avalanche** совпадает с предыдущим кадром. CPU полностью пропускает цикл прохода по чанкам и мгновенно
+копирует готовые команды отрисовки из кэша в GPU-буфер. Второй уровень — фрустум-кулинг через C/AVX2 ядро (scalar
+3.7-3.9×, AVX2 2.5-2.7× vs C++ baseline).
 
 ---
 
@@ -89,6 +116,7 @@ CPU (cache-friendly, SIMD-friendly), а не для удобства иерар�
 
 4 каскада массива глубины 2048×2048. На каждый кадр CPU строит `sunShadowViewProjections[4]`
 через `BuildSunShadowCascadeSplits` (по `decisions.md §15`):
+
 1. Глубины разбиения — практическая схема с лямбда, по умолчанию лямбда 0.80, со сдвигом в ближний план
    (см. `agent/memory.md §1` MeshingStress repro);
 2. Per-cascade подгонка сферы по XY — стабильная при вращении, не дёргается при повороте;
@@ -97,6 +125,7 @@ CPU (cache-friendly, SIMD-friendly), а не для удобства иерар�
 4. Камера света привязана к сетке текселей тени — стабильна при малом движении камеры.
 
 Фрагментный шейдер `voxel.frag::ComputeSunShadowSample`:
+
 - Выбирает каскад по глубине вида (`gl_FragCoord.z`, инвариант кадра);
 - PCF 5×5 со взвешиванием;
 - смещение с учётом N·L + смещение получателя в мировом пространстве;
@@ -105,8 +134,10 @@ CPU (cache-friendly, SIMD-friendly), а не для удобства иерар�
 ### 3.2. Что такое TAA и зачем оно нужно?
 
 Temporal Anti-Aliasing — метод сглаживания, который смешивает текущий кадр с историей
-(сэмплы со смещением). Включён по умолчанию, потому что anti-jitter — базовая проблема UX (видимое дрожание камеры). Наш TAA: 8-точечный jitter Halton 2,3, зажим YCoCg для цветовой истории
-(сохраняет цветность на ярких участках), neighbourhood radius 1-7, инвалидация истории по 7 триггерам, встроенный CAS post-TAA для повышения резкости. Формат цвета сцены B10G11R10_UFLOAT —
+(сэмплы со смещением). Включён по умолчанию, потому что anti-jitter — базовая проблема UX (видимое дрожание камеры). Наш
+TAA: 8-точечный jitter Halton 2,3, зажим YCoCg для цветовой истории
+(сохраняет цветность на ярких участках), neighbourhood radius 1-7, инвалидация истории по 7 триггерам, встроенный CAS
+post-TAA для повышения резкости. Формат цвета сцены B10G11R10_UFLOAT —
 2× экономия пропускной способности. См. `agent/decisions.md §18-§19`.
 
 ### 3.3. Что такое ray-marching и как он реализован?
@@ -114,6 +145,7 @@ Temporal Anti-Aliasing — метод сглаживания, который с�
 Ray-marching — метод рендеринга, при котором для каждого пикселя трассируется луч через
 объём/поле расстояний, и цвет определяется по ближайшему пересечению. В ТЗ указано «GPU ray-marching
 через compute-шейдеры». В ProjectV:
+
 - **Основной путь: mesh-based** — greedy meshing генерирует полигональную геометрию (быстрее
   для статичных сцен);
 - **Ray-marching compute pass** (переключатель F6) — `ray_march.comp` трассирует DDA через
@@ -127,7 +159,8 @@ Mesh-based — основной, ray-marching — вторичный режим.
 Прямая voxel-space DDA-трассировка от фрагмента к солнцу. `voxel.frag::ComputeContactShadow`
 берёт мировую позицию фрагмента, делает короткий DDA (максимум ~5 единиц) в направлении
 солнца. Если на пути непрозрачный воксель — уменьшает вклад тени от солнца. Это даёт
-«контактную» тень под объектами, где разрешения CSM недостаточно. Ограниченный прямой шейдерный проход, не отдельный render pass.
+«контактную» тень под объектами, где разрешения CSM недостаточно. Ограниченный прямой шейдерный проход, не отдельный
+render pass.
 
 ### 3.5. Что такое AOCC?
 
@@ -151,7 +184,12 @@ Ambient Occlusion Cavity Check — короткая полусферная DDA �
 
 ### 4.1. Как реализован walk controller?
 
-В `src/physics/PhysicsWorld.cpp`. **JPH::CharacterVirtual используется** для collision detection (капсула, прокси); наш voxel-решатель **augments** Jolt-сторону (см. `decisions.md §6`). Конкретно: `JPH::CharacterVirtual::ExtendedUpdate` с `BuildWalkEdgeGraceUpdateSettings()` (наша настройка) + наш `UpdateWalkGroundSupport` поверх для voxel-specific ground query. Владение грунтом: непрерывная выборка опоры под стопой через `UpdateWalkGroundSupport`, edge grace (`kWalkEdgeGraceFrames = 4` фрейма + `kWalkFootSupportEdgeGraceScore = 0.2f`, НЕ 0.1 м) для тонких граней, sneak с sampled top-plane.
+В `src/physics/PhysicsWorld.cpp`. **JPH::CharacterVirtual используется** для collision detection (капсула, прокси); наш
+voxel-решатель **augments** Jolt-сторону (см. `decisions.md §6`). Конкретно: `JPH::CharacterVirtual::ExtendedUpdate` с
+`BuildWalkEdgeGraceUpdateSettings()` (наша настройка) + наш `UpdateWalkGroundSupport` поверх для voxel-specific ground
+query. Владение грунтом: непрерывная выборка опоры под стопой через `UpdateWalkGroundSupport`, edge grace (
+`kWalkEdgeGraceFrames = 4` фрейма + `kWalkFootSupportEdgeGraceScore = 0.2f`, НЕ 0.1 м) для тонких граней, sneak с
+sampled top-plane.
 3 режима управления (walk/creative/spectator) — F4 переключает, двойное нажатие Space переключает
 creative ↔ walk.
 
@@ -165,7 +203,9 @@ Voxel-решатель (собственный в `PhysicsWorld.cpp`) знает
 
 ### 4.3. Как работает авто-прыжок?
 
-Прыжок через один блок — traversal path, а не базовое поведение. Выключен по умолчанию. J — переключатель. F12 — delay вкл/выкл. Отсчёт начинается только когда непосредственный подъём на один блок достижим. Удержание ручного прыжка обнуляет отсчёт задержки. Документация — `decisions.md §8`.
+Прыжок через один блок — traversal path, а не базовое поведение. Выключен по умолчанию. J — переключатель. F12 — delay
+вкл/выкл. Отсчёт начинается только когда непосредственный подъём на один блок достижим. Удержание ручного прыжка
+обнуляет отсчёт задержки. Документация — `decisions.md §8`.
 
 ### 4.4. Что такое пошаговая отладка / замедление?
 
@@ -183,6 +223,7 @@ Voxel-решатель (собственный в `PhysicsWorld.cpp`) знает
 ### 5.1. Как загружаются модели?
 
 `src/asset/AssetLoader.cpp` — синхронный загрузчик через fastgltf. Конвейер:
+
 1. Разбор .glb (бинарный glTF) → парсер fastgltf;
 2. Декодирование сжатых Draco мешей (`DracoMeshDecoder.cpp`);
 3. Оптимизация через meshopt (vertex cache, overdraw, vertex fetch);
@@ -215,7 +256,8 @@ Voxel-решатель (собственный в `PhysicsWorld.cpp`) знает
 
 miniaudio поддерживает много форматов, но в нашем случае — MP3 через встроенные
 декодеры miniaudio (бэкенд dr_mp3). Файлы в `music/` (относительно CWD), сканирование через
-`std::filesystem::directory_iterator`. Плейлист сортируется по алфавиту, sticky-индекс `m_currentIndex`. Если текущий трек исчез — мягкая остановка + ограничение индекса.
+`std::filesystem::directory_iterator`. Плейлист сортируется по алфавиту, sticky-индекс `m_currentIndex`. Если текущий
+трек исчез — мягкая остановка + ограничение индекса.
 
 ### 6.2. Почему именно miniaudio?
 
@@ -252,7 +294,11 @@ pcm» (требование пользователя). 16/44100 PCM, форма�
 ### 7.2. Какой процент покрытия тестами?
 
 ~40-50% по моей оценке. Фокус на критичных путях: ECS-состояние, редактирование материалов вокселей, walk
-controller, frustum culling, декодирование ассетов. 12 наборов ctest: ProjectVTests (~157 тестов), AssetLoaderTests (9), MeshBakerTests (4), DracoDecoderTests (3), FrustumCullingTests (5), CFrustumCullingTests (Tier 3 C-kernel), SunShadowCascadeSplitsTests (Tier 5), BoxUvFixtureTests (2), MathTests (Tier 0.A), StringIdTests (Tier 1.D), ModuleSmoke (Tier 2), StdModuleProbe (Tier 2). GPU-стороны покрывается визуальными smoke-проверками (RuntimeSmoke 6/6 captures). 80% покрытия — явный follow-up, не критично для демонстрации архитектуры.
+controller, frustum culling, декодирование ассетов. 12 наборов ctest: ProjectVTests (~157 тестов), AssetLoaderTests (9),
+MeshBakerTests (4), DracoDecoderTests (3), FrustumCullingTests (5), CFrustumCullingTests (Tier 3 C-kernel),
+SunShadowCascadeSplitsTests (Tier 5), BoxUvFixtureTests (2), MathTests (Tier 0.A), StringIdTests (Tier 1.D),
+ModuleSmoke (Tier 2), StdModuleProbe (Tier 2). GPU-стороны покрывается визуальными smoke-проверками (RuntimeSmoke 6/6
+captures). 80% покрытия — явный follow-up, не критично для демонстрации архитектуры.
 
 ### 7.3. Что такое базовые уровни CTest?
 
@@ -283,6 +329,7 @@ controller, frustum culling, декодирование ассетов. 12 на�
 ### 8.2. Какие пресеты есть?
 
 7 пресетов в `CMakePresets.json`:
+
 - `windows-clang-debug` (повседневная разработка);
 - `windows-clang-debug-ci` (тихий вывод для CI);
 - `windows-clang-debug-tracy-profiler` (инструментация Tracy, для явного профилирования);
@@ -314,6 +361,7 @@ controller, frustum culling, декодирование ассетов. 12 на�
 ### 9.1. Что в Phase 4-9 (Vision)?
 
 Из `legacy/docs/architecture/academic/roadmap_and_scope.md`:
+
 - **Phase 4 — Networking**: server-authoritative + client prediction;
 - **Phase 5 — SVO rendering**: гибрид SVO+chunks, SVO ray-marching для теней;
 - **Phase 6 — Полная симуляция жидкостей**: клеточный автомат на GPU с диффузией и вязкостью;
@@ -332,6 +380,7 @@ networking), но их реализация — это 6-12 месяцев до�
 ### 9.3. Какие исследования есть в проекте?
 
 `legacy/docs/architecture/academic/01_project_defense_model.md` — формальные обоснования:
+
 - Клеточный автомат (математика: $f: S^{k+1} \to S$);
 - DOD анализ кеша (AoS 18,75% против SoA 100% использования);
 - SVO ray-marching сложность $O(d)$ против плотного $O(n^{1/3})$;
@@ -385,6 +434,7 @@ reference shot: **110-130 FPS** при 1920×1080 (после TAA + CAS). На 1
 ### 10.6. Что если спросят про «60 FPS на сетке 512³» (ТЗ 7.2.4)?
 
 Ответ (3 части):
+
 1. **Текущий scope — sandbox-first.** MVP решает задачу компактных детализированных сцен
    (Voxel Laboratory: 27 чанков, 110-130 FPS), где полигональный
    greedy-мешинг выигрывает по простоте и скорости.
@@ -398,6 +448,7 @@ reference shot: **110-130 FPS** при 1920×1080 (после TAA + CAS). На 1
 ### 10.7. Что если спросят «почему именно эти библиотеки, а не свои реализации»?
 
 Каждая зависимость — проверенная в бою open-source библиотека, решающая конкретную проблему:
+
 - SDL3 — кроссплатформенный windowing/input (есть свои обёртки в `platform/PlatformEvents.cpp`);
 - volk — загрузчик Vulkan в рантайме (нужен для горячей перезагрузки);
 - VMA — паттерны выделения памяти (свои с VMA — reinvent wheel);
@@ -415,26 +466,36 @@ reference shot: **110-130 FPS** при 1920×1080 (после TAA + CAS). На 1
 ### 10.8. Что если спросят про дрожание VoxelLab (BUG-004)?
 
 **Симптом:** При включённом TAA статичные меши на сцене VoxelLab совершают субпиксельные колебания (тремор).
-**Физика проблемы:** Это классический баг синхронизации ресурсов (descriptor race). При смене пресетов или пассов дескрипторные сеты TAA-резолва перевыделяются. Из-за отсутствия жёсткой синхронизации через барьеры/фенсы Vulkan на кадрах с высокой загрузкой GPU, дескрипторы TAA-пасса пытаются читать данные из буферов, которые уже были уничтожены или перезаписаны CPU на текущем кадре.
-**Решение / временный обходной путь:** TAA-резолв отключается клавишей `T` в рантайме (переключает `taaEnabled` shader variant) — возвращает рендерер к стабильной прямой отрисовке кадра ценой aliasing. Полный рефакторинг времени жизни дескрипторов TAA запланирован в Phase 5 нашего бэклога.
+**Физика проблемы:** Это классический баг синхронизации ресурсов (descriptor race). При смене пресетов или пассов
+дескрипторные сеты TAA-резолва перевыделяются. Из-за отсутствия жёсткой синхронизации через барьеры/фенсы Vulkan на
+кадрах с высокой загрузкой GPU, дескрипторы TAA-пасса пытаются читать данные из буферов, которые уже были уничтожены или
+перезаписаны CPU на текущем кадре.
+**Решение / временный обходной путь:** TAA-резолв отключается клавишей `T` в рантайме (переключает `taaEnabled` shader
+variant) — возвращает рендерер к стабильной прямой отрисовке кадра ценой aliasing. Полный рефакторинг времени жизни
+дескрипторов TAA запланирован в Phase 5 нашего бэклога.
 
 ### 10.9. Что если спросят про гонку при переключении сцен (BUG-005)?
 
 **Симптом:** При нажатии F5 (cycle scene preset) — серия ошибок `VUID-vkCmdDraw-None-08114` от Vulkan validation layer.
-**Физика проблемы:** Дескриптор предыдущего кадра ссылается на buffer handle, который VMA re-used для нового allocation. validation layer's per-handle state table marks reused handle as "destroyed".
-**Решение / временный обходной путь:** Внедрён `vkDeviceWaitIdle` в `DestroySceneResources` (Tier 5) — смягчил race, но не устранил полностью. Полная очистка требует переработки жизненного цикла дескрипторов (Phase 5 бэклога).
+**Физика проблемы:** Дескриптор предыдущего кадра ссылается на buffer handle, который VMA re-used для нового allocation.
+validation layer's per-handle state table marks reused handle as "destroyed".
+**Решение / временный обходной путь:** Внедрён `vkDeviceWaitIdle` в `DestroySceneResources` (Tier 5) — смягчил race, но
+не устранил полностью. Полная очистка требует переработки жизненного цикла дескрипторов (Phase 5 бэклога).
 
 ### 10.10. Что если спросят про Tier 0-5?
 
 Tier 0-5 закрыты (12 коммитов с `427be4f` до `90a45b4`):
+
 - **Tier 0** (`86df567`, `e85a6f9`): `Vec3/Vec4/Mat4` с alignas 16/32, миграция hot structures
 - **Tier 1** (`427be4f`, `92c4380`): `std::inplace_vector`, `StringID`, `std::expected` для cold-path
 - **Tier 2** (`c3faa65`, `e0029dc`, `73e2dd7`, `be16a2d`, `5c9d658`): C++20 модули, libc++ миграция, `import std;` probe
 - **Tier 3** (`b778567`): C/AVX2 ядро фрустум-кулинга + Google Benchmark
 - **Tier 4** (`ef8b403`): провод C-ядра в движок
-- **Tier 5** (`aa34642`): branch hints, EVIL docs, `vkWaitForFences 10ms`, InputAction mask UB fix, shadow benchmark и splits tests
+- **Tier 5** (`aa34642`): branch hints, EVIL docs, `vkWaitForFences 10ms`, InputAction mask UB fix, shadow benchmark и
+  splits tests
 
-Базовый уровень производительности установлен. Tier 0-5 — perf baseline, не bug-fixing. Известные TAA-scope проблемы (VoxelLab tremor BUG-004, F5 VUID race BUG-005) — postdefense follow-up.
+Базовый уровень производительности установлен. Tier 0-5 — perf baseline, не bug-fixing. Известные TAA-scope проблемы (
+VoxelLab tremor BUG-004, F5 VUID race BUG-005) — postdefense follow-up.
 
 ---
 
@@ -442,10 +503,13 @@ Tier 0-5 закрыты (12 коммитов с `427be4f` до `90a45b4`):
 
 ### 11.1. Расскажите про команду — кто что делал?
 
-Команда «Черепашки Ninja» из 6 человек. Тимлид — Кадочников Лев Петрович (le1t), он же основной разработчик, отвечает за архитектуру, выбор библиотек, DOD layout, ECS-bridge, cold paths (snapshot, JSON config), hot shader reload F5, и ведёт все Q&A комиссии. Остальные 5 участников распределены по модулям:
+Команда «Черепашки Ninja» из 6 человек. Тимлид — Кадочников Лев Петрович (le1t), он же основной разработчик, отвечает за
+архитектуру, выбор библиотек, DOD layout, ECS-bridge, cold paths (snapshot, JSON config), hot shader reload F5, и ведёт
+все Q&A комиссии. Остальные 5 участников распределены по модулям:
 
 - **Тиммейт 1** — стек и сборка: C++26, CMake presets, ctest 14/14, RuntimeSmoke 6/6, метрики.
-- **Тиммейт 2** — voxel-мир и meshing: чанки 8×8×8, материалы, greedy meshing Лысенкова, visibility cache (custom XOR-fold hash).
+- **Тиммейт 2** — voxel-мир и meshing: чанки 8×8×8, материалы, greedy meshing Лысенкова, visibility cache (custom
+  XOR-fold hash).
 - **Тиммейт 3** — рендеринг: CSM, PCF, контактные тени, AOCC, TAA + YCoCg + CAS, ray-marching compute pass.
 - **Тиммейт 4** — физика и walk controller: Jolt, walk/creative/spectator, edge grace, авто-прыжок.
 - **Тиммейт 5** — демо VoxelLab + ассеты + аудио: сцена, glTF/Draco/meshopt pipeline, miniaudio.
@@ -456,6 +520,7 @@ Tier 0-5 закрыты (12 коммитов с `427be4f` до `90a45b4`):
 ### 11.2. Расскажите про ray-marching — что это и зачем?
 
 ТЗ требовало «GPU ray-marching через compute-шейдеры» (п. 4.1.2). Реализация:
+
 - Файл: `src/shaders/ray_march.comp` + `src/render/RayMarchPass.{hpp,cpp}`.
 - Алгоритм: Amanatides-Woo 3D DDA через packed voxel payload.
 - Push constants: `worldMinAndChunkSize/chunkGridAndFlags`.
@@ -470,6 +535,7 @@ Ray-marching — вторичный режим, переключаемый.
 ### 11.3. Расскажите про fluid CA (клеточный автомат для жидкости)
 
 ТЗ требовало «Симуляция жидкостей (CA)» (п. 4.1.3). Реализация:
+
 - Файл: `src/voxel/VoxelWorld.cpp` → `UpdateFluidCA()`.
 - Алгоритм: 1 tick = down-fall, fallback cardinal spread (4 направления, hash-ordered).
 - Hash = Teschner spatial hash `(x*73856093) ^ (y*19349663) ^ (z*83492791)` (НЕ splitmix64), deterministic.
@@ -482,6 +548,7 @@ Ray-marching — вторичный режим, переключаемый.
 ### 11.4. Расскажите про hot shader reload (F5)
 
 F5 в `src/app/main.cpp` → `RebuildAllShadersFromDisk()`:
+
 1. Subprocess: `cmake --build build/<preset> --target Shaders`.
 2. glslc/glslangValidator перекомпилирует `.vert`/`.frag`/`.comp` → `.spv`.
 3. На success → `RequestRayMarchPipelineRecreate()` (и другие pipelines с invalidated shader module).
@@ -497,6 +564,7 @@ Multi-agent coordination через `agent/active-sessions.md` (см. `AGENTS.md
 Auto-close после commit per `AGENTS.md §8.1`.
 
 См. `git log --oneline -20` для истории:
+
 - Tier 0-5 (12 коммитов): `c3faa65`, `e0029dc`, ..., `aa34642`.
 - VoxelLab tremor fix attempt: `90a45b4`.
 - Release presets: `6fe9201`.
@@ -506,11 +574,13 @@ Auto-close после commit per `AGENTS.md §8.1`.
 ### 11.6. Какие платформы поддерживаются и как собирать?
 
 Windows 10/11 + Linux Arch. Обе платформы build green, ctest 14/14.
+
 - Linux: native clang 22.1.6 + lld 22 + libc++ 16. Preset `linux-clang-debug`.
 - Windows: clang-cl 22 (Visual Studio Build Tools 2026 + Vulkan SDK 1.4). Preset `windows-clang-debug`.
 - 7 debug + 8 release CMakePresets, host-independent JSON, валидируются через `cmake --list-presets`.
 
 Команды:
+
 ```bash
 cmake --preset linux-clang-debug
 cmake --build build/linux-clang-debug --target ProjectV ProjectVTests --parallel 8
@@ -525,7 +595,8 @@ ctest --test-dir build/linux-clang-debug --output-on-failure
 VoxelLab показывает residual sub-pixel jitter при включённом TAA. FPS ~150, MS ~6.6 (нет проблем с производительностью).
 Попытка фикса в `90a45b4` (TAA NDC depth + descriptor race) устранила race, но не устранила визуальный jitter полностью.
 
-**Рабочий workaround:** клавиша `T` в рантайме переключает `taaEnabled` shader variant — отключает TAA-резолв, восстанавливает стабильную картинку ценой aliasing.
+**Рабочий workaround:** клавиша `T` в рантайме переключает `taaEnabled` shader variant — отключает TAA-резолв,
+восстанавливает стабильную картинку ценой aliasing.
 
 **Что дальше:** рефакторинг TAA-пасса в Phase 5 roadmap. Полный разбор — `agent/voxelab-tremor-handoff-2.md`.
 **Где наблюдается:** только VoxelLab, на других пресетах сцен не наблюдается.
@@ -537,14 +608,16 @@ VoxelLab показывает residual sub-pixel jitter при включённ�
 **Смягчение (Tier 5):** `vkDeviceWaitIdle` в `DestroySceneResources` уменьшил race, не устранил полностью.
 **Что дальше:** переработка жизненного цикла дескрипторов в Phase 5.
 
-**Hot shader reload (F11, перекомпиляция шейдеров) — другая операция, не путать с cycle scene preset (InputAction F5, разделённые после relocate 2026-06-15).**
+**Hot shader reload (F11, перекомпиляция шейдеров) — другая операция, не путать с cycle scene preset (InputAction F5,
+разделённые после relocate 2026-06-15).**
 
 ---
 
 ## Связь с другими defense-документами
 
 Полный reference всех 23 алгоритмов проекта — [`docs/DefenseAlgorithms.md`](DefenseAlgorithms.md).
-Вербальные тексты для 6 участников — [`docs/DefenseBriefer_{1..5}.md`](DefenseBriefer_1.md) + [`docs/DefenseBriefer_le1t.md`](DefenseBriefer_le1t.md).
+Вербальные тексты для 6 участников — [`docs/DefenseBriefer_{1..5}.md`](DefenseBriefer_1.md) + [
+`docs/DefenseBriefer_le1t.md`](DefenseBriefer_le1t.md).
 10-минутный таймлайн — [`docs/DefenseScript.md`](DefenseScript.md).
 Сценарий демо — [`docs/DefenseDemoScript.md`](DefenseDemoScript.md).
 Talking points — [`docs/DefenseSpeakerNotes.md`](DefenseSpeakerNotes.md).

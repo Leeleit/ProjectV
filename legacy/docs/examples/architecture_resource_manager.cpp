@@ -29,7 +29,11 @@ struct ResourceHandle {
 	bool operator==(const ResourceHandle &other) const = default;
 };
 
-enum class ResourceType : uint8_t { Unknown = 0, VulkanBuffer, VulkanImage, GLTFModel, COUNT };
+enum class ResourceType : uint8_t { Unknown = 0,
+									VulkanBuffer,
+									VulkanImage,
+									GLTFModel,
+									COUNT };
 
 // Базовый интерфейс для ресурсов (Type Erasure)
 class IResourceData {

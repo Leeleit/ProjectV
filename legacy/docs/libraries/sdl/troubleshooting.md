@@ -5,18 +5,18 @@
 ## На этой странице
 
 - [Инициализация](#инициализация)
-  - [SDL_Init возвращает false](#sdl_init-возвращает-false)
-  - [SDL_CreateWindow возвращает NULL](#sdl_createwindow-возвращает-null)
-  - [SDL_Vulkan_CreateSurface возвращает false](#sdl_vulkan_createsurface-возвращает-false)
-  - [SDL_Vulkan_GetInstanceExtensions возвращает NULL](#sdl_vulkan_getinstanceextensions-возвращает-null--sdl_vulkan_createsurface-не-работает)
-  - [Окно не отображается или сразу закрывается](#окно-не-отображается-или-сразу-закрывается)
+    - [SDL_Init возвращает false](#sdl_init-возвращает-false)
+    - [SDL_CreateWindow возвращает NULL](#sdl_createwindow-возвращает-null)
+    - [SDL_Vulkan_CreateSurface возвращает false](#sdl_vulkan_createsurface-возвращает-false)
+    - [SDL_Vulkan_GetInstanceExtensions возвращает NULL](#sdl_vulkan_getinstanceextensions-возвращает-null--sdl_vulkan_createsurface-не-работает)
+    - [Окно не отображается или сразу закрывается](#окно-не-отображается-или-сразу-закрывается)
 - [Runtime](#runtime)
-  - [События не приходят](#события-не-приходят--sdl_pollevent-в-цикле-ничего-не-возвращает)
-  - [DLL SDL не найдена (Windows)](#dll-sdl-не-найдена-при-запуске-windows)
-  - [Приложение зависает при закрытии](#приложение-зависает-при-закрытии)
-  - [Кастомный путь к Vulkan loader](#нужен-кастомный-путь-к-vulkan-loader)
+    - [События не приходят](#события-не-приходят--sdl_pollevent-в-цикле-ничего-не-возвращает)
+    - [DLL SDL не найдена (Windows)](#dll-sdl-не-найдена-при-запуске-windows)
+    - [Приложение зависает при закрытии](#приложение-зависает-при-закрытии)
+    - [Кастомный путь к Vulkan loader](#нужен-кастомный-путь-к-vulkan-loader)
 - [Сборка](#сборка)
-  - [undefined reference to SDL_main](#undefined-reference-to-sdl_main--линковка-не-находит-entry-point)
+    - [undefined reference to SDL_main](#undefined-reference-to-sdl_main--линковка-не-находит-entry-point)
 - [См. также](#см-также)
 
 ---

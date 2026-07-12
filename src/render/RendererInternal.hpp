@@ -65,7 +65,7 @@ void RecordGraphicsCommands(
 	RenderState &render,
 	const SwapchainState &swapchain,
 	const FrameRenderData &frameRenderData,
-	const VulkanContextState &context,
+	VulkanContextState &context,
 	VkCommandBuffer cmd,
 	uint32_t imageIndex);
 

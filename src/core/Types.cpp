@@ -18,6 +18,7 @@ import projectv.string_id;
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
+#include "render/PostFx.hpp"
 #include "render/SkyAtmosphere.hpp"
 #include "render/VolumetricFog.hpp"
 #include "voxel/VoxelWorld.hpp"
@@ -41,6 +42,7 @@ void ShutdownVulkan(AppState *state)
 		projectv::render::DestroyWorldGenPipelines(&state->context(), &state->render());
 		projectv::render::DestroySkyAtmospherePipelines(&state->context(), &state->render());
 		projectv::render::DestroyVolumetricFogResources(&state->context(), &state->render());
+		projectv::render::DestroyPostFxResources(&state->context(), &state->render());
 		projectv::render::DestroySkyLutResources(&state->context(), &state->render());
 		projectv::render::DestroyRayTracedShadowResources(&state->context(), &state->render());
 		delete state->render().rayTracedShadows;

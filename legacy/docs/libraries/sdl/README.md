@@ -121,11 +121,11 @@ flowchart TD
 
 - **C11** или **C++11** (или новее)
 - **Платформенные зависимости** (линкуются автоматически):
-  - Windows: нет зависимостей
-  - Linux: `-lpthread -ldl -lm -lrt`
-  - macOS:
-    `-framework CoreFoundation -framework CoreAudio -framework AudioToolbox -framework ForceFeedback -framework Carbon -framework IOKit -framework CoreVideo`
-  - Android: `-llog -landroid`
+    - Windows: нет зависимостей
+    - Linux: `-lpthread -ldl -lm -lrt`
+    - macOS:
+      `-framework CoreFoundation -framework CoreAudio -framework AudioToolbox -framework ForceFeedback -framework Carbon -framework IOKit -framework CoreVideo`
+    - Android: `-llog -landroid`
 
 ### Поддерживаемые платформы
 

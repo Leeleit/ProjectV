@@ -17,14 +17,14 @@
 
 ## Ядро ECS
 
-| Термин            | Объяснение                                                                                                                                                                                                                             |
-|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **ECS**           | Entity Component System — подход к организации кода и данных. Сущности (entities) — уникальные объекты; компоненты (components) — данные; системы (systems) — логика над entities, matching компоненты.                                |
+| Термин            | Объяснение                                                                                                                                                                                                                                   |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **ECS**           | Entity Component System — подход к организации кода и данных. Сущности (entities) — уникальные объекты; компоненты (components) — данные; системы (systems) — логика над entities, matching компоненты.                                      |
 | **flecs::world**  | C++: контейнер всех ECS-данных. `flecs::world ecs;` — один world на приложение. См. [world.hpp](../../../../external/flecs/include/flecs/addons/cpp/impl/world.hpp). В C: `ecs_world_t*`, `ecs_init()` / `ecs_fini()`.                       |
 | **flecs::entity** | C++: класс с read/write операциями. `world.entity()` — создать; `e.set<T>()`, `e.get<T>()`, `e.destruct()`. См. [entity.hpp](../../../../external/flecs/include/flecs/addons/cpp/entity.hpp). В C: [api-reference](api-reference.md#entity). |
-| **Entity**        | Уникальная сущность в мире. 64-битный id. Сама по себе не несёт данных; данные — в компонентах.                                                                                                                                        |
+| **Entity**        | Уникальная сущность в мире. 64-битный id. Сама по себе не несёт данных; данные — в компонентах.                                                                                                                                              |
 | **ecs_entity_t**  | C API: `typedef ecs_id_t ecs_entity_t` ([flecs.h:381](../../../../external/flecs/include/flecs.h)). Младшие 32 бита — ID, старшие — версия. Ноль — невалидный.                                                                               |
-| **ecs_is_alive**  | Проверяет, жива ли entity. C++: `entity.is_alive()`. Удалённые id переиспользуются — старая ссылка невалидна.                                                                                                                          |
+| **ecs_is_alive**  | Проверяет, жива ли entity. C++: `entity.is_alive()`. Удалённые id переиспользуются — старая ссылка невалидна.                                                                                                                                |
 
 ---
 
@@ -92,16 +92,16 @@
 
 ## Прочее
 
-| Термин             | Объяснение                                                                                                                                                                                  |
-|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **flecs::iter**    | C++ итератор в callback системы. `it.entity(i)`, `it.count()`, `it.delta_time()`, `it.world()`. См. [api-reference](api-reference.md#iterator-ecs_iter_t).                                  |
+| Термин             | Объяснение                                                                                                                                                                                        |
+|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **flecs::iter**    | C++ итератор в callback системы. `it.entity(i)`, `it.count()`, `it.delta_time()`, `it.world()`. См. [api-reference](api-reference.md#iterator-ecs_iter_t).                                        |
 | **ecs_iter_t**     | C итератор. Поля: `entities`, `count`, `delta_time`, `world`, `param`. Компоненты — макрос `ecs_field(it, Type, index)` ([flecs_c.h](../../../../external/flecs/include/flecs/addons/flecs_c.h)). |
-| **ecs_field**      | C макрос: `ecs_field(it, Position, 0)` возвращает `Position*` на массив размера `it->count`. Индекс — номер term (0-based).                                                                 |
-| **ecs_each**       | C макрос: `ecs_iter_t it = ecs_each(world, Position); while (ecs_each_next(&it)) { ... }` — итерация по одному компоненту без query.                                                        |
-| **Module**         | C++: `struct M { M(flecs::world& w){ ... } }; world.import<M>()`. C: `ECS_IMPORT(world, MyModule)`. Дети модуля — по ChildOf.                                                               |
-| **Addon**          | Опциональный модуль flecs. При `FLECS_CUSTOM_BUILD` (distr) — кастомный набор.                                                                                                              |
-| **FLECS_DEBUG**    | Макрос. Assert'ы и проверки. Замедляет, помогает при отладке.                                                                                                                               |
-| **Flecs Explorer** | Веб-инструмент для entities, компонентов, запросов. Требует REST addon.                                                                                                                     |
+| **ecs_field**      | C макрос: `ecs_field(it, Position, 0)` возвращает `Position*` на массив размера `it->count`. Индекс — номер term (0-based).                                                                       |
+| **ecs_each**       | C макрос: `ecs_iter_t it = ecs_each(world, Position); while (ecs_each_next(&it)) { ... }` — итерация по одному компоненту без query.                                                              |
+| **Module**         | C++: `struct M { M(flecs::world& w){ ... } }; world.import<M>()`. C: `ECS_IMPORT(world, MyModule)`. Дети модуля — по ChildOf.                                                                     |
+| **Addon**          | Опциональный модуль flecs. При `FLECS_CUSTOM_BUILD` (distr) — кастомный набор.                                                                                                                    |
+| **FLECS_DEBUG**    | Макрос. Assert'ы и проверки. Замедляет, помогает при отладке.                                                                                                                                     |
+| **Flecs Explorer** | Веб-инструмент для entities, компонентов, запросов. Требует REST addon.                                                                                                                           |
 
 ---
 

@@ -77,9 +77,22 @@ artifact — see WARNING header in that file.
   multi-sampled (follow-up). Fixed a related regression: `colorAttachment1.storeOp` had been hardcoded to `DONT_CARE`,
   which is correct for the MSAA path (attachment consumed by auto-resolve) but invalid for the single-sample path (TAA
   resolve reads the attachment as a sampled image, which requires `STORE`). Restored `STORE` for the single-sample path.
+- PostFx descriptor/image correctness for the new bloom + aerial-perspective pass: descriptor bindings switched to
+  `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` to match shader `sampler2D`; 16 sets split across frames so an in-flight
+  set is never overwritten; per-mip views created once outside the command buffer; all bloom mips transitioned to
+  `GENERAL` on create/resize; depth image transitioned to `DEPTH_READ_ONLY_OPTIMAL` before composite; `postFxExtent`
+  compared on resize to recreate resources when the swapchain changes.
 
 ### Added
 
+- Phase 7 rendering polish: VCT cone density upgrade (`voxel.frag`), ACES Filmic tone mapping + exposure controls, and
+  post-processing chain (bloom + aerial perspective). All three TODO items closed in this session.
+- Bloom post-FX in `src/render/PostFx.cpp`: 5-mip downsample chain, threshold/soft knee, additive composite. Env-gated
+  via `PROJECTV_BLOOM=1`.
+- Aerial perspective (distance-based fog) in `src/render/PostFx.cpp`, separate from existing `VolumetricFog`. Env-gated
+  via `PROJECTV_AERIAL_PERSPECTIVE=1`.
+- `postFxDescriptorSets` (16 sets, 8 per frame) and per-mip `bloomScratchMipViews` in `RenderState` to support the new
+  post-FX pass without updating in-flight descriptor sets.
 - `viewProjectionUnjittered` to `GraphicsPushConstants` (`src/core/Types.hpp:213-229`, offset 128, `static_assert`
   enforces layout). C++ struct mirrors byte-exact in `voxel.frag`, `voxel.vert`, `probe_update.comp` push constant
   blocks.

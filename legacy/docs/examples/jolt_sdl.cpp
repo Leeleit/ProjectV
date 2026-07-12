@@ -363,7 +363,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 	cout << "  - ESC: Exit" << endl;
 	cout << "  - Close window: Exit" << endl;
 	cout << "  - Sphere will fall and eventually go to sleep" << endl;
-	cout << "  - Physics info printed every second (60 frames)\n" << endl;
+	cout << "  - Physics info printed every second (60 frames)\n"
+		 << endl;
 
 	return SDL_APP_CONTINUE;
 }

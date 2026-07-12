@@ -24,10 +24,11 @@ PRE-RESET SNAPSHOT — ARCHIVED 2026-06-24
 > - `agent/workspace.md` (текущий контекст + active tasks)
 > - `TODO.md` (roadmap)
 > - `AGENTS.md` (протокол работы агента)
-================================================================================
--->
+    ================================================================================
+    -->
 
 # Workspace
+
 Текущий рабочий контекст: снимок проекта + активные задачи + недавние milestones.
 Долговечные факты и договорённости — `agent/knowledge.md`. Протокол — `AGENTS.md`. Roadmap — `TODO.md`.
 
@@ -35,104 +36,372 @@ PRE-RESET SNAPSHOT — ARCHIVED 2026-06-24
 
 ## 1. Now
 
-**2026-06-24 session 24x (Refraction self-intersection fixed, copy-pasted DDA chunk traversal consolidated in voxel.frag, this session).** Build green, ctest 37/37 pass. Consolidating chunk DDA traversal in `voxel.frag` and addressing operator comments:
-- Refraction self-intersection fixed: refraction rays are now traced ignoring transparent materials (both Glass and Fluid) by passing parameters `ignoreGlass=true, ignoreFluid=true` to `TraceVoxelIntersection`.
-- Consolidated three copy-pasted DDA loops (`TraceRtxAmbientOcclusionRay`, `EvaluateVoxelLighting`, and `TraceVoxelIntersection`) inside `voxel.frag` into a unified `TraceVoxelIntersection` helper by adding parameters `ignoreGlass`, `ignoreFluid`, and `rayFlags` for hardware optimizations. This removes 150+ lines of duplicate GLSL code.
-- Verified build and allocations: confirmed storage image formats `r11f_g11f_b10f` (irradiance) and `rg16f` (distance) are allocated with `VK_IMAGE_USAGE_STORAGE_BIT` in `RtxGiProbes::AllocateTextures`.
-- Confirmed push constants alignment: verified that `GraphicsPushConstants` matches `PushConstants` struct in `probe_update.comp` exactly.
-- Confirmed homogeneous layout for `SceneLightingBuffer` in `probe_update.comp` (matches `voxel.frag` exactly, which is the current codebase constraint).
+**2026-06-24 session 24x (Refraction self-intersection fixed, copy-pasted DDA chunk traversal consolidated in
+voxel.frag, this session).** Build green, ctest 37/37 pass. Consolidating chunk DDA traversal in `voxel.frag` and
+addressing operator comments:
+
+- Refraction self-intersection fixed: refraction rays are now traced ignoring transparent materials (both Glass and
+  Fluid) by passing parameters `ignoreGlass=true, ignoreFluid=true` to `TraceVoxelIntersection`.
+- Consolidated three copy-pasted DDA loops (`TraceRtxAmbientOcclusionRay`, `EvaluateVoxelLighting`, and
+  `TraceVoxelIntersection`) inside `voxel.frag` into a unified `TraceVoxelIntersection` helper by adding parameters
+  `ignoreGlass`, `ignoreFluid`, and `rayFlags` for hardware optimizations. This removes 150+ lines of duplicate GLSL
+  code.
+- Verified build and allocations: confirmed storage image formats `r11f_g11f_b10f` (irradiance) and `rg16f` (distance)
+  are allocated with `VK_IMAGE_USAGE_STORAGE_BIT` in `RtxGiProbes::AllocateTextures`.
+- Confirmed push constants alignment: verified that `GraphicsPushConstants` matches `PushConstants` struct in
+  `probe_update.comp` exactly.
+- Confirmed homogeneous layout for `SceneLightingBuffer` in `probe_update.comp` (matches `voxel.frag` exactly, which is
+  the current codebase constraint).
 - Saved safety patch to `/tmp/before_24x_20260624_184800.patch`.
 
-**2026-06-23 session 23x (RTX shadow instability, blocky shadows, glass shadow casting bugs fixed, and remaining RTX milestones 5.5, 5.6, 5.7 implemented, this session).** Build green, ctest 37/37 pass + `ProjectVRayTracedShadowTests` passed. Root causes of RTX shadow instability, chunk-aligned blocky shadows, solid glass shadows, and pitch-black occlusion identified and fixed:
-- In `voxel_rtx_shadow.rint`, corrected the coordinate space mismatch of `tMaxAxis` (now initialized relative to `rayOriginWorld` instead of the local variable `pos`), and changed the voxel hit reporting to use `tCurrent` (the entry distance to the cell) instead of `tMinCell` (furthest corner). This prevents reconstructing the surface positions close to the camera near plane.
-- In `voxel_rtx_shadow.rint`, fixed DDA traversal loop by updating `tCurrent = tMaxAxis.{axis}` at each step (previously `tCurrent` remained stuck at `max(tEntry, rayTmin)` causing hits to project onto the chunk boundary faces instead of the actual hit voxels, resulting in blocky chunk-sized shadows).
-- In `voxel_rtx_shadow.rint`, added a check to ignore `Glass` (material ID `1u`) during shadow ray traversal to prevent transparent glass shells from casting solid shadows.
-- In `voxel_rtx_shadow.rgen`, changed Step 1 (primary ray) to use `gl_RayFlagsOpaqueEXT` instead of `gl_RayFlagsTerminateOnFirstHitEXT` to guarantee finding the closest hit point (visible surface) rather than bailing on the first found BVH node.
-- Biasing for Step 2 (shadow ray) changed to shift the origin along `sunDir * 0.02` (towards the light source) instead of `viewDir * 0.05` (which was pushing the origin inside the voxel).
-- In `Renderer.cpp`, removed `kRtxShadowAabbShrinkMeters` shrink offset from chunk AABBs, restoring exact bounds now that self-shadowing is cleanly handled by ray biasing.
-- In `voxel.frag`, blended binary shadow visibility with a strength factor of `0.75` (25% ambient sun bleed) using `mix(0.25, 1.0, rtxLit)` in `ComputeSunShadowSample` to prevent shadows from being pitch-black.
-- In `VulkanGraphicsPipeline.cpp`, removed loading of `voxel_shadow.vert.spv` and `voxel_shadow.frag.spv` and the creation of their shader modules. These shaders were deleted in session 20x but the loading logic was still checking for them unconditionally, causing a startup crash loop.
-- In `src/CMakeLists.txt`, replaced the target-level shader dependency and POST_BUILD copy command with a custom `CopyShaders` target that always runs and depends on `Shaders`. This ensures compiled shader `.spv` files are copied to the `bin/` directory on every build, even if the `ProjectV` C++ binary itself is up-to-date.
-- Replaced the stub of `SampleRtxGiProbeIrradiance` in `voxel.frag` with proper DDGI probe volume sampling using trilinear interpolation among the 8 nearest probes, normal-based cosine weighting, and Chebyshev depth visibility test.
-- Implemented analytical refracted ray trace (`TraceRtxRefractionRay`) and integrated refractive lookup in the glass/fluid shaders path using the real index of refraction (1.5 for glass, 1.33 for fluid) to replace fake transmission.
-- Verified and documented `TraceRtxSmoothSpecularRay` which implements a second-bounce ray trace for multi-bounce specular reflections and specular GI.
-- Updated `COMMENTS.md` with design rationale for shader fixes and CMake dependencies, and logged changes in `CHANGELOG.md` and `TODO.md`.
+**2026-06-23 session 23x (RTX shadow instability, blocky shadows, glass shadow casting bugs fixed, and remaining RTX
+milestones 5.5, 5.6, 5.7 implemented, this session).** Build green, ctest 37/37 pass + `ProjectVRayTracedShadowTests`
+passed. Root causes of RTX shadow instability, chunk-aligned blocky shadows, solid glass shadows, and pitch-black
+occlusion identified and fixed:
 
-**2026-06-22 session 22x (5.2.E Voxel-aware procedural intersection shadows — implementation complete, this session).** Build green, ctest 37/37 pass + `ProjectVRayTracedShadowTests` 29/29 sub-tests (25 baseline + 4 new: `TestRtxShadowPipelineClassHasGetters`, `TestRtxShadowSbtClassHasGetters`, `TestRtxShadowShaderFilesExistInBuildDirectory`, `TestRtxShadowIntersectionShaderUsesVoxelDdaPattern`). RTX 3060 Ti smoke log clean: `ProbeHardwareRayTracingSupport` now reports `rayTracingPipeline=1`, `RtxShadowPipeline: ready (sbtHandleSize=32 sbtBaseAlign=64 sbtHandleAlign=32)`, `RtxShadowSBT: ready (size=192 bytes, rgen=64 miss=64 hit=64)`, `VoxelAwareRtxShadows: ready (image=1920x1080, frames=2)`, `RayTracedShadows: instances=15 blasRebuilds=30 tlasRebuilds=N dispatch=N fallback=0` — dispatch counter increments per frame confirming `vkCmdTraceRaysKHR` is reaching the GPU. **0 Vulkan validation layer errors, 0 VMA allocator assertions on exit**. Safety-net: `/tmp/before_22x_20260622_235500_rtx_voxel_aware.patch` (592 KB, from session 21x baseline). No new commits — operator review pending.
+- In `voxel_rtx_shadow.rint`, corrected the coordinate space mismatch of `tMaxAxis` (now initialized relative to
+  `rayOriginWorld` instead of the local variable `pos`), and changed the voxel hit reporting to use `tCurrent` (the
+  entry distance to the cell) instead of `tMinCell` (furthest corner). This prevents reconstructing the surface
+  positions close to the camera near plane.
+- In `voxel_rtx_shadow.rint`, fixed DDA traversal loop by updating `tCurrent = tMaxAxis.{axis}` at each step (previously
+  `tCurrent` remained stuck at `max(tEntry, rayTmin)` causing hits to project onto the chunk boundary faces instead of
+  the actual hit voxels, resulting in blocky chunk-sized shadows).
+- In `voxel_rtx_shadow.rint`, added a check to ignore `Glass` (material ID `1u`) during shadow ray traversal to prevent
+  transparent glass shells from casting solid shadows.
+- In `voxel_rtx_shadow.rgen`, changed Step 1 (primary ray) to use `gl_RayFlagsOpaqueEXT` instead of
+  `gl_RayFlagsTerminateOnFirstHitEXT` to guarantee finding the closest hit point (visible surface) rather than bailing
+  on the first found BVH node.
+- Biasing for Step 2 (shadow ray) changed to shift the origin along `sunDir * 0.02` (towards the light source) instead
+  of `viewDir * 0.05` (which was pushing the origin inside the voxel).
+- In `Renderer.cpp`, removed `kRtxShadowAabbShrinkMeters` shrink offset from chunk AABBs, restoring exact bounds now
+  that self-shadowing is cleanly handled by ray biasing.
+- In `voxel.frag`, blended binary shadow visibility with a strength factor of `0.75` (25% ambient sun bleed) using
+  `mix(0.25, 1.0, rtxLit)` in `ComputeSunShadowSample` to prevent shadows from being pitch-black.
+- In `VulkanGraphicsPipeline.cpp`, removed loading of `voxel_shadow.vert.spv` and `voxel_shadow.frag.spv` and the
+  creation of their shader modules. These shaders were deleted in session 20x but the loading logic was still checking
+  for them unconditionally, causing a startup crash loop.
+- In `src/CMakeLists.txt`, replaced the target-level shader dependency and POST_BUILD copy command with a custom
+  `CopyShaders` target that always runs and depends on `Shaders`. This ensures compiled shader `.spv` files are copied
+  to the `bin/` directory on every build, even if the `ProjectV` C++ binary itself is up-to-date.
+- Replaced the stub of `SampleRtxGiProbeIrradiance` in `voxel.frag` with proper DDGI probe volume sampling using
+  trilinear interpolation among the 8 nearest probes, normal-based cosine weighting, and Chebyshev depth visibility
+  test.
+- Implemented analytical refracted ray trace (`TraceRtxRefractionRay`) and integrated refractive lookup in the
+  glass/fluid shaders path using the real index of refraction (1.5 for glass, 1.33 for fluid) to replace fake
+  transmission.
+- Verified and documented `TraceRtxSmoothSpecularRay` which implements a second-bounce ray trace for multi-bounce
+  specular reflections and specular GI.
+- Updated `COMMENTS.md` with design rationale for shader fixes and CMake dependencies, and logged changes in
+  `CHANGELOG.md` and `TODO.md`.
 
-- **Phase 0: Web-search gate** — Vulkan spec on `VK_KHR_ray_tracing_pipeline`, SBT alignment (`shaderGroupHandleSize`, `shaderGroupBaseAlignment`, `shaderGroupHandleAlignment`), procedural hit group spec, Khronos Tutorial on intersection shaders. Reference: `nvpro-samples/vk_raytracing_tutorial_NV` (procedural geometry pattern), `jedjoud10/vulkan-voxel-raytracer` (voxel DDA + Octree).
-- **Phase 1: `VK_KHR_ray_tracing_pipeline` extension + feature struct** — `VulkanBootstrap.cpp` adds `kRayTracingPipelineExtension` to deviceExtensions and chains `VkPhysicalDeviceRayTracingPipelineFeaturesKHR { rayTracingPipeline = VK_TRUE }` into device create pNext. `HardwareRayTracingProbe.{hpp,cpp}` extended with shader group alignment fields (defaults: handleSize=32, baseAlign=64, handleAlign=32) queried from `VkPhysicalDeviceRayTracingPipelinePropertiesKHR` when extension is present. Smoke log now reports `rayTracingPipeline=1`.
-- **Phase 2: 4 shader stages** — new files `src/shaders/voxel_rtx_shadow.{rgen,rint,rchit,rmiss}` (~370 LoC GLSL). rgen reconstructs world position from `gl_LaunchIDEXT.xy` + inverse view-projection matrix, traces one ray toward sun direction via `traceRayEXT`. rint (procedural intersection) reads `gl_InstanceCustomIndexEXT` → chunkIndex, fetches `chunkDescriptors[chunkIndex]` (origin/extent/voxelDataInfo), runs Amanatides-Woo DDA over `chunkVoxelWords[]` from `tMin` to `tMax` (chunk-slab), calls `reportIntersectionEXT(hitDistance, 0u)` on first occupied voxel. rchit writes `payload.shadowFactor = 0.0`. rmiss writes `1.0`. CMake: 4 files added to `SHADERS` list and compiled via `glslc` to `build/linux-clang-debug/src/voxel_rtx_shadow.{rgen,rint,rchit,rmiss}.spv`.
-- **Phase 3-4: `RtxShadowPipeline` + `RtxShadowSBT` classes** — new files `src/render/RtxShadowPipeline.{hpp,cpp}` (~250 LoC) and `RtxShadowSBT.{hpp,cpp}` (~150 LoC). Pipeline class loads 4 shader modules via `ReadShaderFile`, creates a dedicated descriptor set layout (bindings 1 = chunkDescriptors SSBO, 3 = sceneLighting SSBO, 4 = chunkVoxelWords SSBO, 13 = rtxTlas acceleration structure, 18 = rtxShadowMask storage image, 19 = rtxShadowCamera UBO), pipeline layout, and `vkCreateRayTracingPipelinesKHR` with 4 stages (rgen/rint/rchit/rmiss) + 3 shader groups (general rgen, general miss, procedural hit with rint+rchit). SBT class allocates a 192-byte buffer (`VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`), queries handles via `vkGetRayTracingShaderGroupHandlesKHR`, copies into the SBT buffer respecting `shaderGroupBaseAlignment` (64) for both stride and size (required by spec VUID-vkCmdTraceRaysKHR-size-04023), exposes `GetStridedDeviceAddressRegionKHR` for `vkCmdTraceRaysKHR` dispatch.
-- **Phase 5: Shadow mask image + camera UBO + descriptor sets per frame** — `RayTracedShadows` extended with `m_shadowMaskImage` (R8_UNORM, 1920×1080, `VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT`), `m_shadowMaskImageView`, per-frame `m_rtxFrames[2]` (camera UBO 96 bytes = mat4 inverseViewProjection + vec4 cameraPositionAndScreenWidth + vec4 cameraForwardAndScreenHeight), per-frame descriptor set, descriptor pool. `RecordVoxelAwareRtxShadowPass` records `vkCmdPipelineBarrier` UNDEFINED→GENERAL, binds RT pipeline + descriptor set, dispatches `vkCmdTraceRaysKHR`, then transitions GENERAL→SHADER_READ_ONLY_OPTIMAL for fragment shader sampling. `GetShadowMaskImageView()` + `IsVoxelAwareRtxActive()` getters exposed for graphics descriptor wiring.
-- **Phase 6: Dispatch wiring in Renderer.cpp** — `Renderer::DrawFrame` calls `RecordVoxelAwareRtxShadowPass` between BLAS build + TLAS update and `RecordGraphicsCommands`. Forward `viewProjection` matrix is inverted per-frame via `projectv::math::inverse()`; `cameraPosition` and `cameraForward` extracted from `graphicsPushConstants`. Buffer handles sourced from `frame->renderData.chunkDescriptorBuffer`, `shadowFrameResources.sceneLightingBuffer`, `frame->renderData.chunkVoxelPayloadBuffer`. Profile zone: `RecordVoxelAwareRtxShadowPass`.
-- **Phase 7: Voxel.frag integration + fallback image** — new `kGraphicsDescriptorBindings[18]` entry (COMBINED_IMAGE_SAMPLER, FRAGMENT_BIT) + `kGraphicsCombinedImageSamplerDescriptorPoolSize` bumped 7→8. New free function `CreateRtxShadowMaskFallbackOnly` allocates a 1×1 R8 fallback image (with sampler attached to binding 18) so the slot is always valid before `RefreshGraphicsResourceBindings` runs. `RefreshGraphicsResourceBindings` writes binding 18 = shadow mask view (or fallback if voxel-aware path inactive, or skipped entirely if both are null). `voxel.frag` adds `layout(set = 0, binding = 18) uniform sampler2D rtxShadowMask;` and `ComputeSunShadowSample` for the RTX path now does `texture(rtxShadowMask, gl_FragCoord.xy / vec2(textureSize(rtxShadowMask, 0))).r` instead of inline `TraceRtxSunShadowRay`. The old `TraceRtxSunShadowRay` ray-query helper has been removed entirely (session 22x cleanup after operator-reported regression: legacy code no longer needed).
-- **Phase 7.1 (operator-reported follow-up): VMA assertion on exit + shadow mask first-frame garbage + legacy inline ray-query helper** — three issues found after first operator smoke: (a) `VmaDeviceMemoryBlock::Destroy` asserted because `render->rtxShadowMaskFallbackImage/Allocation` was never freed before `vmaDestroyAllocator` ran. Fix: `ShutdownVulkan` in `core/Types.cpp` now calls `projectv::render::DestroyRtxShadowMaskFallbackOnly` immediately after `delete state->render().rayTracedShadows`. (b) Shadow mask image was created with `VK_IMAGE_LAYOUT_UNDEFINED` and sampled by `voxel.frag` on the first frame before `vkCmdTraceRaysKHR` produced valid per-pixel data, producing garbage reads on black surfaces. Fix: new `RayTracedShadows::InitializeShadowMaskClear` issues a one-shot command buffer that transitions the image UNDEFINED → TRANSFER_DST_OPTIMAL, calls `vkCmdClearColorImage` with `clearValue.float32 = {1, 1, 1, 1}` (fully lit), then transitions TRANSFER_DST_OPTIMAL → GENERAL. Image usage flag also extended to include `VK_IMAGE_USAGE_TRANSFER_DST_BIT` so the clear is valid. (c) `TraceRtxSunShadowRay` + `kRtxSunShadowMaxDistanceMeters` constant deleted from `voxel.frag` (no callers remain after `ComputeSunShadowSample` switch to texture sampling) — this is the source of the "следы старых non-RTX теней" operator observed (legacy inline ray-query code path being silently mixed with new RT pipeline path). `TestRtxSunShadowRayHelperExistsInShader` updated to check for `texture(rtxShadowMask` and `binding = 18` substrings instead of the deleted helper, and migrated from `FILE *` + 16384-byte buffer to `std::ifstream` (the previous buffer was too small to reach the new binding-18 lines added near the end of the now-larger shader).
-- **Phase 7.2 (second operator follow-up): self-shadow at large T_min + shadow mask extent vs swapchain extent** — two more issues found after second operator smoke where the platform progressively turned black as the camera moved along the floor: (a) The ray generation shader used `T_min = 0.001` while launching rays from the camera near plane (NOT from the shaded surface fragment). When the near-plane ray origin lies inside a floor voxel, the ray immediately hits that same voxel and reads shadowFactor = 0.0 → the floor fragment reads "in shadow" → black platform. With VoxelLab voxel size 1.0 m the per-voxel AABB BLAS makes this hit almost inevitable on floor pixels. Fix: `voxel_rtx_shadow.rgen` now uses `T_min = kRtxSunShadowTMinMeters = 0.5` (half voxel size) — the ray escapes the launch voxel before the procedural intersection shader starts its DDA walk. (b) Shadow mask extent was hardcoded to 1920×1080 but the actual SDL window / swapchain extent is 1896×1034 (or whatever the OS picks). When the swapchain extent != shadow mask extent, fragment shader sampling reads past the shadow mask bounds → garbage. Worse, after swapchain recreation the new image view's handle changes but the graphics descriptor set's binding-18 entry still references the destroyed old view, causing `vkCmdDrawIndirect` to fail with `imageView VkImageView 0x0 is invalid or has been destroyed`. Fix: new `RayTracedShadows::RecreateShadowMaskForExtent(context, width, height)` destroys the old image/view and recreates them at the requested size, then re-runs `InitializeShadowMaskClear` to refill with 1.0. The swapchain recreation path (`RecreateSwapchain` in `VulkanSwapchain.cpp`) now invokes this helper right after `RefreshGraphicsResourceBindings`, and then re-invokes `RefreshGraphicsResourceBindings` to update the graphics descriptor set's binding-18 entry to point at the freshly-created image view. Smoke log now reports `Render: RayTracedShadows: shadow mask resized to 1896x1034` confirming both the size match and the subsequent descriptor refresh.
-- **Phase 7.3 (third operator follow-up — RCA from "agent umnee"): self-shadow root cause + 2-pass ray trace** — the `T_min = 0.5` workaround only helped for a subset of camera positions; when the camera was close enough to the floor that the near-plane origin landed inside a floor voxel AABB, the ray still self-hit. Per RCA in agent's analysis, the **root cause** is that the ray generation shader launches the shadow ray from the camera near plane (not from the surface fragment position). For any floor pixel the near-plane origin can lie within the floor voxel's chunk BLAS AABB, so the shadow ray immediately hits that same voxel → shadowFactor=0.0. Fix: replaced single-shot "near-plane → sun" trace with a **2-pass trace** in `voxel_rtx_shadow.rgen`. Step 1: primary ray from near plane along view direction with `T_max = length(worldFarPos - worldOrigin)` finds the actual surface fragment position; the closest-hit shader writes `gl_HitTEXT` into a new `payload.hitT` field of `ShadowPayload`. Step 2: only if primary hit, fire a second shadow ray from `worldOrigin + viewDir * hitT + viewDir * 0.05` (small bias along outgoing view direction so it can't re-hit the launch voxel) toward sun direction with `T_max = 256`. Sky pixels (primary miss) keep `shadowFactor = 1.0` (lit, no shadow needed). All three stage shaders (`rgen`, `rchit`, `rmiss`) updated to share `struct ShadowPayload { float shadowFactor; float hitT; }` so the closest-hit write of `hitT` is visible to the raygen primary pass. `rchit` writes `shadowPayload.hitT = gl_HitTEXT; shadowPayload.shadowFactor = 0.0;` (the 0.0 is overwritten by the second trace in rgen if the shadow ray misses, which is what we want). `rmiss` writes `shadowPayload.hitT = -1.0;` to signal the raygen that the primary trace missed. Per agent's analysis this also has the side-benefit of `T_max = viewSegmentLength` for the primary ray, bounding the search to the visible scene. Performance impact: 2 rays per pixel worst case (sky pixel = 1 ray, occluded pixel = 2 rays), but shadow ray is short (≤256m) and primary ray is short (≤viewSegmentLength ~ few meters), well within RT core budget on RTX 3060 Ti.
-- **Phase 8: Sub-tests** — 4 new sub-tests in `ProjectVRayTracedShadowTests`. `TestRtxShadowPipelineClassHasGetters` verifies default-constructed state and group indices (rgen=0, miss=1, hit=2). `TestRtxShadowSbtClassHasGetters` verifies default deviceAddress/stride/size are zero for all four regions (raygen/miss/hit/callable). `TestRtxShadowShaderFilesExistInBuildDirectory` checks that all 4 `.spv` files exist in `PROJECTV_BUILD_DIR` after build. `TestRtxShadowIntersectionShaderUsesVoxelDdaPattern` reads the GLSL source of `voxel_rtx_shadow.rint` and verifies it contains `gl_InstanceCustomIndexEXT`, `reportIntersectionEXT`, `chunkVoxelWords`, and `voxelDataInfo` substrings.
-- **Phase 9: CMake wiring + ctest env propagation** — `src/CMakeLists.txt` adds `RtxShadowPipeline.cpp` + `RtxShadowSBT.cpp` to `ProjectV` sources. `tests/CMakeLists.txt` adds the same two files to `ProjectVRayTracedShadowTests` sources and sets `ENVIRONMENT "PROJECTV_BUILD_DIR=$<TARGET_FILE_DIR:ProjectVRayTracedShadowTests>/../src"` so ctest finds the shader binaries.
-- **Phase 10: Doc-sync (this entry)** — `TODO.md` strategic status updated, `agent/workspace.md` this entry, `COMMENTS.md` and `CHANGELOG.md` pending follow-up. Safety-net patch preserved at `/tmp/before_22x_20260622_235500_rtx_voxel_aware.patch`.
+**2026-06-22 session 22x (5.2.E Voxel-aware procedural intersection shadows — implementation complete, this session).**
+Build green, ctest 37/37 pass + `ProjectVRayTracedShadowTests` 29/29 sub-tests (25 baseline + 4 new:
+`TestRtxShadowPipelineClassHasGetters`, `TestRtxShadowSbtClassHasGetters`,
+`TestRtxShadowShaderFilesExistInBuildDirectory`, `TestRtxShadowIntersectionShaderUsesVoxelDdaPattern`). RTX 3060 Ti
+smoke log clean: `ProbeHardwareRayTracingSupport` now reports `rayTracingPipeline=1`,
+`RtxShadowPipeline: ready (sbtHandleSize=32 sbtBaseAlign=64 sbtHandleAlign=32)`,
+`RtxShadowSBT: ready (size=192 bytes, rgen=64 miss=64 hit=64)`,
+`VoxelAwareRtxShadows: ready (image=1920x1080, frames=2)`,
+`RayTracedShadows: instances=15 blasRebuilds=30 tlasRebuilds=N dispatch=N fallback=0` — dispatch counter increments per
+frame confirming `vkCmdTraceRaysKHR` is reaching the GPU. **0 Vulkan validation layer errors, 0 VMA allocator assertions
+on exit**. Safety-net: `/tmp/before_22x_20260622_235500_rtx_voxel_aware.patch` (592 KB, from session 21x baseline). No
+new commits — operator review pending.
+
+- **Phase 0: Web-search gate** — Vulkan spec on `VK_KHR_ray_tracing_pipeline`, SBT alignment (`shaderGroupHandleSize`,
+  `shaderGroupBaseAlignment`, `shaderGroupHandleAlignment`), procedural hit group spec, Khronos Tutorial on intersection
+  shaders. Reference: `nvpro-samples/vk_raytracing_tutorial_NV` (procedural geometry pattern),
+  `jedjoud10/vulkan-voxel-raytracer` (voxel DDA + Octree).
+- **Phase 1: `VK_KHR_ray_tracing_pipeline` extension + feature struct** — `VulkanBootstrap.cpp` adds
+  `kRayTracingPipelineExtension` to deviceExtensions and chains
+  `VkPhysicalDeviceRayTracingPipelineFeaturesKHR { rayTracingPipeline = VK_TRUE }` into device create pNext.
+  `HardwareRayTracingProbe.{hpp,cpp}` extended with shader group alignment fields (defaults: handleSize=32,
+  baseAlign=64, handleAlign=32) queried from `VkPhysicalDeviceRayTracingPipelinePropertiesKHR` when extension is
+  present. Smoke log now reports `rayTracingPipeline=1`.
+- **Phase 2: 4 shader stages** — new files `src/shaders/voxel_rtx_shadow.{rgen,rint,rchit,rmiss}` (~370 LoC GLSL). rgen
+  reconstructs world position from `gl_LaunchIDEXT.xy` + inverse view-projection matrix, traces one ray toward sun
+  direction via `traceRayEXT`. rint (procedural intersection) reads `gl_InstanceCustomIndexEXT` → chunkIndex, fetches
+  `chunkDescriptors[chunkIndex]` (origin/extent/voxelDataInfo), runs Amanatides-Woo DDA over `chunkVoxelWords[]` from
+  `tMin` to `tMax` (chunk-slab), calls `reportIntersectionEXT(hitDistance, 0u)` on first occupied voxel. rchit writes
+  `payload.shadowFactor = 0.0`. rmiss writes `1.0`. CMake: 4 files added to `SHADERS` list and compiled via `glslc` to
+  `build/linux-clang-debug/src/voxel_rtx_shadow.{rgen,rint,rchit,rmiss}.spv`.
+- **Phase 3-4: `RtxShadowPipeline` + `RtxShadowSBT` classes** — new files `src/render/RtxShadowPipeline.{hpp,cpp}` (~250
+  LoC) and `RtxShadowSBT.{hpp,cpp}` (~150 LoC). Pipeline class loads 4 shader modules via `ReadShaderFile`, creates a
+  dedicated descriptor set layout (bindings 1 = chunkDescriptors SSBO, 3 = sceneLighting SSBO, 4 = chunkVoxelWords SSBO,
+  13 = rtxTlas acceleration structure, 18 = rtxShadowMask storage image, 19 = rtxShadowCamera UBO), pipeline layout, and
+  `vkCreateRayTracingPipelinesKHR` with 4 stages (rgen/rint/rchit/rmiss) + 3 shader groups (general rgen, general miss,
+  procedural hit with rint+rchit). SBT class allocates a 192-byte buffer (
+  `VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`), queries handles via
+  `vkGetRayTracingShaderGroupHandlesKHR`, copies into the SBT buffer respecting `shaderGroupBaseAlignment` (64) for both
+  stride and size (required by spec VUID-vkCmdTraceRaysKHR-size-04023), exposes `GetStridedDeviceAddressRegionKHR` for
+  `vkCmdTraceRaysKHR` dispatch.
+- **Phase 5: Shadow mask image + camera UBO + descriptor sets per frame** — `RayTracedShadows` extended with
+  `m_shadowMaskImage` (R8_UNORM, 1920×1080, `VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT`),
+  `m_shadowMaskImageView`, per-frame `m_rtxFrames[2]` (camera UBO 96 bytes = mat4 inverseViewProjection + vec4
+  cameraPositionAndScreenWidth + vec4 cameraForwardAndScreenHeight), per-frame descriptor set, descriptor pool.
+  `RecordVoxelAwareRtxShadowPass` records `vkCmdPipelineBarrier` UNDEFINED→GENERAL, binds RT pipeline + descriptor set,
+  dispatches `vkCmdTraceRaysKHR`, then transitions GENERAL→SHADER_READ_ONLY_OPTIMAL for fragment shader sampling.
+  `GetShadowMaskImageView()` + `IsVoxelAwareRtxActive()` getters exposed for graphics descriptor wiring.
+- **Phase 6: Dispatch wiring in Renderer.cpp** — `Renderer::DrawFrame` calls `RecordVoxelAwareRtxShadowPass` between
+  BLAS build + TLAS update and `RecordGraphicsCommands`. Forward `viewProjection` matrix is inverted per-frame via
+  `projectv::math::inverse()`; `cameraPosition` and `cameraForward` extracted from `graphicsPushConstants`. Buffer
+  handles sourced from `frame->renderData.chunkDescriptorBuffer`, `shadowFrameResources.sceneLightingBuffer`,
+  `frame->renderData.chunkVoxelPayloadBuffer`. Profile zone: `RecordVoxelAwareRtxShadowPass`.
+- **Phase 7: Voxel.frag integration + fallback image** — new `kGraphicsDescriptorBindings[18]` entry (
+  COMBINED_IMAGE_SAMPLER, FRAGMENT_BIT) + `kGraphicsCombinedImageSamplerDescriptorPoolSize` bumped 7→8. New free
+  function `CreateRtxShadowMaskFallbackOnly` allocates a 1×1 R8 fallback image (with sampler attached to binding 18) so
+  the slot is always valid before `RefreshGraphicsResourceBindings` runs. `RefreshGraphicsResourceBindings` writes
+  binding 18 = shadow mask view (or fallback if voxel-aware path inactive, or skipped entirely if both are null).
+  `voxel.frag` adds `layout(set = 0, binding = 18) uniform sampler2D rtxShadowMask;` and `ComputeSunShadowSample` for
+  the RTX path now does `texture(rtxShadowMask, gl_FragCoord.xy / vec2(textureSize(rtxShadowMask, 0))).r` instead of
+  inline `TraceRtxSunShadowRay`. The old `TraceRtxSunShadowRay` ray-query helper has been removed entirely (session 22x
+  cleanup after operator-reported regression: legacy code no longer needed).
+- **Phase 7.1 (operator-reported follow-up): VMA assertion on exit + shadow mask first-frame garbage + legacy inline
+  ray-query helper** — three issues found after first operator smoke: (a) `VmaDeviceMemoryBlock::Destroy` asserted
+  because `render->rtxShadowMaskFallbackImage/Allocation` was never freed before `vmaDestroyAllocator` ran. Fix:
+  `ShutdownVulkan` in `core/Types.cpp` now calls `projectv::render::DestroyRtxShadowMaskFallbackOnly` immediately after
+  `delete state->render().rayTracedShadows`. (b) Shadow mask image was created with `VK_IMAGE_LAYOUT_UNDEFINED` and
+  sampled by `voxel.frag` on the first frame before `vkCmdTraceRaysKHR` produced valid per-pixel data, producing garbage
+  reads on black surfaces. Fix: new `RayTracedShadows::InitializeShadowMaskClear` issues a one-shot command buffer that
+  transitions the image UNDEFINED → TRANSFER_DST_OPTIMAL, calls `vkCmdClearColorImage` with
+  `clearValue.float32 = {1, 1, 1, 1}` (fully lit), then transitions TRANSFER_DST_OPTIMAL → GENERAL. Image usage flag
+  also extended to include `VK_IMAGE_USAGE_TRANSFER_DST_BIT` so the clear is valid. (c) `TraceRtxSunShadowRay` +
+  `kRtxSunShadowMaxDistanceMeters` constant deleted from `voxel.frag` (no callers remain after `ComputeSunShadowSample`
+  switch to texture sampling) — this is the source of the "следы старых non-RTX теней" operator observed (legacy inline
+  ray-query code path being silently mixed with new RT pipeline path). `TestRtxSunShadowRayHelperExistsInShader` updated
+  to check for `texture(rtxShadowMask` and `binding = 18` substrings instead of the deleted helper, and migrated from
+  `FILE *` + 16384-byte buffer to `std::ifstream` (the previous buffer was too small to reach the new binding-18 lines
+  added near the end of the now-larger shader).
+- **Phase 7.2 (second operator follow-up): self-shadow at large T_min + shadow mask extent vs swapchain extent** — two
+  more issues found after second operator smoke where the platform progressively turned black as the camera moved along
+  the floor: (a) The ray generation shader used `T_min = 0.001` while launching rays from the camera near plane (NOT
+  from the shaded surface fragment). When the near-plane ray origin lies inside a floor voxel, the ray immediately hits
+  that same voxel and reads shadowFactor = 0.0 → the floor fragment reads "in shadow" → black platform. With VoxelLab
+  voxel size 1.0 m the per-voxel AABB BLAS makes this hit almost inevitable on floor pixels. Fix:
+  `voxel_rtx_shadow.rgen` now uses `T_min = kRtxSunShadowTMinMeters = 0.5` (half voxel size) — the ray escapes the
+  launch voxel before the procedural intersection shader starts its DDA walk. (b) Shadow mask extent was hardcoded to
+  1920×1080 but the actual SDL window / swapchain extent is 1896×1034 (or whatever the OS picks). When the swapchain
+  extent != shadow mask extent, fragment shader sampling reads past the shadow mask bounds → garbage. Worse, after
+  swapchain recreation the new image view's handle changes but the graphics descriptor set's binding-18 entry still
+  references the destroyed old view, causing `vkCmdDrawIndirect` to fail with
+  `imageView VkImageView 0x0 is invalid or has been destroyed`. Fix: new
+  `RayTracedShadows::RecreateShadowMaskForExtent(context, width, height)` destroys the old image/view and recreates them
+  at the requested size, then re-runs `InitializeShadowMaskClear` to refill with 1.0. The swapchain recreation path (
+  `RecreateSwapchain` in `VulkanSwapchain.cpp`) now invokes this helper right after `RefreshGraphicsResourceBindings`,
+  and then re-invokes `RefreshGraphicsResourceBindings` to update the graphics descriptor set's binding-18 entry to
+  point at the freshly-created image view. Smoke log now reports
+  `Render: RayTracedShadows: shadow mask resized to 1896x1034` confirming both the size match and the subsequent
+  descriptor refresh.
+- **Phase 7.3 (third operator follow-up — RCA from "agent umnee"): self-shadow root cause + 2-pass ray trace** — the
+  `T_min = 0.5` workaround only helped for a subset of camera positions; when the camera was close enough to the floor
+  that the near-plane origin landed inside a floor voxel AABB, the ray still self-hit. Per RCA in agent's analysis, the
+  **root cause** is that the ray generation shader launches the shadow ray from the camera near plane (not from the
+  surface fragment position). For any floor pixel the near-plane origin can lie within the floor voxel's chunk BLAS
+  AABB, so the shadow ray immediately hits that same voxel → shadowFactor=0.0. Fix: replaced single-shot "near-plane →
+  sun" trace with a **2-pass trace** in `voxel_rtx_shadow.rgen`. Step 1: primary ray from near plane along view
+  direction with `T_max = length(worldFarPos - worldOrigin)` finds the actual surface fragment position; the closest-hit
+  shader writes `gl_HitTEXT` into a new `payload.hitT` field of `ShadowPayload`. Step 2: only if primary hit, fire a
+  second shadow ray from `worldOrigin + viewDir * hitT + viewDir * 0.05` (small bias along outgoing view direction so it
+  can't re-hit the launch voxel) toward sun direction with `T_max = 256`. Sky pixels (primary miss) keep
+  `shadowFactor = 1.0` (lit, no shadow needed). All three stage shaders (`rgen`, `rchit`, `rmiss`) updated to share
+  `struct ShadowPayload { float shadowFactor; float hitT; }` so the closest-hit write of `hitT` is visible to the raygen
+  primary pass. `rchit` writes `shadowPayload.hitT = gl_HitTEXT; shadowPayload.shadowFactor = 0.0;` (the 0.0 is
+  overwritten by the second trace in rgen if the shadow ray misses, which is what we want). `rmiss` writes
+  `shadowPayload.hitT = -1.0;` to signal the raygen that the primary trace missed. Per agent's analysis this also has
+  the side-benefit of `T_max = viewSegmentLength` for the primary ray, bounding the search to the visible scene.
+  Performance impact: 2 rays per pixel worst case (sky pixel = 1 ray, occluded pixel = 2 rays), but shadow ray is
+  short (≤256m) and primary ray is short (≤viewSegmentLength ~ few meters), well within RT core budget on RTX 3060 Ti.
+- **Phase 8: Sub-tests** — 4 new sub-tests in `ProjectVRayTracedShadowTests`. `TestRtxShadowPipelineClassHasGetters`
+  verifies default-constructed state and group indices (rgen=0, miss=1, hit=2). `TestRtxShadowSbtClassHasGetters`
+  verifies default deviceAddress/stride/size are zero for all four regions (raygen/miss/hit/callable).
+  `TestRtxShadowShaderFilesExistInBuildDirectory` checks that all 4 `.spv` files exist in `PROJECTV_BUILD_DIR` after
+  build. `TestRtxShadowIntersectionShaderUsesVoxelDdaPattern` reads the GLSL source of `voxel_rtx_shadow.rint` and
+  verifies it contains `gl_InstanceCustomIndexEXT`, `reportIntersectionEXT`, `chunkVoxelWords`, and `voxelDataInfo`
+  substrings.
+- **Phase 9: CMake wiring + ctest env propagation** — `src/CMakeLists.txt` adds `RtxShadowPipeline.cpp` +
+  `RtxShadowSBT.cpp` to `ProjectV` sources. `tests/CMakeLists.txt` adds the same two files to
+  `ProjectVRayTracedShadowTests` sources and sets
+  `ENVIRONMENT "PROJECTV_BUILD_DIR=$<TARGET_FILE_DIR:ProjectVRayTracedShadowTests>/../src"` so ctest finds the shader
+  binaries.
+- **Phase 10: Doc-sync (this entry)** — `TODO.md` strategic status updated, `agent/workspace.md` this entry,
+  `COMMENTS.md` and `CHANGELOG.md` pending follow-up. Safety-net patch preserved at
+  `/tmp/before_22x_20260622_235500_rtx_voxel_aware.patch`.
 - **Phase 11: Commit prompt** — per AGENTS.md §5.4 / §5.9, no commit without operator confirmation.
 
-**Operator action:** inspect `git diff --stat` (8 files modified from baseline, 4 new shader files, 2 new C++ TUs), then `git add` + `git commit` if approved.
+**Operator action:** inspect `git diff --stat` (8 files modified from baseline, 4 new shader files, 2 new C++ TUs), then
+`git add` + `git commit` if approved.
 
 **Files modified (scope of this session 22x):**
-- `src/render/RayTracedShadows.{hpp,cpp}` — added `RtxShadowPipeline` member, `RtxShadowSBT` member, `RtxFrameResources` struct, `CreateVoxelAwareRtxResources` + `RecordVoxelAwareRtxShadowPass` + `ReleaseVoxelAwareRtxResources` + `CreateShadowMaskFallback` + `ReleaseShadowMaskFallback`, getters `GetShadowMaskImageView()` + `IsVoxelAwareRtxActive()`, `CreateRtxShadowMaskFallbackOnly` + `DestroyRtxShadowMaskFallbackOnly` free functions
+
+- `src/render/RayTracedShadows.{hpp,cpp}` — added `RtxShadowPipeline` member, `RtxShadowSBT` member, `RtxFrameResources`
+  struct, `CreateVoxelAwareRtxResources` + `RecordVoxelAwareRtxShadowPass` + `ReleaseVoxelAwareRtxResources` +
+  `CreateShadowMaskFallback` + `ReleaseShadowMaskFallback`, getters `GetShadowMaskImageView()` +
+  `IsVoxelAwareRtxActive()`, `CreateRtxShadowMaskFallbackOnly` + `DestroyRtxShadowMaskFallbackOnly` free functions
 - `src/render/RtxShadowPipeline.{hpp,cpp}` — NEW (pipeline creation, descriptor set layout, shader group setup)
 - `src/render/RtxShadowSBT.{hpp,cpp}` — NEW (SBT buffer allocation, handle query, strided regions)
-- `src/render/Renderer.cpp` — wire-up `RecordVoxelAwareRtxShadowPass` in `DrawFrame` with inverseViewProjection + camera info + buffer handles
-- `src/render/vulkan/VulkanBootstrap.cpp` — `kRayTracingPipelineExtension` constant, device extension gating, feature struct chain
+- `src/render/Renderer.cpp` — wire-up `RecordVoxelAwareRtxShadowPass` in `DrawFrame` with inverseViewProjection + camera
+  info + buffer handles
+- `src/render/vulkan/VulkanBootstrap.cpp` — `kRayTracingPipelineExtension` constant, device extension gating, feature
+  struct chain
 - `src/render/vulkan/HardwareRayTracingProbe.{hpp,cpp}` — SBT alignment fields + property query
-- `src/render/vulkan/VulkanGraphicsPipeline.cpp` — `kGraphicsDescriptorBindings[18]` entry, pool size 7→8, `RefreshGraphicsResourceBindings` binding 18 write
-- `src/render/vulkan/VulkanInit.cpp` — `CreateRtxShadowMaskFallbackOnly` call before first `RefreshGraphicsResourceBindings`
-- `src/shaders/voxel_rtx_shadow.{rgen,rint,rchit,rmiss}` — NEW shader files (rgen + procedural intersection with DDA + closest-hit + miss)
-- `src/shaders/voxel.frag` — `layout(set = 0, binding = 18) uniform sampler2D rtxShadowMask;` + `ComputeSunShadowSample` switched to texture sample for RTX path
+- `src/render/vulkan/VulkanGraphicsPipeline.cpp` — `kGraphicsDescriptorBindings[18]` entry, pool size 7→8,
+  `RefreshGraphicsResourceBindings` binding 18 write
+- `src/render/vulkan/VulkanInit.cpp` — `CreateRtxShadowMaskFallbackOnly` call before first
+  `RefreshGraphicsResourceBindings`
+- `src/shaders/voxel_rtx_shadow.{rgen,rint,rchit,rmiss}` — NEW shader files (rgen + procedural intersection with DDA +
+  closest-hit + miss)
+- `src/shaders/voxel.frag` — `layout(set = 0, binding = 18) uniform sampler2D rtxShadowMask;` + `ComputeSunShadowSample`
+  switched to texture sample for RTX path
 - `src/CMakeLists.txt` — 4 new shader files in `SHADERS` list + 2 new C++ sources
-- `tests/CMakeLists.txt` — 2 new C++ sources for test executable + `set_tests_properties(... ENVIRONMENT ...)` for shader path lookup
-- `tests/RayTracedShadowTests.cpp` — 4 new sub-tests + `<fstream>` / `<iterator>` / `<string>` / RtxShadowPipeline+SBT includes
+- `tests/CMakeLists.txt` — 2 new C++ sources for test executable + `set_tests_properties(... ENVIRONMENT ...)` for
+  shader path lookup
+- `tests/RayTracedShadowTests.cpp` — 4 new sub-tests + `<fstream>` / `<iterator>` / `<string>` / RtxShadowPipeline+SBT
+  includes
 - `core/Types.hpp` — `rtxShadowMaskFallbackImage/View/Allocation/Memory` fields on `RenderState`
 - `TODO.md` — strategic status note added for 5.2.E in progress
 
-**Out of scope (deferred):** CHANGELOG.md / COMMENTS.md updates (operators usually prefer those pre-commit), visual LookDevCapture smoke (operator-driven), per-frame shadow mask extent match against swapchain extent (currently hardcoded 1920×1080; deferred until resize handling), binding 18 fallback path tests, contact shadow migration (RTX contact shadow + DDA), performance profiling under VoxelLab scene (deferred to 7.x polish milestones).
+**Out of scope (deferred):** CHANGELOG.md / COMMENTS.md updates (operators usually prefer those pre-commit), visual
+LookDevCapture smoke (operator-driven), per-frame shadow mask extent match against swapchain extent (currently hardcoded
+1920×1080; deferred until resize handling), binding 18 fallback path tests, contact shadow migration (RTX contact
+shadow + DDA), performance profiling under VoxelLab scene (deferred to 7.x polish milestones).
 
-**2026-06-22 session 21x (RTX shadow pipeline actually wired — TLAS handle + per-frame dispatch + descriptor refresh, this session).** Build green, ctest 37/37 pass + `ProjectVRayTracedShadowTests` 25/25 sub-tests. RTX 3060 Ti smoke log clean: `ProbeHardwareRayTracingSupport: RTX path available` → `RayTracedShadows.Initialize: enabled` → `RtxGiProbes.Initialize: enabled` → `Render: RayTracedShadows: instances=15 blasRebuilds=30 tlasRebuilds=N dispatch=N fallback=0` per frame. **0 Vulkan validation layer errors**. VoxelLab visual: ground-truth shadows visible (checker floor shows light/dark pattern from sphere + columns, columns cast shadows on floor). Safety-net: `/tmp/before_21x_20260622_235500.patch` (552 KB, from session 20x baseline). No new commits — operator review pending. Critical bug fix + 3 secondary fixes (see phases below).
+**2026-06-22 session 21x (RTX shadow pipeline actually wired — TLAS handle + per-frame dispatch + descriptor refresh,
+this session).** Build green, ctest 37/37 pass + `ProjectVRayTracedShadowTests` 25/25 sub-tests. RTX 3060 Ti smoke log
+clean: `ProbeHardwareRayTracingSupport: RTX path available` → `RayTracedShadows.Initialize: enabled` →
+`RtxGiProbes.Initialize: enabled` →
+`Render: RayTracedShadows: instances=15 blasRebuilds=30 tlasRebuilds=N dispatch=N fallback=0` per frame. **0 Vulkan
+validation layer errors**. VoxelLab visual: ground-truth shadows visible (checker floor shows light/dark pattern from
+sphere + columns, columns cast shadows on floor). Safety-net: `/tmp/before_21x_20260622_235500.patch` (552 KB, from
+session 20x baseline). No new commits — operator review pending. Critical bug fix + 3 secondary fixes (see phases
+below).
 
-- **Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec on RT/Shadow integration, RTX ray query patterns, DDGI algorithm, `VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12281` (accelerationStructureReference), `VUID-VkAccelerationStructureBuildGeometryInfoKHR-type-03789` (TLAS geometryType), `VUID-vkGetAccelerationStructureBuildSizesKHR-pBuildInfo` (sizing constraints), VK_KHR_ray_query GLSL pattern.
-- **Phase 1 (CRITICAL): TLAS handle was never created** — `RayTracedShadows::AllocateBuffers` had `if (context.rayTracing.accelerationStructureHostCommands) { vkCreateAccelerationStructureKHR(tlas); }`. With `hostCommands=0` (most non-Quadro NVIDIA drivers, including RTX 3060 Ti: `hostBuild=0` in init log), `m_config.tlas` stayed `VK_NULL_HANDLE` permanently. The init log `RayTracedShadows.Initialize: enabled` referred to `m_config.enabled` (boolean flag), not to the `tlas` handle — misleading. Effect: `rtxPathActive = tlas != null` in `Renderer.cpp:723` → default `voxel.frag.spv` used (no `VOXEL_RTX_ENABLED` define) → ray query never invoked → **no shadows visible for entire 19x+20x** despite `rayTracedShadows: instances=15` log. **Fix**: removed `if (hostCommands)` gate, TLAS handle + backing buffer always created. EVIL marker documents why handle creation is unconditional. `src/render/RayTracedShadows.cpp:203-281`.
-- **Phase 1.1: TLAS sizing used wrong geometry type** — `vkGetAccelerationStructureBuildSizesKHR` was called with `VK_GEOMETRY_TYPE_AABBS_KHR` for `VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR` (spec violation: AABBS is bottom-level only). Replaced with `VK_GEOMETRY_TYPE_INSTANCES_KHR` + `m_config.tlasInstanceDeviceAddress` as placeholder. Real per-frame build in `RecordTlasBuild` already used INSTANCES. `src/render/RayTracedShadows.cpp:215-227`.
-- **Phase 1.2: Validation warning rtxTlas never updated** — `RefreshGraphicsResourceBindings` (called in `VulkanInit.cpp:308` for fallback image writes) ran **before** `state->render().rayTracedShadows` was assigned (line 327) and before `CreateRayTracedShadowResources` (line 329) — so `rtxActive` check failed and the `binding=13 rtxTlas` write was skipped. Re-ran `RefreshGraphicsResourceBindings` after `CreateRayTracedShadowResources` (line 334-340). EVIL marker documents the init-order requirement.
-- **Phase 2: BuildDirtyBlases drain order bug** — `m_pendingDirtyChunks.clear()` + `blasRebuildCount += drainedCount` happened **before** the `if (!m_config.enabled || scratch==null) return;` check. Result: queue was drained and counter incremented but no BLAS handles were ever cached when scratch was null → `UpdateTlas` found all `blasDeviceAddresses[i] == 0` → no instances. Reordered: enabled/scratch check now precedes `clear()` and counter increment. `src/render/RayTracedShadows.cpp:359-413`.
-- **Phase 3: Initial BLAS build path** — scene-load chunks never receive a voxel edit, so they never land in `pendingBlasRebuildIndices` and never get a BLAS. Added `CollectNonBuiltBlasChunksForRayTracing` API (scans `world.chunks` for `nonAirVoxelCount > 0` with `blasDeviceAddress == 0`) and integrated into DrawFrame BLAS block (Renderer.cpp:1322-1411). With VoxelLab (8x8x8 chunk size, 24x17x24m world, ~75 chunks) this gives 15 non-empty chunks → 15 BLASes → 15 TLAS instances.
-- **Phase 4: LookDevCapture quit not latched** — `UpdateLookDevCaptureAutomation` returned `false` once `completed=true`, so on the capture frame: 1st tick (`TickLookDevCaptureSystem`) sets `quitAfterFrame = true` → 2nd tick (`SyncEcsWorldState` reprogresses flecs world) resets to `false` → `IsLookDevCaptureQuitRequested` returns `false` → app never exits. Fixed: when `completed=true`, return `automation->quitWhenDone` regardless of branches. `src/app/LookDevCaptureAutomation.cpp:328-380`.
-- **Phase 5: Validation false positive cleanup** — `RecordTlasBuild` post-build barrier included `VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR` in dstStageMask. `rayQueryEXT` is invoked from `VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT` (we don't use the full RT pipeline); the ray-tracing-pipeline stage is a false positive. Removed from barrier. `src/render/RayTracedShadows.cpp:765-772`.
-- **Phase 6: RecordRayTracedShadowPass stub cleanup** — function was a misleading stub incrementing `shadowRayDispatchCount` and returning `true` despite doing no work. The actual ray query dispatch is in `voxel.frag.rtx.spv` via `graphicsPipelineRtx`. Replaced stub with documented no-op returning `false`. `src/render/RayTracedShadows.cpp:797-815`.
-- **Phase 7: `linearColor` debug code revert** — initial debug visualization used `linearColor = color` (which is `const`) and `color = vec3(sunShadowSample.x)`, but TAA variant used pre-saved `linearColor` so the override was lost. Both fixed in non-debug code path; debug code removed entirely for the visual confirmation.
-- **Phase 8: Build + ctest verification** — `cmake --build build/linux-clang-debug --parallel 8` → green. `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 37/37. `ProjectVRayTracedShadowTests` 25/25. `bin/ProjectV --scene VoxelLab` with `PROJECTV_LOOKDEV_CAPTURE_*` env vars → smoke runs, screenshot saved, app exits cleanly. **0 Vulkan validation layer errors**. Doc-sync: `TODO.md` Active tasks summary, `CHANGELOG.md` 21x entry, `COMMENTS.md` 5 design-rationale blocks.
+- **Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec on RT/Shadow integration, RTX ray query
+  patterns, DDGI algorithm, `VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12281` (accelerationStructureReference),
+  `VUID-VkAccelerationStructureBuildGeometryInfoKHR-type-03789` (TLAS geometryType),
+  `VUID-vkGetAccelerationStructureBuildSizesKHR-pBuildInfo` (sizing constraints), VK_KHR_ray_query GLSL pattern.
+- **Phase 1 (CRITICAL): TLAS handle was never created** — `RayTracedShadows::AllocateBuffers` had
+  `if (context.rayTracing.accelerationStructureHostCommands) { vkCreateAccelerationStructureKHR(tlas); }`. With
+  `hostCommands=0` (most non-Quadro NVIDIA drivers, including RTX 3060 Ti: `hostBuild=0` in init log), `m_config.tlas`
+  stayed `VK_NULL_HANDLE` permanently. The init log `RayTracedShadows.Initialize: enabled` referred to
+  `m_config.enabled` (boolean flag), not to the `tlas` handle — misleading. Effect: `rtxPathActive = tlas != null` in
+  `Renderer.cpp:723` → default `voxel.frag.spv` used (no `VOXEL_RTX_ENABLED` define) → ray query never invoked → **no
+  shadows visible for entire 19x+20x** despite `rayTracedShadows: instances=15` log. **Fix**: removed
+  `if (hostCommands)` gate, TLAS handle + backing buffer always created. EVIL marker documents why handle creation is
+  unconditional. `src/render/RayTracedShadows.cpp:203-281`.
+- **Phase 1.1: TLAS sizing used wrong geometry type** — `vkGetAccelerationStructureBuildSizesKHR` was called with
+  `VK_GEOMETRY_TYPE_AABBS_KHR` for `VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR` (spec violation: AABBS is bottom-level
+  only). Replaced with `VK_GEOMETRY_TYPE_INSTANCES_KHR` + `m_config.tlasInstanceDeviceAddress` as placeholder. Real
+  per-frame build in `RecordTlasBuild` already used INSTANCES. `src/render/RayTracedShadows.cpp:215-227`.
+- **Phase 1.2: Validation warning rtxTlas never updated** — `RefreshGraphicsResourceBindings` (called in
+  `VulkanInit.cpp:308` for fallback image writes) ran **before** `state->render().rayTracedShadows` was assigned (line
+    327) and before `CreateRayTracedShadowResources` (line 329) — so `rtxActive` check failed and the
+         `binding=13 rtxTlas`
+         write was skipped. Re-ran `RefreshGraphicsResourceBindings` after `CreateRayTracedShadowResources` (line
+         334-340).
+         EVIL marker documents the init-order requirement.
+- **Phase 2: BuildDirtyBlases drain order bug** — `m_pendingDirtyChunks.clear()` + `blasRebuildCount += drainedCount`
+  happened **before** the `if (!m_config.enabled || scratch==null) return;` check. Result: queue was drained and counter
+  incremented but no BLAS handles were ever cached when scratch was null → `UpdateTlas` found all
+  `blasDeviceAddresses[i] == 0` → no instances. Reordered: enabled/scratch check now precedes `clear()` and counter
+  increment. `src/render/RayTracedShadows.cpp:359-413`.
+- **Phase 3: Initial BLAS build path** — scene-load chunks never receive a voxel edit, so they never land in
+  `pendingBlasRebuildIndices` and never get a BLAS. Added `CollectNonBuiltBlasChunksForRayTracing` API (scans
+  `world.chunks` for `nonAirVoxelCount > 0` with `blasDeviceAddress == 0`) and integrated into DrawFrame BLAS block (
+  Renderer.cpp:1322-1411). With VoxelLab (8x8x8 chunk size, 24x17x24m world, ~75 chunks) this gives 15 non-empty
+  chunks → 15 BLASes → 15 TLAS instances.
+- **Phase 4: LookDevCapture quit not latched** — `UpdateLookDevCaptureAutomation` returned `false` once
+  `completed=true`, so on the capture frame: 1st tick (`TickLookDevCaptureSystem`) sets `quitAfterFrame = true` → 2nd
+  tick (`SyncEcsWorldState` reprogresses flecs world) resets to `false` → `IsLookDevCaptureQuitRequested` returns
+  `false` → app never exits. Fixed: when `completed=true`, return `automation->quitWhenDone` regardless of branches.
+  `src/app/LookDevCaptureAutomation.cpp:328-380`.
+- **Phase 5: Validation false positive cleanup** — `RecordTlasBuild` post-build barrier included
+  `VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR` in dstStageMask. `rayQueryEXT` is invoked from
+  `VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT` (we don't use the full RT pipeline); the ray-tracing-pipeline stage is a false
+  positive. Removed from barrier. `src/render/RayTracedShadows.cpp:765-772`.
+- **Phase 6: RecordRayTracedShadowPass stub cleanup** — function was a misleading stub incrementing
+  `shadowRayDispatchCount` and returning `true` despite doing no work. The actual ray query dispatch is in
+  `voxel.frag.rtx.spv` via `graphicsPipelineRtx`. Replaced stub with documented no-op returning `false`.
+  `src/render/RayTracedShadows.cpp:797-815`.
+- **Phase 7: `linearColor` debug code revert** — initial debug visualization used `linearColor = color` (which is
+  `const`) and `color = vec3(sunShadowSample.x)`, but TAA variant used pre-saved `linearColor` so the override was lost.
+  Both fixed in non-debug code path; debug code removed entirely for the visual confirmation.
+- **Phase 8: Build + ctest verification** — `cmake --build build/linux-clang-debug --parallel 8` → green.
+  `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 37/37. `ProjectVRayTracedShadowTests` 25/25.
+  `bin/ProjectV --scene VoxelLab` with `PROJECTV_LOOKDEV_CAPTURE_*` env vars → smoke runs, screenshot saved, app exits
+  cleanly. **0 Vulkan validation layer errors**. Doc-sync: `TODO.md` Active tasks summary, `CHANGELOG.md` 21x entry,
+  `COMMENTS.md` 5 design-rationale blocks.
 - **Phase 9: Commit prompt** — per AGENTS.md §5.4 + §5.9, no commit without operator confirmation.
 
-**Operator action:** inspect `git diff --stat` (50 files modified, +2035/-3981, ~1.9K LoC net deletion across 20x + 21x), then `git add` + `git commit` if approved.
+**Operator action:** inspect `git diff --stat` (50 files modified, +2035/-3981, ~1.9K LoC net deletion across 20x +
+21x), then `git add` + `git commit` if approved.
 
 ## 1. Now (legacy session 20x summary)
 
-**2026-06-22 session 20x (5.2.D CSM removal + 5.4 RTX AO + 5.5 DDGI infrastructure + TAA gray-screen fix).** Build green, ctest 37/37 pass + `ProjectVRayTracedShadowTests` 25/25 sub-tests (15 baseline + 6 new AO + 4 new DDGI). RTX 3060 Ti smoke log clean: `ProbeHardwareRayTracingSupport: RTX path available` → `RayTracedShadows.Initialize: enabled` → `RtxGiProbes.Initialize: enabled (probes=8 x 8 x 8 octSize=16 rays/probe=64 halfExt=32.0m)` → engine runs end-to-end. TAA gray screen bug discovered and fixed (OOB SSBO struct in 4 shaders). Safety-net: `/tmp/before_19x_20260622_201316.patch` (270 KB, from session 19x baseline; 20x built on top). No new commits — operator review pending.
+**2026-06-22 session 20x (5.2.D CSM removal + 5.4 RTX AO + 5.5 DDGI infrastructure + TAA gray-screen fix).** Build
+green, ctest 37/37 pass + `ProjectVRayTracedShadowTests` 25/25 sub-tests (15 baseline + 6 new AO + 4 new DDGI). RTX 3060
+Ti smoke log clean: `ProbeHardwareRayTracingSupport: RTX path available` → `RayTracedShadows.Initialize: enabled` →
+`RtxGiProbes.Initialize: enabled (probes=8 x 8 x 8 octSize=16 rays/probe=64 halfExt=32.0m)` → engine runs end-to-end.
+TAA gray screen bug discovered and fixed (OOB SSBO struct in 4 shaders). Safety-net:
+`/tmp/before_19x_20260622_201316.patch` (270 KB, from session 19x baseline; 20x built on top). No new commits — operator
+review pending.
 
-- **Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec on RT/Shadow integration, RTX ray query patterns (`vk_raytracing_tutorial_KHR/ray_tracing_ao` nvpro-samples reference for AO cone dispatch), DDGI algorithm (NVIDIAGameWorks/RTXGI-DDGI Math.md + Integration.md reference for probe field, octahedral mapping, trilinear irradiance sample).
-- **Phase 0.5: Fix TAA SSBO layout mismatch (gray screen) — 4 shaders** — `taa_resolve.frag`, `model.frag`, `model.vert`, `voxel_mesh.comp` had stale `SceneLightingBuffer` SSBO struct with CSM fields (`sunShadowParams`, `sunShadowViewProjections[4]`, `shadowCascadeDepthSplits`, `shadowCascadeBlendParams`) that no longer exist in C++ `VoxelSceneLighting` (now 352 bytes). `colorGrading` was at offset 400 (out of bounds), reading 0 → `clamp(0, ...) → {0.25, 0, 0, 0}` → `mix(vec3(luma), normalizedColor, 0)` = `vec3(0.5)` everywhere → **серый экран при TAA enabled**. Without TAA, voxel.frag uses correct SSBO layout and writes final sRGB-ready color directly. **Fix**: removed 4 stale fields from all 4 shaders' SSBO struct. ~16 LoC.
-- **Phase 1: 5.2.D CSM removal — Phase 0 regression fix** — `Renderer.cpp:395` `bufferMemoryBarrierCount = 4` → `3` (4th barrier was uninitialized after CSM removal). `VulkanVoxelMeshingPipeline.cpp` binding 8 (LodDownsampled) + binding 9 (ChunkLodLevels) — verified layout has bindings 0-10. `VoxelWorldTests.cpp` removed 11+ shadow_cascade_*/shadow_tuning_target/shadow_coverage_scale/shadow_cascade_blend_offset EXPECT_TRUE lines. `VulkanGraphicsPipeline.cpp` added binding 4 descriptor write for `chunkVoxelPayloadBufferInfo` (PackedChunkVoxelPayload SSBO). Verified pre-existing failures on HEAD `4415f38` baseline match my changes (no regressions from CSM removal).
-- **Phase 1 cleanup: Dead CSM code** — removed `kGraphicsShadowSamplerDescriptorPoolSize` (renamed to `kGraphicsCombinedImageSamplerDescriptorPoolSize` since it serves binding 6/11/12/14/15/16 texture samplers, not shadows), `kShadowDescriptorSetCount`, `kShadowStorageDescriptorPoolSize`, `kShadowDescriptorPoolSizes`, `kShadowDescriptorBindings`, `kShadowDescriptorSetLayoutInfo`, `ChooseShadowDepthFormat`, `IsSceneChunkVisibleInShadowCascade` (inline in SceneResources.hpp), `kMaxShadowCascadeBlend` (already gone), `TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume` test. Pool sizes bumped: `kGraphicsStorageDescriptorPoolSize` 6→7 (added binding 17 SSBO), `kGraphicsCombinedImageSamplerDescriptorPoolSize` 4→7 (added bindings 14/15/16). +6/37 files, ~120 LoC.
-- **Phase 2: 5.4 RTX AO** — `TraceRtxAmbientOcclusionRay(worldOrigin, direction, radius)` GLSL helper in `voxel.frag:128-142` (gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, T_min=0.001, T_max=radius, EVIL constant `kRtxAoMinRayLengthMeters`). `SampleAmbientOcclusionDirection` switches to RTX path under `VOXEL_RTX_ENABLED` (DDA path preserved as non-RTX fallback). Replaces the buggy DDA AO that returned `(1 - traveled/maxDistance)²` weighted value with binary visibility test. Shader var: `voxel.frag.rtx*.spv` rebuild. 4 new sub-tests: helper exists, dispatch under VOXEL_RTX_ENABLED, flag is TerminateOnFirstHit|Opaque, shader binary built.
-- **Phase 3: 5.5 DDGI infrastructure (probe field, no compute pass yet)** — `RtxGiProbes.{hpp,cpp}` new class: 8×8×8=512 probes, 16×16 octahedral R11G11B10F irradiance + RG16F distance + 1×1 RGBA16F probe data + 64-byte SSBO volume descriptor. `IsRtxGiProbeFieldEnabled` env gate, `CreateRtxGiProbeResources`/`DestroyRtxGiProbeResources` factory functions, `RenderState::rtxGiProbes` raw pointer. 4 new descriptor bindings: 14 (irradiance 3D), 15 (distance 3D), 16 (probe data 2D), 17 (volume desc SSBO). `SampleRtxGiProbeIrradiance` GLSL helper (trilinear sample of probe volume) defined but **not yet wired** into `vctDiffuseIrradiance` path (deferred to 5.5+ follow-up — probe update compute pass is the next step, not in session 20x scope). 6 new sub-tests: config defaults, class getters, env gate, shader bindings, record update pass no-op, header symbol presence. ~570 LoC.
-- **Phase 3.5: All ctest pass** — `cmake --build build/linux-clang-debug --parallel 8` → green. `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 37/37. `ProjectVRayTracedShadowTests` → 25/25. `bin/ProjectV --scene VoxelLab --headless --frames 5` → 0 Vulkan validation errors. `ProjectV` direct run → 6 pre-existing failures (IsFluidCaGpuEnabled, interaction.selection.*, hit.hasHit, hit.voxel) — verified on HEAD `4415f38` baseline, NOT regressions from my changes.
+- **Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec on RT/Shadow integration, RTX ray query
+  patterns (`vk_raytracing_tutorial_KHR/ray_tracing_ao` nvpro-samples reference for AO cone dispatch), DDGI algorithm (
+  NVIDIAGameWorks/RTXGI-DDGI Math.md + Integration.md reference for probe field, octahedral mapping, trilinear
+  irradiance sample).
+- **Phase 0.5: Fix TAA SSBO layout mismatch (gray screen) — 4 shaders** — `taa_resolve.frag`, `model.frag`,
+  `model.vert`, `voxel_mesh.comp` had stale `SceneLightingBuffer` SSBO struct with CSM fields (`sunShadowParams`,
+  `sunShadowViewProjections[4]`, `shadowCascadeDepthSplits`, `shadowCascadeBlendParams`) that no longer exist in C++
+  `VoxelSceneLighting` (now 352 bytes). `colorGrading` was at offset 400 (out of bounds), reading 0 →
+  `clamp(0, ...) → {0.25, 0, 0, 0}` → `mix(vec3(luma), normalizedColor, 0)` = `vec3(0.5)` everywhere → **серый экран при
+  TAA enabled**. Without TAA, voxel.frag uses correct SSBO layout and writes final sRGB-ready color directly. **Fix**:
+  removed 4 stale fields from all 4 shaders' SSBO struct. ~16 LoC.
+- **Phase 1: 5.2.D CSM removal — Phase 0 regression fix** — `Renderer.cpp:395` `bufferMemoryBarrierCount = 4` → `3` (4th
+  barrier was uninitialized after CSM removal). `VulkanVoxelMeshingPipeline.cpp` binding 8 (LodDownsampled) + binding
+  9 (ChunkLodLevels) — verified layout has bindings 0-10. `VoxelWorldTests.cpp` removed 11+ shadow_cascade_*
+  /shadow_tuning_target/shadow_coverage_scale/shadow_cascade_blend_offset EXPECT_TRUE lines.
+  `VulkanGraphicsPipeline.cpp` added binding 4 descriptor write for `chunkVoxelPayloadBufferInfo` (
+  PackedChunkVoxelPayload SSBO). Verified pre-existing failures on HEAD `4415f38` baseline match my changes (no
+  regressions from CSM removal).
+- **Phase 1 cleanup: Dead CSM code** — removed `kGraphicsShadowSamplerDescriptorPoolSize` (renamed to
+  `kGraphicsCombinedImageSamplerDescriptorPoolSize` since it serves binding 6/11/12/14/15/16 texture samplers, not
+  shadows), `kShadowDescriptorSetCount`, `kShadowStorageDescriptorPoolSize`, `kShadowDescriptorPoolSizes`,
+  `kShadowDescriptorBindings`, `kShadowDescriptorSetLayoutInfo`, `ChooseShadowDepthFormat`,
+  `IsSceneChunkVisibleInShadowCascade` (inline in SceneResources.hpp), `kMaxShadowCascadeBlend` (already gone),
+  `TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume` test. Pool sizes bumped:
+  `kGraphicsStorageDescriptorPoolSize` 6→7 (added binding 17 SSBO), `kGraphicsCombinedImageSamplerDescriptorPoolSize`
+  4→7 (added bindings 14/15/16). +6/37 files, ~120 LoC.
+- **Phase 2: 5.4 RTX AO** — `TraceRtxAmbientOcclusionRay(worldOrigin, direction, radius)` GLSL helper in
+  `voxel.frag:128-142` (gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, T_min=0.001, T_max=radius, EVIL
+  constant `kRtxAoMinRayLengthMeters`). `SampleAmbientOcclusionDirection` switches to RTX path under
+  `VOXEL_RTX_ENABLED` (DDA path preserved as non-RTX fallback). Replaces the buggy DDA AO that returned
+  `(1 - traveled/maxDistance)²` weighted value with binary visibility test. Shader var: `voxel.frag.rtx*.spv` rebuild. 4
+  new sub-tests: helper exists, dispatch under VOXEL_RTX_ENABLED, flag is TerminateOnFirstHit|Opaque, shader binary
+  built.
+- **Phase 3: 5.5 DDGI infrastructure (probe field, no compute pass yet)** — `RtxGiProbes.{hpp,cpp}` new class: 8×8×8=512
+  probes, 16×16 octahedral R11G11B10F irradiance + RG16F distance + 1×1 RGBA16F probe data + 64-byte SSBO volume
+  descriptor. `IsRtxGiProbeFieldEnabled` env gate, `CreateRtxGiProbeResources`/`DestroyRtxGiProbeResources` factory
+  functions, `RenderState::rtxGiProbes` raw pointer. 4 new descriptor bindings: 14 (irradiance 3D), 15 (distance 3D),
+  16 (probe data 2D), 17 (volume desc SSBO). `SampleRtxGiProbeIrradiance` GLSL helper (trilinear sample of probe volume)
+  defined but **not yet wired** into `vctDiffuseIrradiance` path (deferred to 5.5+ follow-up — probe update compute pass
+  is the next step, not in session 20x scope). 6 new sub-tests: config defaults, class getters, env gate, shader
+  bindings, record update pass no-op, header symbol presence. ~570 LoC.
+- **Phase 3.5: All ctest pass** — `cmake --build build/linux-clang-debug --parallel 8` → green.
+  `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 37/37. `ProjectVRayTracedShadowTests` → 25/25.
+  `bin/ProjectV --scene VoxelLab --headless --frames 5` → 0 Vulkan validation errors. `ProjectV` direct run → 6
+  pre-existing failures (IsFluidCaGpuEnabled, interaction.selection.*, hit.hasHit, hit.voxel) — verified on HEAD
+  `4415f38` baseline, NOT regressions from my changes.
 - **Phase 4: Doc-sync (in progress)** — this entry + TODO.md + COMMENTS.md + CHANGELOG.md updates.
 - **Phase 5: Commit prompt** — per AGENTS.md §5.4 + §5.9, no commit without operator confirmation.
 
-**Operator action:** inspect `git diff --stat` (36 files modified, +971/-3663, ~2.7K LoC net deletion), then `git add` + `git commit` if approved.
+**Operator action:** inspect `git diff --stat` (36 files modified, +971/-3663, ~2.7K LoC net deletion), then `git add` +
+`git commit` if approved.
 
 **Files modified (scope of this session 20x):**
+
 - `src/render/Renderer.cpp` — bufferMemoryBarrierCount 4→3
 - `src/render/vulkan/VulkanVoxelMeshingPipeline.cpp` — verified bindings 8/9 layout
-- `src/render/vulkan/VulkanGraphicsPipeline.cpp` — removed dead CSM descriptor sets, renamed COMBINED_IMAGE_SAMPLER pool, added 4 DDGI bindings + descriptor writes (14/15/16/17), bumped pool sizes
+- `src/render/vulkan/VulkanGraphicsPipeline.cpp` — removed dead CSM descriptor sets, renamed COMBINED_IMAGE_SAMPLER
+  pool, added 4 DDGI bindings + descriptor writes (14/15/16/17), bumped pool sizes
 - `src/render/SceneResources.hpp` — removed `IsSceneChunkVisibleInShadowCascade`
 - `src/render/SceneResources.cpp` — removed dead CSM code
 - `src/render/RtxGiProbes.{hpp,cpp}` — NEW class (~570 LoC)
@@ -147,33 +416,69 @@ PRE-RESET SNAPSHOT — ARCHIVED 2026-06-24
 - `src/shaders/voxel_mesh.comp` — same SSBO fix
 - `tests/RayTracedShadowTests.cpp` — 6 new AO sub-tests + 4 new DDGI sub-tests
 - `tests/CMakeLists.txt` — added `RtxGiProbes.cpp` to ProjectVRayTracedShadowTests sources
-- `tests/VoxelWorldTests.cpp` — removed `TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume` + cascade-related EXPECT_TRUE lines
+- `tests/VoxelWorldTests.cpp` — removed `TestSceneChunkShadowCascadeVisibilityUsesCascadeClipVolume` + cascade-related
+  EXPECT_TRUE lines
 - `agent/workspace.md` — this entry
 - `TODO.md` — 5.2.D/5.4/5.5 → ✅ Closed
 - `COMMENTS.md` — 5 new design-rationale entries
 - `CHANGELOG.md` — 20x session entry
 
-**Out of scope (deferred per TODO.md):** 5.5+ probe update compute pass (DDGI probe radiance accumulation is the next-step work; current state has empty probe textures with dummy sampler), 5.6 RTX refraction, 5.7 multi-bounce GI, 7.x post-RTX polish, 6.2 PIMPL, 2.3 SVT.
+**Out of scope (deferred per TODO.md):** 5.5+ probe update compute pass (DDGI probe radiance accumulation is the
+next-step work; current state has empty probe textures with dummy sampler), 5.6 RTX refraction, 5.7 multi-bounce GI, 7.x
+post-RTX polish, 6.2 PIMPL, 2.3 SVT.
 
 ---
 
-**2026-06-22 session 18x (Fluid CA debug-assert + async compute wait-semaphore + regression tests, this session).** Bug-fix сессия на основе лога воспроизведения оператора. Safety-net: `/tmp/before_18x_20260622_144002.patch`. Build green, ctest 38/38 pass (excluding pre-existing `ProjectVTests` link errors per workspace.md convention). User's actual replay snapshot `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` (24×17×24, fluid=436) loads + runs 300 ticks без assertion. No new commits — operator review pending.
+**2026-06-22 session 18x (Fluid CA debug-assert + async compute wait-semaphore + regression tests, this session).**
+Bug-fix сессия на основе лога воспроизведения оператора. Safety-net: `/tmp/before_18x_20260622_144002.patch`. Build
+green, ctest 38/38 pass (excluding pre-existing `ProjectVTests` link errors per workspace.md convention). User's actual
+replay snapshot `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` (24×17×24, fluid=436) loads + runs 300
+ticks без assertion. No new commits — operator review pending.
 
-- **Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec `VUID-vkBeginCommandBuffer-commandBuffer-00049` + `VUID-vkQueueSubmit2-commandBuffer-03875` + `VUID-vkBeginCommandBuffer-commandBuffer-02840` (ONE_TIME_SUBMIT vs SIMULTANEOUS_USE mutual exclusion); `docs.vulkan.org/spec/latest/chapters/cmdbuffers.html` Command Buffer Recording section; KhronosGroup `samples/extensions/timeline_semaphore/README.adoc` single-barrier pattern; Vulkanised 2026 timeline seminar.
+- **Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec
+  `VUID-vkBeginCommandBuffer-commandBuffer-00049` + `VUID-vkQueueSubmit2-commandBuffer-03875` +
+  `VUID-vkBeginCommandBuffer-commandBuffer-02840` (ONE_TIME_SUBMIT vs SIMULTANEOUS_USE mutual exclusion);
+  `docs.vulkan.org/spec/latest/chapters/cmdbuffers.html` Command Buffer Recording section; KhronosGroup
+  `samples/extensions/timeline_semaphore/README.adoc` single-barrier pattern; Vulkanised 2026 timeline seminar.
 - **Phase 1: Safety-net** — `git diff > /tmp/before_18x_20260622_144002.patch` (1.1 MB, dirty tree at commit `cee5db6`).
-- **Phase 2: Fix `VoxelWorld::UpdateFluidCA` debug `PV_ASSERT`** — assertion считала fluid в `[fluidCAAabbMin, fluidCAAabbMaxExclusive]` (монотонно-растущий AABB всех когда-либо тронутых fluid'ом позиций), а сравнивала с world-wide `stats.fluidVoxelCount`. Когда fluid уезжал за пределы исходного AABB (столбик Y=5..9 → Y=0..4 на полу), локальный count расходился с world-wide. **Fix**: iterate over `[world.min, world.maxExclusive]` — full world bounds. AABB остаётся fast-path для sim/commit loops (production hot path); только debug invariant расширен. Стоимость: O(world_volume) только в debug (NDEBUG вырезает блок). ~6 LoC в VoxelWorld.cpp.
-- **Phase 3: Fix `RecordAsyncComputePass` CPU-side wait semaphore** — bug в `cee5db6`: wait на `hzbBuildTimelineSemaphore`, но `SubmitToComputeQueue` (L246) сигналит `renderTimelineSemaphore`. Когда HZB-путь не активен (`PROJECTV_HW_RAY_TRACING=OFF` → `IsRayTracedShadowEnabled()=false` → HZB async cull skipped), `hzbBuildLastTimelineValue` остаётся 0, wait skipped, cmd buffer остаётся Pending, `vkBeginCommandBuffer` триггерит `VUID-vkBeginCommandBuffer-commandBuffer-00049` + symmetric `vkQueueSubmit2-commandBuffer-03875` на каждом кадре. **Fix**: wait on `renderTimelineSemaphore` at `renderTimelineValue` (тот же, что signal в `SubmitToComputeQueue`). `RecordHzbAsyncCullPass` остаётся на `hzbBuildTimelineSemaphore` (там submitter signals этот же). ~10 LoC в VulkanAsyncCompute.cpp + EVIL-комментарий с cross-ref на `agent/knowledge.md §33`.
-- **Phase 4: Verify HZB wait is correct** — `RecordHzbAsyncCullPass` (L308) waits on `hzbBuildTimelineSemaphore` at `hzbBuildLastTimelineValue`; `SubmitHzbAsyncCullToComputeQueue` (L404) signals `hzbBuildTimelineSemaphore` at incremented `hzbBuildLastTimelineValue`. **Пара согласована**, fix не нужен. Both record functions share the same persistent `asyncComputeCommandBuffer` but use DIFFERENT signal semaphores — wait MUST match submit per function.
+- **Phase 2: Fix `VoxelWorld::UpdateFluidCA` debug `PV_ASSERT`** — assertion считала fluid в
+  `[fluidCAAabbMin, fluidCAAabbMaxExclusive]` (монотонно-растущий AABB всех когда-либо тронутых fluid'ом позиций), а
+  сравнивала с world-wide `stats.fluidVoxelCount`. Когда fluid уезжал за пределы исходного AABB (столбик Y=5..9 → Y=0..4
+  на полу), локальный count расходился с world-wide. **Fix**: iterate over `[world.min, world.maxExclusive]` — full
+  world bounds. AABB остаётся fast-path для sim/commit loops (production hot path); только debug invariant расширен.
+  Стоимость: O(world_volume) только в debug (NDEBUG вырезает блок). ~6 LoC в VoxelWorld.cpp.
+- **Phase 3: Fix `RecordAsyncComputePass` CPU-side wait semaphore** — bug в `cee5db6`: wait на
+  `hzbBuildTimelineSemaphore`, но `SubmitToComputeQueue` (L246) сигналит `renderTimelineSemaphore`. Когда HZB-путь не
+  активен (`PROJECTV_HW_RAY_TRACING=OFF` → `IsRayTracedShadowEnabled()=false` → HZB async cull skipped),
+  `hzbBuildLastTimelineValue` остаётся 0, wait skipped, cmd buffer остаётся Pending, `vkBeginCommandBuffer` триггерит
+  `VUID-vkBeginCommandBuffer-commandBuffer-00049` + symmetric `vkQueueSubmit2-commandBuffer-03875` на каждом кадре. *
+  *Fix**: wait on `renderTimelineSemaphore` at `renderTimelineValue` (тот же, что signal в `SubmitToComputeQueue`).
+  `RecordHzbAsyncCullPass` остаётся на `hzbBuildTimelineSemaphore` (там submitter signals этот же). ~10 LoC в
+  VulkanAsyncCompute.cpp + EVIL-комментарий с cross-ref на `agent/knowledge.md §33`.
+- **Phase 4: Verify HZB wait is correct** — `RecordHzbAsyncCullPass` (L308) waits on `hzbBuildTimelineSemaphore` at
+  `hzbBuildLastTimelineValue`; `SubmitHzbAsyncCullToComputeQueue` (L404) signals `hzbBuildTimelineSemaphore` at
+  incremented `hzbBuildLastTimelineValue`. **Пара согласована**, fix не нужен. Both record functions share the same
+  persistent `asyncComputeCommandBuffer` but use DIFFERENT signal semaphores — wait MUST match submit per function.
 - **Phase 5: Regression tests** — 2 новых sub-tests в `ProjectVFluidCATests`:
-  - `TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb` — column of fluid at Y=5..9 falls to floor, проверяет что stats.fluidVoxelCount matches world-wide count и что fluid moved below initial AABB.
-  - `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` — loads `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` если есть, прогоняет 300 Fluid CA тиков, asserts no divergence. Skip-with-warning если snapshot отсутствует (для чистых clone'ов).
-- **Phase 6: Rebuild + verify** — `cmake --build build/linux-clang-debug --target ProjectVFluidCATests ProjectV --parallel 8` → green. `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 38/38. `ProjectVFluidCATests` отдельно — PASS включая 2 новых sub-tests. `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` логирует: `[FluidCA] replay snapshot loaded: 24x17x24 fluid=436` → 300 тиков без divergence.
-- **Phase 7: Doc-sync** — `COMMENTS.md` 2 новых design-rationale entries (VoxelWorld.cpp L1663-L1686, VulkanAsyncCompute.cpp L114-L134), `CHANGELOG.md` 18x session entry, `agent/knowledge.md` §30 updated (debug-assert range fix) + §33 NEW (persistent cmd buffer + timeline semaphore wait contract), `agent/workspace.md` this entry.
+    - `TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb` — column of fluid at Y=5..9 falls to floor,
+      проверяет что stats.fluidVoxelCount matches world-wide count и что fluid moved below initial AABB.
+    - `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` — loads
+      `/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin` если есть, прогоняет 300 Fluid CA тиков, asserts
+      no divergence. Skip-with-warning если snapshot отсутствует (для чистых clone'ов).
+- **Phase 6: Rebuild + verify** —
+  `cmake --build build/linux-clang-debug --target ProjectVFluidCATests ProjectV --parallel 8` → green.
+  `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 38/38. `ProjectVFluidCATests` отдельно — PASS включая 2 новых
+  sub-tests. `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` логирует:
+  `[FluidCA] replay snapshot loaded: 24x17x24 fluid=436` → 300 тиков без divergence.
+- **Phase 7: Doc-sync** — `COMMENTS.md` 2 новых design-rationale entries (VoxelWorld.cpp L1663-L1686,
+  VulkanAsyncCompute.cpp L114-L134), `CHANGELOG.md` 18x session entry, `agent/knowledge.md` §30 updated (debug-assert
+  range fix) + §33 NEW (persistent cmd buffer + timeline semaphore wait contract), `agent/workspace.md` this entry.
 - **Phase 8: Commit prompt** — per AGENTS.md §5.4 + §5.9, no commit without operator confirmation.
 
 **Operator action:** inspect `git diff --stat`, then `git add` + `git commit` if approved.
 
 **Files modified (scope of this session):**
+
 - `src/voxel/VoxelWorld.cpp` — 6 LoC (debug assert iteration range fix)
 - `src/render/vulkan/VulkanAsyncCompute.cpp` — ~10 LoC + comment refresh (wait semaphore fix)
 - `tests/FluidCATests.cpp` — 2 new sub-tests (~50 LoC)
@@ -182,81 +487,233 @@ PRE-RESET SNAPSHOT — ARCHIVED 2026-06-24
 - `agent/knowledge.md` — §30 update + new §33
 - `agent/workspace.md` — this update
 
-**Out of scope:** Stage 5.2 TLAS instance population + working RTX visual smoke (still ⏸️ Partial), Stage 6.2 PIMPL full struct move (still ⏸️ Partial), both deferred per TODO.md Сводка.
+**Out of scope:** Stage 5.2 TLAS instance population + working RTX visual smoke (still ⏸️ Partial), Stage 6.2 PIMPL full
+struct move (still ⏸️ Partial), both deferred per TODO.md Сводка.
 
 ---
 
-**2026-06-22 session 18x+ (this session — chain + AABB fixes after RTX re-test).** Build green, ctest 38/38 pass + `ProjectVFluidCATests` PASS (24 sub-tests). User's RTX replay runs clean (no VUID-08740). Safety-net: `/tmp/before_18xplus_152237.patch`. No new commits — operator review pending.
+**2026-06-22 session 18x+ (this session — chain + AABB fixes after RTX re-test).** Build green, ctest 38/38 pass +
+`ProjectVFluidCATests` PASS (24 sub-tests). User's RTX replay runs clean (no VUID-08740). Safety-net:
+`/tmp/before_18xplus_152237.patch`. No new commits — operator review pending.
 
-- **Phase A: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec chain requirements + `VUID-VkShaderModuleCreateInfo-pCode-08740` requirement semantics. Same `docs.vulkan.org/spec/latest/chapters/shaders.html` chapter as 18x.
-- **Phase B: Fix `VulkanBootstrap.cpp` `VkDeviceCreateInfo::pNext` chain** — refactored 6 ternary `?: nullptr` short-circuits into unconditional links. Each feature struct always has `sType` initialized at declaration. Only the feature *fields* stay gated on `selected.supports*` / `meshShaderEnabled` / `rtxEnabled`. Real bug: on hardware without `swapchainMaintenance1`, the chain broke mid-way and `meshShader`/`accelerationStructure`/`rayQuery` feature structs NEVER reached `vkCreateDevice`. Validation layer caught this via `VUID-VkShaderModuleCreateInfo-pCode-08740` on every RTX shader load.
-- **Phase C: Verify** — `PROJECTV_HW_RAY_TRACING=1 bin/ProjectV` → no `VUID-...-08740` errors. `Render: RayTracedShadows.Initialize: enabled` preserved. User's replay runs end-to-end.
-- **Phase D: Investigate "вода не течёт" report** — extended `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` to dump voxel grid around fluid AABB + log `totalMoved`. Result: AABB was `(INT32_MAX, INT32_MAX, INT32_MAX)..(INT32_MIN, INT32_MIN, INT32_MIN)` (invalid sentinel), so `UpdateFluidCA` sim range was empty → `movedCount=0` every tick → water never falls. Grid dump shows fluid (436 cells) inside VoxelLab glass sphere — `~~~~~` enclosed by `GGGGG` rings, sitting on a `GGGGGGG` glass floor at Y=3. By design water is stable inside the glass; if user breaks the shell, fluid would fall — but the empty-AABB bug prevents CA from doing anything even then.
-- **Phase E: Fix `RebuildVoxelWorldDerivedState` to recompute AABB** — piggy-back on existing `O(world_volume)` iteration that already runs once per snapshot load to rebuild `world.stats`. Reset AABB to sentinels first, expand on each `Fluid` cell found. Zero extra cost.
-- **Phase F: Re-verify** — replay test now logs `[FluidCA] replay: 300 ticks, ... AABB grew: y[3..11) -> y[3..11)` (correct AABB after recompute), `fluid preserved=436/436` (no divergence). Fluid in this particular snapshot is stable inside the glass sphere by design, so `totalMoved=0` is expected — test no longer asserts movement, just AABB validity.
-- **Phase G: Doc-sync** — `COMMENTS.md` 2 new design-rationale blocks (VulkanBootstrap.cpp chain fix L819-L867, VoxelWorld.cpp RebuildVoxelWorldDerivedState fix L653-L686), `CHANGELOG.md` 18x+ section, `agent/knowledge.md` §34 (chain rules) + §35 (snapshot round-trip invariants), `agent/workspace.md` this entry.
+- **Phase A: Web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec chain requirements +
+  `VUID-VkShaderModuleCreateInfo-pCode-08740` requirement semantics. Same
+  `docs.vulkan.org/spec/latest/chapters/shaders.html` chapter as 18x.
+- **Phase B: Fix `VulkanBootstrap.cpp` `VkDeviceCreateInfo::pNext` chain** — refactored 6 ternary `?: nullptr`
+  short-circuits into unconditional links. Each feature struct always has `sType` initialized at declaration. Only the
+  feature *fields* stay gated on `selected.supports*` / `meshShaderEnabled` / `rtxEnabled`. Real bug: on hardware
+  without `swapchainMaintenance1`, the chain broke mid-way and `meshShader`/`accelerationStructure`/`rayQuery` feature
+  structs NEVER reached `vkCreateDevice`. Validation layer caught this via `VUID-VkShaderModuleCreateInfo-pCode-08740`
+  on every RTX shader load.
+- **Phase C: Verify** — `PROJECTV_HW_RAY_TRACING=1 bin/ProjectV` → no `VUID-...-08740` errors.
+  `Render: RayTracedShadows.Initialize: enabled` preserved. User's replay runs end-to-end.
+- **Phase D: Investigate "вода не течёт" report** — extended `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot`
+  to dump voxel grid around fluid AABB + log `totalMoved`. Result: AABB was
+  `(INT32_MAX, INT32_MAX, INT32_MAX)..(INT32_MIN, INT32_MIN, INT32_MIN)` (invalid sentinel), so `UpdateFluidCA` sim
+  range was empty → `movedCount=0` every tick → water never falls. Grid dump shows fluid (436 cells) inside VoxelLab
+  glass sphere — `~~~~~` enclosed by `GGGGG` rings, sitting on a `GGGGGGG` glass floor at Y=3. By design water is stable
+  inside the glass; if user breaks the shell, fluid would fall — but the empty-AABB bug prevents CA from doing anything
+  even then.
+- **Phase E: Fix `RebuildVoxelWorldDerivedState` to recompute AABB** — piggy-back on existing `O(world_volume)`
+  iteration that already runs once per snapshot load to rebuild `world.stats`. Reset AABB to sentinels first, expand on
+  each `Fluid` cell found. Zero extra cost.
+- **Phase F: Re-verify** — replay test now logs `[FluidCA] replay: 300 ticks, ... AABB grew: y[3..11) -> y[3..11)` (
+  correct AABB after recompute), `fluid preserved=436/436` (no divergence). Fluid in this particular snapshot is stable
+  inside the glass sphere by design, so `totalMoved=0` is expected — test no longer asserts movement, just AABB
+  validity.
+- **Phase G: Doc-sync** — `COMMENTS.md` 2 new design-rationale blocks (VulkanBootstrap.cpp chain fix L819-L867,
+  VoxelWorld.cpp RebuildVoxelWorldDerivedState fix L653-L686), `CHANGELOG.md` 18x+ section, `agent/knowledge.md` §34 (
+  chain rules) + §35 (snapshot round-trip invariants), `agent/workspace.md` this entry.
 - **Phase H: Commit prompt** — per AGENTS.md §5.4 + §5.9, no commit without operator confirmation.
 
 **Files modified (scope of this session 18x+):**
+
 - `src/render/vulkan/VulkanBootstrap.cpp` — chain refactor, ~20 LoC + sType always-init
 - `src/voxel/VoxelWorld.cpp` — AABB reset + expand inside existing `RebuildVoxelWorldDerivedState` loop, ~12 LoC
-- `tests/FluidCATests.cpp` — extended `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` with AABB validity assertions + voxel grid dump (~30 LoC)
+- `tests/FluidCATests.cpp` — extended `TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot` with AABB validity
+  assertions + voxel grid dump (~30 LoC)
 - `COMMENTS.md`, `CHANGELOG.md`, `agent/knowledge.md`, `agent/workspace.md`
 
-**Out of scope:** Stage 5.2 TLAS instance population + working RTX visual smoke (still ⏸️ Partial), Stage 6.2 PIMPL full struct move (still ⏸️ Partial), both deferred per TODO.md Сводка. The user's claim that water doesn't flow is fully addressed: AABB is now properly restored from snapshot, Fluid CA sim range is correct, water in stable configurations remains stable (by design).
+**Out of scope:** Stage 5.2 TLAS instance population + working RTX visual smoke (still ⏸️ Partial), Stage 6.2 PIMPL full
+struct move (still ⏸️ Partial), both deferred per TODO.md Сводка. The user's claim that water doesn't flow is fully
+addressed: AABB is now properly restored from snapshot, Fluid CA sim range is correct, water in stable configurations
+remains stable (by design).
 
 ---
 
-**2026-06-21 session 16x (Stage 5.2 RTX foundation, Phases 1-15 complete, Phase 16 doc-sync in progress).** Build green, ctest 37/38 pass (+ 2 pre-existing link-error executables `ProjectVTests` + `ProjectVFluidCATests` excluded; 1 new test executable `ProjectVRayTracedShadowTests` 8/8 sub-tests pass, +1 vs previous baseline). 15/16 phases done. ~1100 LoC new code (excl. tests). Foundation in place, env-gated RTX path runs. NO commit — operator decision pending. Safety-net: `/tmp/before_16x_20260621_183028.patch` (430 KB, kept per AGENTS.md §5.4).
+**2026-06-21 session 16x (Stage 5.2 RTX foundation, Phases 1-15 complete, Phase 16 doc-sync in progress).** Build green,
+ctest 37/38 pass (+ 2 pre-existing link-error executables `ProjectVTests` + `ProjectVFluidCATests` excluded; 1 new test
+executable `ProjectVRayTracedShadowTests` 8/8 sub-tests pass, +1 vs previous baseline). 15/16 phases done. ~1100 LoC new
+code (excl. tests). Foundation in place, env-gated RTX path runs. NO commit — operator decision pending. Safety-net:
+`/tmp/before_16x_20260621_183028.patch` (430 KB, kept per AGENTS.md §5.4).
 
-- **Phase 1: Safety-net + dirty baseline** — `git diff > /tmp/before_16x_*.patch`. Dirty tree baseline: 30 modified + 100+ untracked (8x V C artefacts + experiments).
-- **Phase 2: Web-search gate** — read vendored Vulkan 1.4.350.1 RTX docs (`antora/tutorial/latest/courses/18_Ray_tracing/02_Acceleration_structures.html`, `03_Ray_query_shadows.html`); subagent extracted full API contracts from `vulkan_core.h` (pNext chain order, struct layouts, deferred host ops, GLSL `rayQueryEXT` pattern, VkAccelerationStructureInstanceKHR 64-byte layout, build flags, scratch alignment).
-- **Phase 3: `HardwareRayTracingProbe` extended** — added `deferredHostOperations`, `accelerationStructureHostCommands`, `bufferDeviceAddress` capability flags + `maxPrimitiveCount`, `maxInstanceCount`, `maxPerStageDescriptorAccelerationStructures`, `minAccelerationStructureScratchOffsetAlignment` limits. Probe now queries `VkPhysicalDeviceAccelerationStructurePropertiesKHR` + chains `VkPhysicalDeviceRayQueryFeaturesKHR` + `VkPhysicalDeviceAccelerationStructureFeaturesKHR` + `VkPhysicalDeviceBufferDeviceAddressFeatures` via `VkPhysicalDeviceFeatures2::pNext`. +44 LoC.
-- **Phase 4: `VulkanBootstrap` extension enable + pNext chain** — `PROJECTV_HW_RAY_TRACING=ON` opt-in env gate. When ON + probe success: adds `VK_KHR_acceleration_structure` + `VK_KHR_ray_query` + (`VK_KHR_deferred_host_operations` if supported) to `ppEnabledExtensionNames`. Chains `VkPhysicalDeviceAccelerationStructureFeaturesKHR` (accelerationStructure=VK_TRUE, hostCommands=VK_TRUE if supported) + `VkPhysicalDeviceRayQueryFeaturesKHR` (rayQuery=VK_TRUE) into device create pNext chain (after `VkPhysicalDeviceMeshShaderFeaturesEXT`). Result stored in `VulkanContextState::rayTracing` (new field). Also: `VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT` flag set when HW RT detected (avoids VMA assertion when RTX buffers use device addresses). +95 LoC.
-- **Phase 5: `RayTracedShadows.{hpp,cpp}` skeleton + env gate** — new file with `RayTracedShadowConfig` struct (tlas, tlasInstanceBuffer, allocation, mappedData, deviceAddress, capacity, instance count, counters, scratch buffer), `RayTracedShadows` class (Initialize, Shutdown, SetBlasDirtyQueue, BuildDirtyBlases, UpdateTlas, RecordTlasBuild, RecordRayTracedShadowPass, RecordDebugReport, ComputeBlasBuildScratchSize, BuildChunkBlas), `IsRayTracedShadowEnabled()` env-gate function + `CreateRayTracedShadowResources` + `DestroyRayTracedShadowResources` factory functions. TLAS instance buffer allocated with VMA `HOST_ACCESS_SEQUENTIAL_WRITE_BIT` + `MAPPED_BIT` for CPU writes. Scratch buffer (32 MiB aligned) for AS build + raw pointer cleanup. +475 LoC.
-- **Phase 6: `SceneResources` integration + `RenderState` field** — added `projectv::render::RayTracedShadows *rayTracedShadows` pointer to `RenderState` (forward-declared in Types.hpp, full type in Types.cpp to avoid include cycle). Wired into `VulkanInit.cpp` init flow + `Types.cpp` shutdown flow. +50 LoC Types.hpp + 10 LoC Types.cpp + 47 LoC VulkanInit.cpp.
-- **Phase 7: VMA scratch buffer pool** — single 32 MiB scratch buffer aligned to `minAccelerationStructureScratchOffsetAlignment` (128 on RTX 3060 Ti). VMA `DEDICATED_MEMORY_BIT` flag. Reused by all BLAS + TLAS builds. +30 LoC.
-- **Phase 8: `BuildChunkBlas` API** — takes SVDAG-derived triangle data (vertex buffer + index buffer + counts) and prepares `VkAccelerationStructureBuildGeometryInfoKHR` with `PREFER_FAST_TRACE_BIT_KHR` + `ALLOW_COMPACTION_BIT_KHR`. API surface in place; actual `vkCmdBuildAccelerationStructuresKHR` dispatch deferred (needs SVDAG-to-triangle conversion integration). +60 LoC.
-- **Phase 9: `UpdateTlas` + `RecordTlasBuild` API** — TLAS instance buffer population with `VkAccelerationStructureInstanceKHR` (64 bytes per instance, mask=0xFF, instanceCustomIndex encoding chunk index). +50 LoC.
-- **Phase 10: `VoxelWorld` → BLAS dirty queue** — added `pendingBlasRebuildIndices` parallel list to `pendingChunkRebuildIndices`. `MarkChunksTouchedByVoxelEditDirty` now appends to both. New `CollectDirtyVoxelChunkBlasRebuildRequests` drains BLAS queue. +20 LoC VoxelWorld.cpp + 2 LoC VoxelWorld.hpp.
-- **Phase 11: `Renderer.cpp::RecordGraphicsCommands` wire-up** — calls `RecordRayTracedShadowPass` between main voxel pass and `vkCmdEndRendering`. Tracy zone "RecordRayTracedShadowPass". Gated on `render.rayTracedShadows != nullptr`. +10 LoC.
-- **Phase 12-13: Shader work deferred** — SPIR-V variant + `rayQueryEXT` GLSL integration + `VoxelSceneLighting` byte-exact contract extension deferred to next session (per operator "Решаю позже" commit timing + risk of byte-exact lighting contract drift per `agent/knowledge.md §15`).
-- **Phase 14: `ProjectVRayTracedShadowTests` NEW** — 8 sub-tests: env-gate default off / on / 1 / 0 / garbage, config default values, default-constructed shadow, scratch size for zero/non-zero primitives, BuildChunkBlas null-buffer guard, dirty queue consume, `VkAccelerationStructureInstanceKHR` 64-byte size invariant. All 8 pass. +137 LoC tests/CMakeLists.txt + 130 LoC RayTracedShadowTests.cpp.
-- **Phase 15: `CMakePresets.json` backfill** — `ProjectVRayTracedShadowTests` added to all 5 buildPresets (windows-clang-debug-build, windows-clang-debug-ci-build, linux-clang-debug-build, windows-clang-release-build, linux-clang-release-build). 5 = 1 × 5 occurrences per AGENTS.md §4 invariant.
+- **Phase 1: Safety-net + dirty baseline** — `git diff > /tmp/before_16x_*.patch`. Dirty tree baseline: 30 modified +
+  100+ untracked (8x V C artefacts + experiments).
+- **Phase 2: Web-search gate** — read vendored Vulkan 1.4.350.1 RTX docs (
+  `antora/tutorial/latest/courses/18_Ray_tracing/02_Acceleration_structures.html`, `03_Ray_query_shadows.html`);
+  subagent extracted full API contracts from `vulkan_core.h` (pNext chain order, struct layouts, deferred host ops, GLSL
+  `rayQueryEXT` pattern, VkAccelerationStructureInstanceKHR 64-byte layout, build flags, scratch alignment).
+- **Phase 3: `HardwareRayTracingProbe` extended** — added `deferredHostOperations`, `accelerationStructureHostCommands`,
+  `bufferDeviceAddress` capability flags + `maxPrimitiveCount`, `maxInstanceCount`,
+  `maxPerStageDescriptorAccelerationStructures`, `minAccelerationStructureScratchOffsetAlignment` limits. Probe now
+  queries `VkPhysicalDeviceAccelerationStructurePropertiesKHR` + chains `VkPhysicalDeviceRayQueryFeaturesKHR` +
+  `VkPhysicalDeviceAccelerationStructureFeaturesKHR` + `VkPhysicalDeviceBufferDeviceAddressFeatures` via
+  `VkPhysicalDeviceFeatures2::pNext`. +44 LoC.
+- **Phase 4: `VulkanBootstrap` extension enable + pNext chain** — `PROJECTV_HW_RAY_TRACING=ON` opt-in env gate. When
+  ON + probe success: adds `VK_KHR_acceleration_structure` + `VK_KHR_ray_query` + (`VK_KHR_deferred_host_operations` if
+  supported) to `ppEnabledExtensionNames`. Chains `VkPhysicalDeviceAccelerationStructureFeaturesKHR` (
+  accelerationStructure=VK_TRUE, hostCommands=VK_TRUE if supported) + `VkPhysicalDeviceRayQueryFeaturesKHR` (
+  rayQuery=VK_TRUE) into device create pNext chain (after `VkPhysicalDeviceMeshShaderFeaturesEXT`). Result stored in
+  `VulkanContextState::rayTracing` (new field). Also: `VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT` flag set when HW
+  RT detected (avoids VMA assertion when RTX buffers use device addresses). +95 LoC.
+- **Phase 5: `RayTracedShadows.{hpp,cpp}` skeleton + env gate** — new file with `RayTracedShadowConfig` struct (tlas,
+  tlasInstanceBuffer, allocation, mappedData, deviceAddress, capacity, instance count, counters, scratch buffer),
+  `RayTracedShadows` class (Initialize, Shutdown, SetBlasDirtyQueue, BuildDirtyBlases, UpdateTlas, RecordTlasBuild,
+  RecordRayTracedShadowPass, RecordDebugReport, ComputeBlasBuildScratchSize, BuildChunkBlas),
+  `IsRayTracedShadowEnabled()` env-gate function + `CreateRayTracedShadowResources` + `DestroyRayTracedShadowResources`
+  factory functions. TLAS instance buffer allocated with VMA `HOST_ACCESS_SEQUENTIAL_WRITE_BIT` + `MAPPED_BIT` for CPU
+  writes. Scratch buffer (32 MiB aligned) for AS build + raw pointer cleanup. +475 LoC.
+- **Phase 6: `SceneResources` integration + `RenderState` field** — added
+  `projectv::render::RayTracedShadows *rayTracedShadows` pointer to `RenderState` (forward-declared in Types.hpp, full
+  type in Types.cpp to avoid include cycle). Wired into `VulkanInit.cpp` init flow + `Types.cpp` shutdown flow. +50 LoC
+  Types.hpp + 10 LoC Types.cpp + 47 LoC VulkanInit.cpp.
+- **Phase 7: VMA scratch buffer pool** — single 32 MiB scratch buffer aligned to
+  `minAccelerationStructureScratchOffsetAlignment` (128 on RTX 3060 Ti). VMA `DEDICATED_MEMORY_BIT` flag. Reused by all
+  BLAS + TLAS builds. +30 LoC.
+- **Phase 8: `BuildChunkBlas` API** — takes SVDAG-derived triangle data (vertex buffer + index buffer + counts) and
+  prepares `VkAccelerationStructureBuildGeometryInfoKHR` with `PREFER_FAST_TRACE_BIT_KHR` + `ALLOW_COMPACTION_BIT_KHR`.
+  API surface in place; actual `vkCmdBuildAccelerationStructuresKHR` dispatch deferred (needs SVDAG-to-triangle
+  conversion integration). +60 LoC.
+- **Phase 9: `UpdateTlas` + `RecordTlasBuild` API** — TLAS instance buffer population with
+  `VkAccelerationStructureInstanceKHR` (64 bytes per instance, mask=0xFF, instanceCustomIndex encoding chunk index). +50
+  LoC.
+- **Phase 10: `VoxelWorld` → BLAS dirty queue** — added `pendingBlasRebuildIndices` parallel list to
+  `pendingChunkRebuildIndices`. `MarkChunksTouchedByVoxelEditDirty` now appends to both. New
+  `CollectDirtyVoxelChunkBlasRebuildRequests` drains BLAS queue. +20 LoC VoxelWorld.cpp + 2 LoC VoxelWorld.hpp.
+- **Phase 11: `Renderer.cpp::RecordGraphicsCommands` wire-up** — calls `RecordRayTracedShadowPass` between main voxel
+  pass and `vkCmdEndRendering`. Tracy zone "RecordRayTracedShadowPass". Gated on `render.rayTracedShadows != nullptr`.
+  +10 LoC.
+- **Phase 12-13: Shader work deferred** — SPIR-V variant + `rayQueryEXT` GLSL integration + `VoxelSceneLighting`
+  byte-exact contract extension deferred to next session (per operator "Решаю позже" commit timing + risk of byte-exact
+  lighting contract drift per `agent/knowledge.md §15`).
+- **Phase 14: `ProjectVRayTracedShadowTests` NEW** — 8 sub-tests: env-gate default off / on / 1 / 0 / garbage, config
+  default values, default-constructed shadow, scratch size for zero/non-zero primitives, BuildChunkBlas null-buffer
+  guard, dirty queue consume, `VkAccelerationStructureInstanceKHR` 64-byte size invariant. All 8 pass. +137 LoC
+  tests/CMakeLists.txt + 130 LoC RayTracedShadowTests.cpp.
+- **Phase 15: `CMakePresets.json` backfill** — `ProjectVRayTracedShadowTests` added to all 5 buildPresets (
+  windows-clang-debug-build, windows-clang-debug-ci-build, linux-clang-debug-build, windows-clang-release-build,
+  linux-clang-release-build). 5 = 1 × 5 occurrences per AGENTS.md §4 invariant.
 
-**Runtime verified:** `PROJECTV_HW_RAY_TRACING=ON bin/ProjectV` → `Render: RayTracedShadows.Initialize: enabled (maxBlas=4096 maxPrim/Blas=8192 hostBuild=0)`. Default (no env) → `Render: RayTracedShadows.Initialize: PROJECTV_HW_RAY_TRACING not ON; path stays dormant`. Pre-existing validation errors (bindings 9-12: lodDownsampled/chunkLodLevels/vctClipmap/volumetricFog) are from prior sessions (8x V1/V C) and predate this work.
+**Runtime verified:** `PROJECTV_HW_RAY_TRACING=ON bin/ProjectV` →
+`Render: RayTracedShadows.Initialize: enabled (maxBlas=4096 maxPrim/Blas=8192 hostBuild=0)`. Default (no env) →
+`Render: RayTracedShadows.Initialize: PROJECTV_HW_RAY_TRACING not ON; path stays dormant`. Pre-existing validation
+errors (bindings 9-12: lodDownsampled/chunkLodLevels/vctClipmap/volumetricFog) are from prior sessions (8x V1/V C) and
+predate this work.
 
-**Per AGENTS.md §5.4 + AGENTS.md §5.9:** no commit performed. Operator decision pending (Phase 16: doc sync + commit prompt).
+**Per AGENTS.md §5.4 + AGENTS.md §5.9:** no commit performed. Operator decision pending (Phase 16: doc sync + commit
+prompt).
 
+**2026-06-21 session 8x (Variant C «Stage 5.4 wire-up + Sky LDR LUT», this session, closed dirty per operator policy)
+** — 9 phases + doc sync across 4 TODO stages (5.4 wire-up + 5.x Sky LDR LUT + CMakePresets backfill). Build green, *
+*36/36 ctest pass** (+ 2 pre-existing link-error executables `ProjectVTests` + `ProjectVFluidCATests` excluded per
+workspace.md §1). 0 new test targets (reused 8x V B targets); +5 sub-tests in `ProjectVSkyAtmosphereTests` (Sky LUT
+env + constants + create/destroy) + 2 new sub-tests in `TestLightingDebugViewCycleIncludesShadow` (VolumetricFog +
+VolumetricTransmittance cycle entries). All green. **No commit** — operator policy "close dirty without prompt" per
+AGENTS.md §5.4.
 
-
-**2026-06-21 session 8x (Variant C «Stage 5.4 wire-up + Sky LDR LUT», this session, closed dirty per operator policy)** — 9 phases + doc sync across 4 TODO stages (5.4 wire-up + 5.x Sky LDR LUT + CMakePresets backfill). Build green, **36/36 ctest pass** (+ 2 pre-existing link-error executables `ProjectVTests` + `ProjectVFluidCATests` excluded per workspace.md §1). 0 new test targets (reused 8x V B targets); +5 sub-tests in `ProjectVSkyAtmosphereTests` (Sky LUT env + constants + create/destroy) + 2 new sub-tests in `TestLightingDebugViewCycleIncludesShadow` (VolumetricFog + VolumetricTransmittance cycle entries). All green. **No commit** — operator policy "close dirty without prompt" per AGENTS.md §5.4.
-
-- **Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)** — Hillaire 2020 EGSR (`cf14050` + `sebh/UnrealEngineSkyAtmosphere` + `AirGuanZ/AtmosphereRenderer` MIT port; confirmed Sky-View LUT 256×128 + Multi-Scattering LUT 32×32 with 0.036 ms perf on GTX 1060 for 64×64 Sky-View) + Frostbite 2015 (Hillaire slide 28: per-slice integral `sliceLightIntegral = sliceLight * (1 - transmittance) / density` for improved transmission) + Wronski 2014 froxel pattern (confirmed 160×90×64 @ 720p, 240×135×128 @ 1080p+, 12-slab ray-march production tuning) + Unity VolumetricLighting reference (32×2×1 workgroup, transmission in alpha, sliceDensity=max(0.000001) for div-by-zero safety) + Nubis 2017 (conservative depth max(0.5) for thin occluders, sphere-bottom excluded, 1.2 ms target).
-- **Phase 1: Volumetric fog froxel descriptor plumbing (voxel.frag binding 12)** — `kGraphicsDescriptorBindings` extended 7→9 entries (added binding 11 = `vctClipmap` sampler3D + binding 12 = `volumetricFog` sampler3D). EVIL markers for both binding numbers per AGENTS.md §8.1. `kGraphicsVolume3DDescriptorPoolSize` (SAMPLED_IMAGE type) added — pool multiplier 2×MAX_FRAMES_IN_FLIGHT. `volumetricFogFallbackImage/View/Allocation/Memory` fields added to `RenderState` (1×1×1 RGBA16F zero dummy bound when env gate is OFF, so binding 12 is always valid for shader). `CreateVolumetricFogFallbackOnly` separate function creates fallback even when PROJECTV_FOG=ON not set. `RefreshGraphicsResourceBindings` extended to write bindings 11+12 per frame with vctClipmapView (real when vctClipmapEnabled, VK_NULL_HANDLE otherwise) + volumetricFogImageInfo (real when volumetricFogPipelineEnabled, fallback otherwise). VulkanInit.cpp: `CreateVolumetricFogFallbackOnly` called unconditionally before env-gated `CreateVolumetricFogResources`. ~280 LoC.
-- **Phase 2: Volumetric fog consume in voxel.frag** — `voxel.frag` adds `layout(set = 0, binding = 12) uniform sampler3D volumetricFog;` (EVIL marker for binding 12 + Wronski 2014 froxel binding contract). New `SampleVolumetricFogAtWorld` logic: compute `froxelUvw = (gl_FragCoord.xy / froxelImageSize, depthDistribution)` where `depthDistribution = pow(normalizedDepth, 0.5) * 0.995 + 0.005` matches `volumetric_fog.comp` exponential depth distribution. `texture(volumetricFog, froxelUvw)` returns accumulated RGB + (1 - transmittance) alpha. Composition: `color = color * volumetricFogTransmittance + volumetricFogAccum` (per-slice Beer-Lambert per Frostbite 2015 slide 28). LightingDebugView: 2 new entries `VolumetricFog` (12) + `VolumetricTransmittance` (13). Debug paths 12/13 set color = fog accum / transmittance gray. VoxelWorldTests.cpp `TestLightingDebugViewCycleIncludesShadow` extended with 2 new cycle assertions. VoxelizePipelineTests.cpp `TestVctDebugViewCycle` updated for new cycle. ~180 LoC.
-- **Phase 3: Renderer.cpp cloudscape per-frame dispatch wiring** — `Renderer.cpp::DrawFrame` now records `RecordCloudscapeRaymarchPass` after main voxel pass before `vkCmdEndRendering`. Predicate `cloudscapePassActive = IsCloudscapeEnabled() && cloudscapePipelineEnabled`. Push constants from `currentSceneLighting`: `cloudColorAndCoverage` (4-tuple cloud color + coverage 0.65), `sunDirectionAndIntensity` (sun direction + intensity from `sunColorAndIntensity[3]`), `cloudLayerParams` (cloud UV offset/coverage/contrast), `viewParams` (camera height, aspect ratio, tanHalfFovY). `imageIndex` passed for per-frame descriptor set lookup. `Cloudscape.hpp` included in Renderer.cpp. ~60 LoC.
-- **Phase 4: Sky LDR LUT precomputation — Sky-View 256×128 RGBA16F (CPU)** — `CreateSkyViewLut`: CPU computes 256×128 RGBA16F Hillaire 2020 single-scattering per `(viewZenith, sunZenith)` with 16-step ray-march through exponential atmosphere density `exp(-altitude/8500)`. Single scattering transmittance `T(θ_v, θ_s)` per spectral channel R/G/B; Henyey-Greenstein phase function (g=0.8) for Mie + Rayleigh phase (0.75 * (1 + cos²θ)). Float-to-half manual conversion `FloatToHalf` (IEEE 754 round-to-nearest-even) since GLM doesn't expose `packHalf1x16`. RGBA16F upload via VMA `HOST_ACCESS_RANDOM_BIT` mapped memory. `kSkyViewLutFormat = VK_FORMAT_R16G16B16A16_SFLOAT` + `kSkyViewLutWidth = 256` + `kSkyViewLutHeight = 128` constants (EVIL markers). sky_atmosphere_constants namespace (kPlanetRadius, kAtmosphereHeight, kRayleighBetaR/G/B, kMieBeta, kMieG, kRaymarchStepCount=16) EVIL markers. ~250 LoC.
-- **Phase 5: Sky LDR LUT precomputation — Multi-Scattering 32×32 RGBA16F (CPU)** — `CreateMultiScatteringLut`: CPU computes 32×32 RGBA16F Wrenninge-style 2-octave multiple scattering accumulation as function of `(altitude, sunZenith)`. Same FloatToHalf upload pipeline. `kMultiScatteringLutWidth/Height = 32` constants (EVIL markers). ~150 LoC.
-- **Phase 6: Sky LDR LUT integration in shader** — `sky_atmosphere.frag` adds `layout(set = 0, binding = 0) uniform sampler2D skyViewLut` + `layout(set = 0, binding = 1) uniform sampler2D multiScatteringLut` (EVIL markers per Hillaire 2020 reference). Sky pass chooses between precomputed LUT path (gated by `pc.zenithColorAndIntensity.w > 1.5` magic — caller sets this flag when env PROJECTV_SKY_LUT=ON) and analytical fallback. LUT path: `viewZenith = acos(-viewDir.z)/π/2`, `sunZenith = acos(sunDir.y)/π/2`, sample `skyViewLut(viewZenith, sunZenith)` + `multiScatteringLut(sunZenith, sunDir.y)`, combine + transmittance multiply. Pipeline: descriptor set layout extended 0→2 COMBINED_IMAGE_SAMPLER bindings + descriptor pool extended + per-frame descriptor set alloc + write. `RecordSkyAtmospherePass` signature extended with `uint32_t frameIndex` for descriptor set lookup. Renderer.cpp call site updated to pass `imageIndex`. skyAtmosphereDescriptorSets[] MAX_FRAMES_IN_FLIGHT array in RenderState. ~280 LoC.
-- **Phase 7: Tests + Tracy + EVIL audit** — ProjectVSkyAtmosphereTests +5 sub-tests (env gate PROJECTV_SKY_LUT default/ON, kSkyViewLutWidth=256/kSkyViewLutHeight=128/kMultiScatteringLutWidth=32/kMultiScatteringLutHeight=32/kSkyViewLutFormat=RGBA16F, create/destroy null rejects). Tracy plot "Sky LUT Precompute (ms)" added to ConfigureDefaultPlots. EVIL marker audit grep: voxel.frag=3, sky_atmosphere.frag=2, volumetric_fog.comp=1, cloudscape.frag=1, VulkanGraphicsPipeline.cpp=2. All hard-coded magic-numbers documented per AGENTS.md §8.1.
-- **Phase 8: CMakePresets.json backfill** — Per AGENTS.md §4 invariant, backfilled `ProjectVVoxelizePipelineTests` + `ProjectVPhysicsIncrementalJoltTests` to all 5 buildPresets (windows-clang-debug-build, windows-clang-debug-ci-build, linux-clang-debug-build, windows-clang-release-build, linux-clang-release-build). 10 = 2 × 5 occurrences. Closes pre-existing gap from 8x V1 + 8x V A sessions.
-- **Phase 9: Doc sync (this entry)** — `agent/workspace.md` + `TODO.md` + `COMMENTS.md` + `CHANGELOG.md` updated. **No commit prompt** (per operator "close dirty without prompt" directive).
+- **Phase 0: Web-search gate (mandatory per AGENTS.md §5.3)** — Hillaire 2020 EGSR (`cf14050` +
+  `sebh/UnrealEngineSkyAtmosphere` + `AirGuanZ/AtmosphereRenderer` MIT port; confirmed Sky-View LUT 256×128 +
+  Multi-Scattering LUT 32×32 with 0.036 ms perf on GTX 1060 for 64×64 Sky-View) + Frostbite 2015 (Hillaire slide 28:
+  per-slice integral `sliceLightIntegral = sliceLight * (1 - transmittance) / density` for improved transmission) +
+  Wronski 2014 froxel pattern (confirmed 160×90×64 @ 720p, 240×135×128 @ 1080p+, 12-slab ray-march production tuning) +
+  Unity VolumetricLighting reference (32×2×1 workgroup, transmission in alpha, sliceDensity=max(0.000001) for
+  div-by-zero safety) + Nubis 2017 (conservative depth max(0.5) for thin occluders, sphere-bottom excluded, 1.2 ms
+  target).
+- **Phase 1: Volumetric fog froxel descriptor plumbing (voxel.frag binding 12)** — `kGraphicsDescriptorBindings`
+  extended 7→9 entries (added binding 11 = `vctClipmap` sampler3D + binding 12 = `volumetricFog` sampler3D). EVIL
+  markers for both binding numbers per AGENTS.md §8.1. `kGraphicsVolume3DDescriptorPoolSize` (SAMPLED_IMAGE type)
+  added — pool multiplier 2×MAX_FRAMES_IN_FLIGHT. `volumetricFogFallbackImage/View/Allocation/Memory` fields added to
+  `RenderState` (1×1×1 RGBA16F zero dummy bound when env gate is OFF, so binding 12 is always valid for shader).
+  `CreateVolumetricFogFallbackOnly` separate function creates fallback even when PROJECTV_FOG=ON not set.
+  `RefreshGraphicsResourceBindings` extended to write bindings 11+12 per frame with vctClipmapView (real when
+  vctClipmapEnabled, VK_NULL_HANDLE otherwise) + volumetricFogImageInfo (real when volumetricFogPipelineEnabled,
+  fallback otherwise). VulkanInit.cpp: `CreateVolumetricFogFallbackOnly` called unconditionally before env-gated
+  `CreateVolumetricFogResources`. ~280 LoC.
+- **Phase 2: Volumetric fog consume in voxel.frag** — `voxel.frag` adds
+  `layout(set = 0, binding = 12) uniform sampler3D volumetricFog;` (EVIL marker for binding 12 + Wronski 2014 froxel
+  binding contract). New `SampleVolumetricFogAtWorld` logic: compute
+  `froxelUvw = (gl_FragCoord.xy / froxelImageSize, depthDistribution)` where
+  `depthDistribution = pow(normalizedDepth, 0.5) * 0.995 + 0.005` matches `volumetric_fog.comp` exponential depth
+  distribution. `texture(volumetricFog, froxelUvw)` returns accumulated RGB + (1 - transmittance) alpha. Composition:
+  `color = color * volumetricFogTransmittance + volumetricFogAccum` (per-slice Beer-Lambert per Frostbite 2015 slide
+  28). LightingDebugView: 2 new entries `VolumetricFog` (12) + `VolumetricTransmittance` (13). Debug paths 12/13 set
+  color = fog accum / transmittance gray. VoxelWorldTests.cpp `TestLightingDebugViewCycleIncludesShadow` extended with 2
+  new cycle assertions. VoxelizePipelineTests.cpp `TestVctDebugViewCycle` updated for new cycle. ~180 LoC.
+- **Phase 3: Renderer.cpp cloudscape per-frame dispatch wiring** — `Renderer.cpp::DrawFrame` now records
+  `RecordCloudscapeRaymarchPass` after main voxel pass before `vkCmdEndRendering`. Predicate
+  `cloudscapePassActive = IsCloudscapeEnabled() && cloudscapePipelineEnabled`. Push constants from
+  `currentSceneLighting`: `cloudColorAndCoverage` (4-tuple cloud color + coverage 0.65), `sunDirectionAndIntensity` (sun
+  direction + intensity from `sunColorAndIntensity[3]`), `cloudLayerParams` (cloud UV offset/coverage/contrast),
+  `viewParams` (camera height, aspect ratio, tanHalfFovY). `imageIndex` passed for per-frame descriptor set lookup.
+  `Cloudscape.hpp` included in Renderer.cpp. ~60 LoC.
+- **Phase 4: Sky LDR LUT precomputation — Sky-View 256×128 RGBA16F (CPU)** — `CreateSkyViewLut`: CPU computes 256×128
+  RGBA16F Hillaire 2020 single-scattering per `(viewZenith, sunZenith)` with 16-step ray-march through exponential
+  atmosphere density `exp(-altitude/8500)`. Single scattering transmittance `T(θ_v, θ_s)` per spectral channel R/G/B;
+  Henyey-Greenstein phase function (g=0.8) for Mie + Rayleigh phase (0.75 * (1 + cos²θ)). Float-to-half manual
+  conversion `FloatToHalf` (IEEE 754 round-to-nearest-even) since GLM doesn't expose `packHalf1x16`. RGBA16F upload via
+  VMA `HOST_ACCESS_RANDOM_BIT` mapped memory. `kSkyViewLutFormat = VK_FORMAT_R16G16B16A16_SFLOAT` +
+  `kSkyViewLutWidth = 256` + `kSkyViewLutHeight = 128` constants (EVIL markers). sky_atmosphere_constants namespace (
+  kPlanetRadius, kAtmosphereHeight, kRayleighBetaR/G/B, kMieBeta, kMieG, kRaymarchStepCount=16) EVIL markers. ~250 LoC.
+- **Phase 5: Sky LDR LUT precomputation — Multi-Scattering 32×32 RGBA16F (CPU)** — `CreateMultiScatteringLut`: CPU
+  computes 32×32 RGBA16F Wrenninge-style 2-octave multiple scattering accumulation as function of
+  `(altitude, sunZenith)`. Same FloatToHalf upload pipeline. `kMultiScatteringLutWidth/Height = 32` constants (EVIL
+  markers). ~150 LoC.
+- **Phase 6: Sky LDR LUT integration in shader** — `sky_atmosphere.frag` adds
+  `layout(set = 0, binding = 0) uniform sampler2D skyViewLut` +
+  `layout(set = 0, binding = 1) uniform sampler2D multiScatteringLut` (EVIL markers per Hillaire 2020 reference). Sky
+  pass chooses between precomputed LUT path (gated by `pc.zenithColorAndIntensity.w > 1.5` magic — caller sets this flag
+  when env PROJECTV_SKY_LUT=ON) and analytical fallback. LUT path: `viewZenith = acos(-viewDir.z)/π/2`,
+  `sunZenith = acos(sunDir.y)/π/2`, sample `skyViewLut(viewZenith, sunZenith)` +
+  `multiScatteringLut(sunZenith, sunDir.y)`, combine + transmittance multiply. Pipeline: descriptor set layout extended
+  0→2 COMBINED_IMAGE_SAMPLER bindings + descriptor pool extended + per-frame descriptor set alloc + write.
+  `RecordSkyAtmospherePass` signature extended with `uint32_t frameIndex` for descriptor set lookup. Renderer.cpp call
+  site updated to pass `imageIndex`. skyAtmosphereDescriptorSets[] MAX_FRAMES_IN_FLIGHT array in RenderState. ~280 LoC.
+- **Phase 7: Tests + Tracy + EVIL audit** — ProjectVSkyAtmosphereTests +5 sub-tests (env gate PROJECTV_SKY_LUT
+  default/ON,
+  kSkyViewLutWidth=256/kSkyViewLutHeight=128/kMultiScatteringLutWidth=32/kMultiScatteringLutHeight=32/kSkyViewLutFormat=RGBA16F,
+  create/destroy null rejects). Tracy plot "Sky LUT Precompute (ms)" added to ConfigureDefaultPlots. EVIL marker audit
+  grep: voxel.frag=3, sky_atmosphere.frag=2, volumetric_fog.comp=1, cloudscape.frag=1, VulkanGraphicsPipeline.cpp=2. All
+  hard-coded magic-numbers documented per AGENTS.md §8.1.
+- **Phase 8: CMakePresets.json backfill** — Per AGENTS.md §4 invariant, backfilled `ProjectVVoxelizePipelineTests` +
+  `ProjectVPhysicsIncrementalJoltTests` to all 5 buildPresets (windows-clang-debug-build, windows-clang-debug-ci-build,
+  linux-clang-debug-build, windows-clang-release-build, linux-clang-release-build). 10 = 2 × 5 occurrences. Closes
+  pre-existing gap from 8x V1 + 8x V A sessions.
+- **Phase 9: Doc sync (this entry)** — `agent/workspace.md` + `TODO.md` + `COMMENTS.md` + `CHANGELOG.md` updated. **No
+  commit prompt** (per operator "close dirty without prompt" directive).
 
 **Per AGENTS.md §5.4 + AGENTS.md §5.9:** no commit performed. Operator decides commit timing separately.
 
 ## 2. Nearest Gap
 
-- **Stage 5.2 RTX shadows + BLAS** — `kVctCutoffRoughness=0.3` forwards smooth surfaces to RTX path. RTX BLAS (Bottom-Level Acceleration Structure) for static chunks, TLAS + ray query in `voxel.frag`, BLAS build per dirty-chunk. ~770 LoC, RTX-only path (graceful fallback per `2026-06-20-rt-shadows-vs-csm` verdict). Env gate `PROJECTV_HW_RAY_TRACING` per operator policy.
-- **16x session continuation** — Phases 7-16 of Stage 5.2 plan: scratch pool allocator, BuildChunkBlas, TLAS update, dirty queue propagation, Renderer.cpp wire-up, voxel.frag SPIR-V variant + rayQueryEXT, VoxelSceneLighting byte-exact contract, tests, CMakePresets backfill, doc sync. ~1450 LoC remaining.
-- **Stage 6.2 AppState PIMPL full struct move** — mechanical sed `state->render().X` → `state->render()->X` over 172 call sites. Multi-session.
+- **Stage 5.2 RTX shadows + BLAS** — `kVctCutoffRoughness=0.3` forwards smooth surfaces to RTX path. RTX BLAS (
+  Bottom-Level Acceleration Structure) for static chunks, TLAS + ray query in `voxel.frag`, BLAS build per
+  dirty-chunk. ~770 LoC, RTX-only path (graceful fallback per `2026-06-20-rt-shadows-vs-csm` verdict). Env gate
+  `PROJECTV_HW_RAY_TRACING` per operator policy.
+- **16x session continuation** — Phases 7-16 of Stage 5.2 plan: scratch pool allocator, BuildChunkBlas, TLAS update,
+  dirty queue propagation, Renderer.cpp wire-up, voxel.frag SPIR-V variant + rayQueryEXT, VoxelSceneLighting byte-exact
+  contract, tests, CMakePresets backfill, doc sync. ~1450 LoC remaining.
+- **Stage 6.2 AppState PIMPL full struct move** — mechanical sed `state->render().X` → `state->render()->X` over 172
+  call sites. Multi-session.
 - **Stage 1.1 NanoVDB async flatten** — Stage 1.1 flatten currently runs on CPU; could move to async compute queue.
-- **Stage 5.x Visual Polish additional axes** — bloom + aerial perspective + tonemap upgrade experiments (`2026-06-21-bloom-post-processing`, `2026-06-21-aerial-perspective`, `2026-06-21-tonemap-color-grading`) ready for integration per closed experiments.
+- **Stage 5.x Visual Polish additional axes** — bloom + aerial perspective + tonemap upgrade experiments (
+  `2026-06-21-bloom-post-processing`, `2026-06-21-aerial-perspective`, `2026-06-21-tonemap-color-grading`) ready for
+  integration per closed experiments.
 - **Stage 2.3 SVT** — sparse virtual texturing (still 🔓 Open, deferred).
 
 ## 3. Next Steps
 
 Future session candidates (operator decides):
+
 1. **Stage 5.2 RTX shadows + BLAS** — high, completes hybrid VCT+RTX per rt-shadows-vs-csm. RTX-only path.
 2. **Stage 6.2 AppState PIMPL full struct move** — high-risk sed migration, biggest incremental rebuild win.
 3. **Stage 5.x Visual Polish additional axes** — bloom + aerial perspective integration per closed experiments.
@@ -264,59 +721,161 @@ Future session candidates (operator decides):
 
 ## 4. Risks
 
-- **Stage 6.3 HZB cross-queue depth** — now fully closed (Phase 1 of this session). Single-barrier pattern with `VK_QUEUE_FAMILY_IGNORED` is sufficient for current `VK_SHARING_MODE_EXCLUSIVE` HZB image when timeline semaphore + barrier provide execution + memory respectively. If `VK_KHR_maintenance8` becomes available (with `VK_DEPENDENCY_QUEUE_FAMILY_OWNERSHIP_TRANSFER_USE_ALL_STAGES_BIT`), the barrier can be tightened.
-- **Stage 5.1 VCT** — env gate default OFF. When `PROJECTV_VCT_GPU=ON` + 3D clipmap allocated, voxelize dispatch runs after graphics mip chain, then mip chain blit, then fragment shader uses `textureLod(vctClipmap, uvw, mipLevel)`. VoxelLab reference scene: 256³ RGBA16F = 16 MiB VRAM (4 mips ≈ 21 MiB total with metadata), well within `agent/knowledge.md §15` lighting contract. `kVctConeDirectionCount=6` per TODO §5.1 explicit (vs WickedEngine 16-32 cones for production quality — upgrade path documented).
-- **Stage 5.1 VCT specular cutoff** — `roughness > 0.3` routes to VCT specular. Smooth materials (`roughness <= 0.3`) currently have no specular GI contribution from VCT (placeholder comment in `voxel.frag` for Stage 5.2 RTX path). Risk: smooth materials may look under-lit when VCT is enabled. Acceptable because env gate is OFF by default; enabled users get a clear signal.
-- **Stage 5.2 RTX deferred** — per operator decision, RTX not in 8x A scope. Smooth specular GI empty until Stage 5.2 lands. No regression in default path.
-- **Stage 1.1 NanoVDB resize** — grow path active when capacity exceeded. `LogRuntimeFailure("NanoVdbFlatten", "GrowAndRefreshFailed")` only fires if VMA allocation fails after grow. Per-frame grow has 1.5× headroom.
-- **Stage 3.2 Incremental Jolt boundary-neighbor** — iterates 1-27 chunk slots; worst-case voxel edit on a corner produces 8 JPH body rebuilds. Per-rebuild cost ~2× wall time per chunk (greedy merge compile) but 35× fewer JPH AddShape calls net-positive.
-- **Ninja 1.13 dep-scan race** — `agent/knowledge.md §30` documents the bug workaround (`--parallel 1` first build); required on C++ module changes.
+- **Stage 6.3 HZB cross-queue depth** — now fully closed (Phase 1 of this session). Single-barrier pattern with
+  `VK_QUEUE_FAMILY_IGNORED` is sufficient for current `VK_SHARING_MODE_EXCLUSIVE` HZB image when timeline semaphore +
+  barrier provide execution + memory respectively. If `VK_KHR_maintenance8` becomes available (with
+  `VK_DEPENDENCY_QUEUE_FAMILY_OWNERSHIP_TRANSFER_USE_ALL_STAGES_BIT`), the barrier can be tightened.
+- **Stage 5.1 VCT** — env gate default OFF. When `PROJECTV_VCT_GPU=ON` + 3D clipmap allocated, voxelize dispatch runs
+  after graphics mip chain, then mip chain blit, then fragment shader uses `textureLod(vctClipmap, uvw, mipLevel)`.
+  VoxelLab reference scene: 256³ RGBA16F = 16 MiB VRAM (4 mips ≈ 21 MiB total with metadata), well within
+  `agent/knowledge.md §15` lighting contract. `kVctConeDirectionCount=6` per TODO §5.1 explicit (vs WickedEngine 16-32
+  cones for production quality — upgrade path documented).
+- **Stage 5.1 VCT specular cutoff** — `roughness > 0.3` routes to VCT specular. Smooth materials (`roughness <= 0.3`)
+  currently have no specular GI contribution from VCT (placeholder comment in `voxel.frag` for Stage 5.2 RTX path).
+  Risk: smooth materials may look under-lit when VCT is enabled. Acceptable because env gate is OFF by default; enabled
+  users get a clear signal.
+- **Stage 5.2 RTX deferred** — per operator decision, RTX not in 8x A scope. Smooth specular GI empty until Stage 5.2
+  lands. No regression in default path.
+- **Stage 1.1 NanoVDB resize** — grow path active when capacity exceeded.
+  `LogRuntimeFailure("NanoVdbFlatten", "GrowAndRefreshFailed")` only fires if VMA allocation fails after grow. Per-frame
+  grow has 1.5× headroom.
+- **Stage 3.2 Incremental Jolt boundary-neighbor** — iterates 1-27 chunk slots; worst-case voxel edit on a corner
+  produces 8 JPH body rebuilds. Per-rebuild cost ~2× wall time per chunk (greedy merge compile) but 35× fewer JPH
+  AddShape calls net-positive.
+- **Ninja 1.13 dep-scan race** — `agent/knowledge.md §30` documents the bug workaround (`--parallel 1` first build);
+  required on C++ module changes.
 
 ---
 
-**2026-06-22 session 19x (Stage 5.2.A→B→C, this session).** Build green, ctest 38/38 pass + `ProjectVRayTracedShadowTests` 19/19 sub-tests (11 baseline + 8 new for 5.2.A/B/C). RTX 3060 Ti smoke log clean: `ProbeHardwareRayTracingSupport: RTX path available` → `RayTracedShadows.Initialize: enabled (maxBlas=4096 maxPrim/Blas=8192 hostBuild=0)` → engine runs end-to-end с RTX shadows by default (no env var). Safety-net: `/tmp/before_19x_20260622_201316.patch` (270 KB). No new commits — operator review pending.
+**2026-06-22 session 19x (Stage 5.2.A→B→C, this session).** Build green, ctest 38/38 pass +
+`ProjectVRayTracedShadowTests` 19/19 sub-tests (11 baseline + 8 new for 5.2.A/B/C). RTX 3060 Ti smoke log clean:
+`ProbeHardwareRayTracingSupport: RTX path available` →
+`RayTracedShadows.Initialize: enabled (maxBlas=4096 maxPrim/Blas=8192 hostBuild=0)` → engine runs end-to-end с RTX
+shadows by default (no env var). Safety-net: `/tmp/before_19x_20260622_201316.patch` (270 KB). No new commits — operator
+review pending.
 
-- **Phase 0: Safety-net + web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec `VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12281` (`accelerationStructureReference` must be 0 or `vkGetAccelerationStructureDeviceAddressKHR` result) + `VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03709` (BLAS must be fully backed by physical memory) + `VUID-VkAccelerationStructureBuildGeometryInfoKHR-type-03789` (TLAS `geometryType` must be `VK_GEOMETRY_TYPE_INSTANCES_KHR`) + GLSL `GLSL_EXT_ray_query` (`gl_RayFlagsTerminateOnFirstHitEXT` = 4U) + Khronos Tutorial "Ray Query Integration :: Shadows" reference pattern.
-- **Phase 1 (5.2.A) — TLAS реально собирается** — `RayTracedShadowConfig` extended с `blasHandles[]` / `blasStorageBuffers[]` / `blasStorageAllocations[]` / `blasDeviceAddresses[]` / `blasStorageCapacityBytes[]` (per-BLAS) + `tlasBackingBuffer` / `tlasBackingAllocation` / `tlasBackingDeviceAddress` (TLAS backing). `AllocateBuffers` queries `vkGetAccelerationStructureBuildSizesKHR(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR)` для TLAS sizing (maxBlasCount instances), allocates dedicated TLAS backing buffer + `vkCreateAccelerationStructureKHR(VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)`. `EnsureBlasHandle` private helper: lazy allocate per-chunk BLAS storage buffer + create BLAS handle + cache `vkGetAccelerationStructureDeviceAddressKHR` (fixes the `accelerationStructureReference = 0u` bug at `RayTracedShadows.cpp:433`). `BuildChunkBlas` binds `dstAccelerationStructure` + AS_BUILD → AS_READ barrier (VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12258 alignment). `UpdateTlas` writes real `blasDeviceAddresses[chunkIndex]` to instance. `RecordTlasBuild` does real `vkCmdBuildAccelerationStructuresKHR` for TLAS (geometry instances, scratchData, AS_BUILD → FRAGMENT|RAY_TRACING barrier). +200 LoC.
-- **Phase 2 (5.2.B) — RTX shadow visibility в шейдере** — `TraceRtxSunShadowRay(worldOrigin, sunDir) → float` GLSL helper in `voxel.frag:88-99` (gl_RayFlagsTerminateOnFirstHitEXT, T_min=0.001, T_max=256 m, EVIL constant `kRtxSunShadowMaxDistanceMeters`). `ComputeSunShadowSample` early return для RTX path: `if (nDotLRtx > 0.02) return vec4(rtxLit*contact, anyRtxShadow, 0.0, contact)` — CSM path skipped entirely. Pipeline: existing `graphicsPipelineRtx` + `graphicsPipelineRtxTaaOn` (already wired в `Renderer.cpp:866-875` через `rtxPathActive` flag) auto-selected when RTX enabled. Shader variants `voxel.frag.rtx*.spv` rebuild with new helper. +60 LoC shader.
-- **Phase 3 (5.2.C) — RTX shadows default-on** — `IsRayTracedShadowEnabled()` signature change → `IsRayTracedShadowEnabled(const VulkanContextState &context)` returning `context.rayTracing.accelerationStructure && context.rayTracing.rayQuery` (auto-detect). Env gate `PROJECTV_HW_RAY_TRACING=ON/OFF` **полностью удалён** из `RayTracedShadows.cpp`, `VulkanBootstrap.cpp` (2 sites), `VulkanGraphicsPipeline.cpp` (comment). `RayTracedShadows::Initialize` returns `false` on non-RTX GPU (instead of `true` with `enabled=false`) → `CreateRayTracedShadowResources` логирует `SDL_LogCritical` + returns `false` → `VulkanInit::InitVulkan` returns `std::unexpected(VulkanInitError::ShadowResourcesFailed)`. `ProbeHardwareRayTracingSupport` + `IsRayTracedShadowEnabled` теперь определяют hardware capability.
-- **Phase 4: Verify** — `cmake --build build/linux-clang-debug --target ProjectVRayTracedShadowTests ProjectV --parallel 8` → green. `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 38/38 pass. `timeout 12 bin/ProjectV` (no env) → smoke log clean: `RayTracedShadows.Initialize: enabled (maxBlas=4096)` + scene loads + audio init + exit clean. 0 Vulkan validation errors. Side-by-side smoke `PROJECTV_HW_RAY_TRACING=ON` vs default = identical output (env var no longer read).
-- **Phase 5: Doc-sync** — `TODO.md` 5.2.A/B/C → ✅ Closed + сводка updated. `agent/knowledge.md §15` peter-panning entry mark MOOT after 5.2.B + new "Hardware target policy for RTX-driven path (5.2.C)" sub-section (minimum RTX 2060, recommended RTX 3060 Ti+, unsupported list, env gate removed, hard-fail path). `agent/workspace.md` this entry. `COMMENTS.md` design-rationale для BLAS handle cache + TLAS build dispatch. `CHANGELOG.md` 19x session entry.
+- **Phase 0: Safety-net + web-search gate (mandatory per AGENTS.md §5.3)** — Vulkan spec
+  `VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12281` (`accelerationStructureReference` must be 0 or
+  `vkGetAccelerationStructureDeviceAddressKHR` result) + `VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03709` (BLAS
+  must be fully backed by physical memory) + `VUID-VkAccelerationStructureBuildGeometryInfoKHR-type-03789` (TLAS
+  `geometryType` must be `VK_GEOMETRY_TYPE_INSTANCES_KHR`) + GLSL `GLSL_EXT_ray_query` (
+  `gl_RayFlagsTerminateOnFirstHitEXT` = 4U) + Khronos Tutorial "Ray Query Integration :: Shadows" reference pattern.
+- **Phase 1 (5.2.A) — TLAS реально собирается** — `RayTracedShadowConfig` extended с `blasHandles[]` /
+  `blasStorageBuffers[]` / `blasStorageAllocations[]` / `blasDeviceAddresses[]` / `blasStorageCapacityBytes[]` (
+  per-BLAS) + `tlasBackingBuffer` / `tlasBackingAllocation` / `tlasBackingDeviceAddress` (TLAS backing).
+  `AllocateBuffers` queries `vkGetAccelerationStructureBuildSizesKHR(VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR)`
+  для TLAS sizing (maxBlasCount instances), allocates dedicated TLAS backing buffer +
+  `vkCreateAccelerationStructureKHR(VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR)`. `EnsureBlasHandle` private helper:
+  lazy allocate per-chunk BLAS storage buffer + create BLAS handle + cache
+  `vkGetAccelerationStructureDeviceAddressKHR` (fixes the `accelerationStructureReference = 0u` bug at
+  `RayTracedShadows.cpp:433`). `BuildChunkBlas` binds `dstAccelerationStructure` + AS_BUILD → AS_READ barrier (
+  VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-12258 alignment). `UpdateTlas` writes real
+  `blasDeviceAddresses[chunkIndex]` to instance. `RecordTlasBuild` does real `vkCmdBuildAccelerationStructuresKHR` for
+  TLAS (geometry instances, scratchData, AS_BUILD → FRAGMENT|RAY_TRACING barrier). +200 LoC.
+- **Phase 2 (5.2.B) — RTX shadow visibility в шейдере** — `TraceRtxSunShadowRay(worldOrigin, sunDir) → float` GLSL
+  helper in `voxel.frag:88-99` (gl_RayFlagsTerminateOnFirstHitEXT, T_min=0.001, T_max=256 m, EVIL constant
+  `kRtxSunShadowMaxDistanceMeters`). `ComputeSunShadowSample` early return для RTX path:
+  `if (nDotLRtx > 0.02) return vec4(rtxLit*contact, anyRtxShadow, 0.0, contact)` — CSM path skipped entirely. Pipeline:
+  existing `graphicsPipelineRtx` + `graphicsPipelineRtxTaaOn` (already wired в `Renderer.cpp:866-875` через
+  `rtxPathActive` flag) auto-selected when RTX enabled. Shader variants `voxel.frag.rtx*.spv` rebuild with new helper.
+  +60 LoC shader.
+- **Phase 3 (5.2.C) — RTX shadows default-on** — `IsRayTracedShadowEnabled()` signature change →
+  `IsRayTracedShadowEnabled(const VulkanContextState &context)` returning
+  `context.rayTracing.accelerationStructure && context.rayTracing.rayQuery` (auto-detect). Env gate
+  `PROJECTV_HW_RAY_TRACING=ON/OFF` **полностью удалён** из `RayTracedShadows.cpp`, `VulkanBootstrap.cpp` (2 sites),
+  `VulkanGraphicsPipeline.cpp` (comment). `RayTracedShadows::Initialize` returns `false` on non-RTX GPU (instead of
+  `true` with `enabled=false`) → `CreateRayTracedShadowResources` логирует `SDL_LogCritical` + returns `false` →
+  `VulkanInit::InitVulkan` returns `std::unexpected(VulkanInitError::ShadowResourcesFailed)`.
+  `ProbeHardwareRayTracingSupport` + `IsRayTracedShadowEnabled` теперь определяют hardware capability.
+- **Phase 4: Verify** —
+  `cmake --build build/linux-clang-debug --target ProjectVRayTracedShadowTests ProjectV --parallel 8` → green.
+  `ctest -j 8 -E "ProjectVTests|ProjectVFluidCATests"` → 38/38 pass. `timeout 12 bin/ProjectV` (no env) → smoke log
+  clean: `RayTracedShadows.Initialize: enabled (maxBlas=4096)` + scene loads + audio init + exit clean. 0 Vulkan
+  validation errors. Side-by-side smoke `PROJECTV_HW_RAY_TRACING=ON` vs default = identical output (env var no longer
+  read).
+- **Phase 5: Doc-sync** — `TODO.md` 5.2.A/B/C → ✅ Closed + сводка updated. `agent/knowledge.md §15` peter-panning entry
+  mark MOOT after 5.2.B + new "Hardware target policy for RTX-driven path (5.2.C)" sub-section (minimum RTX 2060,
+  recommended RTX 3060 Ti+, unsupported list, env gate removed, hard-fail path). `agent/workspace.md` this entry.
+  `COMMENTS.md` design-rationale для BLAS handle cache + TLAS build dispatch. `CHANGELOG.md` 19x session entry.
 - **Phase 6: Commit prompt** — per AGENTS.md §5.4 + §5.9, no commit without operator confirmation.
 
 **Files modified (scope of this session 19x):**
-- `src/render/RayTracedShadows.hpp` — `RayTracedShadowConfig` (+5 fields) + `EnsureBlasHandle` private + `RayTracedShadowTestAccess` friend
-- `src/render/RayTracedShadows.cpp` — `AllocateBuffers` TLAS sizing/create (~80 LoC) + `EnsureBlasHandle` (~80 LoC) + `BuildChunkBlas` dst + AS barrier (~15 LoC) + `UpdateTlas` real device address (~10 LoC) + `RecordTlasBuild` real build dispatch + barrier (~80 LoC) + `IsRayTracedShadowEnabled` signature change (~5 LoC) + `Initialize` hard-fail (~15 LoC) + `CreateRayTracedShadowResources` critical log + return false (~10 LoC) + `ReleaseBuffers` extended (~30 LoC)
-- `src/shaders/voxel.frag` — `TraceRtxSunShadowRay` helper + `kRtxSunShadowMaxDistanceMeters` constant + `ComputeSunShadowSample` early return
+
+- `src/render/RayTracedShadows.hpp` — `RayTracedShadowConfig` (+5 fields) + `EnsureBlasHandle` private +
+  `RayTracedShadowTestAccess` friend
+- `src/render/RayTracedShadows.cpp` — `AllocateBuffers` TLAS sizing/create (~80 LoC) + `EnsureBlasHandle` (~80 LoC) +
+  `BuildChunkBlas` dst + AS barrier (~15 LoC) + `UpdateTlas` real device address (~10 LoC) + `RecordTlasBuild` real
+  build dispatch + barrier (~80 LoC) + `IsRayTracedShadowEnabled` signature change (~5 LoC) + `Initialize` hard-fail (~
+  15 LoC) + `CreateRayTracedShadowResources` critical log + return false (~10 LoC) + `ReleaseBuffers` extended (~30 LoC)
+- `src/shaders/voxel.frag` — `TraceRtxSunShadowRay` helper + `kRtxSunShadowMaxDistanceMeters` constant +
+  `ComputeSunShadowSample` early return
 - `src/render/vulkan/VulkanBootstrap.cpp` — remove 2 sites of `PROJECTV_HW_RAY_TRACING` env-var reads
-- `src/render/vulkan/VulkanGraphicsPipeline.cpp` — `IsRayTracedShadowEnabled(*context)` callers (3 sites) + comment update
-- `src/render/vulkan/VulkanInit.cpp` — `CreateRayTracedShadowResources` failure → `std::unexpected(ShadowResourcesFailed)`
-- `tests/RayTracedShadowTests.cpp` — `TestConfigHasBlasCacheFields` + `TestUpdateTlasSafeWithoutBlasCache` + `TestUpdateTlasSafeForOversizedChunkIndex` + `TestRecordTlasBuildGuardsForZeroInstanceCount` + `TestRtxSunShadowRayHelperExistsInShader` + rewrite `TestEnvGateDefaultsOff`/`TestEnvGateOnRespected` for new contract
+- `src/render/vulkan/VulkanGraphicsPipeline.cpp` — `IsRayTracedShadowEnabled(*context)` callers (3 sites) + comment
+  update
+- `src/render/vulkan/VulkanInit.cpp` — `CreateRayTracedShadowResources` failure →
+  `std::unexpected(ShadowResourcesFailed)`
+- `tests/RayTracedShadowTests.cpp` — `TestConfigHasBlasCacheFields` + `TestUpdateTlasSafeWithoutBlasCache` +
+  `TestUpdateTlasSafeForOversizedChunkIndex` + `TestRecordTlasBuildGuardsForZeroInstanceCount` +
+  `TestRtxSunShadowRayHelperExistsInShader` + rewrite `TestEnvGateDefaultsOff`/`TestEnvGateOnRespected` for new contract
 - `agent/knowledge.md §15` — peter-panning MOOT + hardware target policy section
 - `TODO.md` — 5.2.A/B/C closed + сводка updated
 - `agent/workspace.md` — this entry
 - `COMMENTS.md` + `CHANGELOG.md` — session entries
 
-**Out of scope (deferred per TODO.md + this session plan):** 5.2.D (CSM removal, ~1300 LoC), 5.4/5.5/5.6/5.7 (RTX AO/DDGI/refraction/multi-bounce), 7.x (post-RTX polish), 6.2/2.3 (deferred-pending). CSM continues to dominate shadow rendering — 5.2.D will be the next session's focus.
+**Out of scope (deferred per TODO.md + this session plan):** 5.2.D (CSM removal, ~1300 LoC), 5.4/5.5/5.6/5.7 (RTX
+AO/DDGI/refraction/multi-bounce), 7.x (post-RTX polish), 6.2/2.3 (deferred-pending). CSM continues to dominate shadow
+rendering — 5.2.D will be the next session's focus.
 
 ---
 
-_(No currently active open sessions — see §6 for most recent closed. Last open session was 19x "in progress" per AGENTS.md §5.5 scope discipline; status will move to §6 once operator commits per §5.9 gate.)_
+_(No currently active open sessions — see §6 for most recent closed. Last open session was 19x "in progress" per
+AGENTS.md §5.5 scope discipline; status will move to §6 once operator commits per §5.9 gate.)_
 
 ## 6. Recent closed sessions
 
-- **2026-06-21 session 17x (this session, in progress)** — 5 phases: Tracy diagnostics (SyncPhysicsWorld + UpdateFluidCA zones/plots) + Fluid↔Air editVersion suppress (no bump for non-physics-solid changes) + Incremental SyncPhysicsWorld split (full-rebuild path on world pointer change vs incremental per-chunk rebuild on edit) + `chunkMergedBoxes` field + `RebuildStaticWorldBodyFromChunkShapes` + `IsPhysicsStaticWorldBodyId` helper + new `ProjectVPhysicsSyncTests` 9/9 sub-tests + CMakePresets.json backfill 5 occurrences + doc sync. ~280 LoC new code + 200 LoC tests. NO commit — operator decision pending.
-- **2026-06-21 session 8x (Variant C «Stage 5.4 wire-up + Sky LDR LUT», this session, closed dirty, no commit)** — 9 phases: Vol fog froxel descriptor plumbing (binding 11 + 12 + fallback 1×1×1 RGBA16F dummy) + Vol fog consume in voxel.frag (froxel 3D texture sample + LightingDebugView VolumetricFog + VolumetricTransmittance entries) + Cloudscape per-frame dispatch wiring in Renderer.cpp + Sky LDR LUT precomputation (Sky-View 256×128 + Multi-Scattering 32×32 CPU FloatToHalf) + Sky LDR LUT integration in shader (skyViewLut + multiScatteringLut sampler2D bindings) + Tests + Tracy + EVIL audit + CMakePresets.json backfill (2 test executables × 5 presets) + doc sync. 0 new test targets; +5 sub-tests in `ProjectVSkyAtmosphereTests` + 2 new cycle assertions in `ProjectVTests`. ~1200 LoC.
-- **2026-06-21 session 8x (Variant B «Stage 5.x Visual Polish foundation», closed dirty, no commit)** — 9 phases: Stage 5.1 VCT visual smoke + Tracy + LightingDebugView 9/10 (partial close) + Stage 5.x Sky Hillaire2020 foundation + Sky Rayleigh + Mie analytical full integration + Stage 5.x Volumetric fog Wronski 2014 froxel foundation + slab accumulation upgrade + Stage 5.x Cloudscape B_SingleLayerRayMarch foundation + shader + pipeline + Tests + EVIL marker audit + CMakePresets.json update + doc sync. 3 new test targets + 6 new sub-tests.
-- **2026-06-21 session 8x (Variant A «close async + open VCT», closed via commit `c80f265`)** — 7 phases: Stage 6.3 HZB cross-queue depth ownership transfer (closes 8x V1 partial) + Stage 5.1 VCT 3D clipmap + voxelize.comp foundation + VCT diffuse 6-cone tracing + VCT specular 1-cone + kVctCutoffRoughness=0.3 hybrid + VCT GPU mip chain build + doc sync. 1 new test target + 12 new sub-tests.
-- **2026-06-21 session 8x (Variant 1 «close partial APIs», prior, closed via commit `465440e`)** — 7 phases: Stage 4.2 LOD GPU consume mesh emission + Stage 2.1 HZB smart blend width shader consume + Stage 4.3 Chunk prebake integration + Stage 6.3 HZB async compute cross-queue depth sync (partial) + Stage 1.1 NanoVDB resize logic + Stage 3.2 Incremental Jolt boundary-neighbor queue + doc sync. 1 new test target + 18 new sub-tests in existing targets.
-- **2026-06-21 session 4x (prior, closed dirty, no commit)** — 4 phases: Stage 6.3 per-pass async compute wiring + Stage 4.2 LOD GPU consume infrastructure (deferred mesh emission) + Stage 4.3 Chunk Streaming Step 3 API + Stage 2.1 HZB smart blend width v2 (env gate + CPU helper). 2 new test targets + 13 new sub-tests.
-- **2026-06-21 session 4x (prior, closed dirty, no commit)** — 4 phases: Stage 5.3 TAA Motion Vectors resolve consume + Stage 4.1 GPU World Gen frame dispatch wiring + Stage 4.3 Chunk Streaming Step 2 (std::jthread + SSD read) + Stage 2.1 HZB smart mip select. 1 new test target + 19 new sub-tests.
-- **2026-06-21 session 12x (closed via commit `991db29`)** — 7 phases: Stage 1.1 NanoVDB GPU upload + Stage 3.3 Greedy Physics Meshing + Stage 5.3 TAA Motion Vectors GPU data path + Stage 4.1 GPU World Gen pipeline + Stage 1.3 Async audio + Stage 4.3 Chunk Streaming foundation + doc sync. 4 new test targets + 16 new sub-tests.
-- **2026-06-21 session 8x (closed via commit `11334e7`)** — 8 phases: Stage 3.1 GPU Fluid CA + Stage 4.2 LOD B_SurfacePreserve + Stage 5.3 TAA MV format + Stage 6.3 async compute env gate + Stage 6.2 PIMPL contract + Stage 4.1 OpenSimplex2 3D-S + Stage 1.1 NanoVDB flatten + doc sync. 6 new test targets (36 sub-tests).
-- **2026-06-21 session 4x (closed via commit `5e11993` + `11334e7`)** — HZB full integration + UpdateApp refactor (355→49 lines) + GPU Fluid CA foundation.
+- **2026-06-21 session 17x (this session, in progress)** — 5 phases: Tracy diagnostics (SyncPhysicsWorld + UpdateFluidCA
+  zones/plots) + Fluid↔Air editVersion suppress (no bump for non-physics-solid changes) + Incremental SyncPhysicsWorld
+  split (full-rebuild path on world pointer change vs incremental per-chunk rebuild on edit) + `chunkMergedBoxes`
+  field + `RebuildStaticWorldBodyFromChunkShapes` + `IsPhysicsStaticWorldBodyId` helper + new `ProjectVPhysicsSyncTests`
+  9/9 sub-tests + CMakePresets.json backfill 5 occurrences + doc sync. ~280 LoC new code + 200 LoC tests. NO commit —
+  operator decision pending.
+- **2026-06-21 session 8x (Variant C «Stage 5.4 wire-up + Sky LDR LUT», this session, closed dirty, no commit)** — 9
+  phases: Vol fog froxel descriptor plumbing (binding 11 + 12 + fallback 1×1×1 RGBA16F dummy) + Vol fog consume in
+  voxel.frag (froxel 3D texture sample + LightingDebugView VolumetricFog + VolumetricTransmittance entries) + Cloudscape
+  per-frame dispatch wiring in Renderer.cpp + Sky LDR LUT precomputation (Sky-View 256×128 + Multi-Scattering 32×32 CPU
+  FloatToHalf) + Sky LDR LUT integration in shader (skyViewLut + multiScatteringLut sampler2D bindings) + Tests +
+  Tracy + EVIL audit + CMakePresets.json backfill (2 test executables × 5 presets) + doc sync. 0 new test targets; +5
+  sub-tests in `ProjectVSkyAtmosphereTests` + 2 new cycle assertions in `ProjectVTests`. ~1200 LoC.
+- **2026-06-21 session 8x (Variant B «Stage 5.x Visual Polish foundation», closed dirty, no commit)** — 9 phases: Stage
+  5.1 VCT visual smoke + Tracy + LightingDebugView 9/10 (partial close) + Stage 5.x Sky Hillaire2020 foundation + Sky
+  Rayleigh + Mie analytical full integration + Stage 5.x Volumetric fog Wronski 2014 froxel foundation + slab
+  accumulation upgrade + Stage 5.x Cloudscape B_SingleLayerRayMarch foundation + shader + pipeline + Tests + EVIL marker
+  audit + CMakePresets.json update + doc sync. 3 new test targets + 6 new sub-tests.
+- **2026-06-21 session 8x (Variant A «close async + open VCT», closed via commit `c80f265`)** — 7 phases: Stage 6.3 HZB
+  cross-queue depth ownership transfer (closes 8x V1 partial) + Stage 5.1 VCT 3D clipmap + voxelize.comp foundation +
+  VCT diffuse 6-cone tracing + VCT specular 1-cone + kVctCutoffRoughness=0.3 hybrid + VCT GPU mip chain build + doc
+  sync. 1 new test target + 12 new sub-tests.
+- **2026-06-21 session 8x (Variant 1 «close partial APIs», prior, closed via commit `465440e`)** — 7 phases: Stage 4.2
+  LOD GPU consume mesh emission + Stage 2.1 HZB smart blend width shader consume + Stage 4.3 Chunk prebake integration +
+  Stage 6.3 HZB async compute cross-queue depth sync (partial) + Stage 1.1 NanoVDB resize logic + Stage 3.2 Incremental
+  Jolt boundary-neighbor queue + doc sync. 1 new test target + 18 new sub-tests in existing targets.
+- **2026-06-21 session 4x (prior, closed dirty, no commit)** — 4 phases: Stage 6.3 per-pass async compute wiring + Stage
+  4.2 LOD GPU consume infrastructure (deferred mesh emission) + Stage 4.3 Chunk Streaming Step 3 API + Stage 2.1 HZB
+  smart blend width v2 (env gate + CPU helper). 2 new test targets + 13 new sub-tests.
+- **2026-06-21 session 4x (prior, closed dirty, no commit)** — 4 phases: Stage 5.3 TAA Motion Vectors resolve consume +
+  Stage 4.1 GPU World Gen frame dispatch wiring + Stage 4.3 Chunk Streaming Step 2 (std::jthread + SSD read) + Stage 2.1
+  HZB smart mip select. 1 new test target + 19 new sub-tests.
+- **2026-06-21 session 12x (closed via commit `991db29`)** — 7 phases: Stage 1.1 NanoVDB GPU upload + Stage 3.3 Greedy
+  Physics Meshing + Stage 5.3 TAA Motion Vectors GPU data path + Stage 4.1 GPU World Gen pipeline + Stage 1.3 Async
+  audio + Stage 4.3 Chunk Streaming foundation + doc sync. 4 new test targets + 16 new sub-tests.
+- **2026-06-21 session 8x (closed via commit `11334e7`)** — 8 phases: Stage 3.1 GPU Fluid CA + Stage 4.2 LOD
+  B_SurfacePreserve + Stage 5.3 TAA MV format + Stage 6.3 async compute env gate + Stage 6.2 PIMPL contract + Stage 4.1
+  OpenSimplex2 3D-S + Stage 1.1 NanoVDB flatten + doc sync. 6 new test targets (36 sub-tests).
+- **2026-06-21 session 4x (closed via commit `5e11993` + `11334e7`)** — HZB full integration + UpdateApp refactor (
+  355→49 lines) + GPU Fluid CA foundation.
 - **2026-06-20 session 2x part 5 (closed dirty)** — close-out 2x part 4 + Pre-Stage 0/Stage 0 audit.
-- **2026-06-20 session 2x part 4 (closed via commit `818579e`)** — HZB spike + NanoVDB flatten + async foundation + VCT/RT cutoff + Incremental Jolt + EVIL markers + std::span sweep.
+- **2026-06-20 session 2x part 4 (closed via commit `818579e`)** — HZB spike + NanoVDB flatten + async foundation +
+  VCT/RT cutoff + Incremental Jolt + EVIL markers + std::span sweep.
 
 ## 7. Archive references
 

@@ -312,7 +312,8 @@ VkResult vmaFindMemoryTypeIndex(
 Параметры создания аллокатора. Основные поля: `flags`, `physicalDevice`, `device`, `instance`, `vulkanApiVersion`,
 `pVulkanFunctions` (при volk — через `vmaImportVulkanFunctionsFromVolk`). Опционально: `preferredLargeHeapBlockSize` (
 0 = по умолчанию), `pAllocationCallbacks`, `pDeviceMemoryCallbacks`, `pHeapSizeLimit` (массив лимитов в байтах по
-каждому heap'у). Подробнее — [Интеграция](integration.md) и [vk_mem_alloc.h](../../../../external/VMA/include/vk_mem_alloc.h).
+каждому heap'у). Подробнее — [Интеграция](integration.md)
+и [vk_mem_alloc.h](../../../../external/VMA/include/vk_mem_alloc.h).
 
 ---
 

@@ -199,6 +199,26 @@ bool TryParseDebugViewToken(
 		*outView = LightingDebugView::GreedyMeshing;
 		return true;
 	}
+	if (normalized == "tonemap" || normalized == "tonemapoutput" || normalized == "tm") {
+		*outView = LightingDebugView::ToneMapOutput;
+		return true;
+	}
+	if (normalized == "grading" || normalized == "colorgrading" || normalized == "colorgradingoutput") {
+		*outView = LightingDebugView::ColorGradingOutput;
+		return true;
+	}
+	if (normalized == "exposure" || normalized == "exposurecurve" || normalized == "exp") {
+		*outView = LightingDebugView::ExposureCurve;
+		return true;
+	}
+	if (normalized == "vctcnt" || normalized == "vctconecount" || normalized == "vct_count") {
+		*outView = LightingDebugView::VctConeCount;
+		return true;
+	}
+	if (normalized == "vctdir" || normalized == "vctconedirections" || normalized == "vct_dir") {
+		*outView = LightingDebugView::VctConeDirections;
+		return true;
+	}
 	if (normalized == "volfog" || normalized == "volumetricfog" || normalized == "vol_f") {
 		*outView = LightingDebugView::VolumetricFog;
 		return true;

@@ -115,7 +115,7 @@
 | **MA_SUCCESS**        | Успешное выполнение.                                                                                                                                                                                   |
 | **ma_format**         | Формат сэмпла: `ma_format_f32` (float [-1,1]), `ma_format_s16` (int16), `ma_format_s24`, `ma_format_s32`, `ma_format_u8` (uint8). Подробнее: [Справочник API — ma_format](api-reference.md#ma_format). |
 | **ma_format_unknown** | Использовать формат устройства по умолчанию (в config).                                                                                                                                                |
-| **MA_MAX_CHANNELS**   | Максимальное число каналов. Значение: **254** (см. [miniaudio.h](../../../../external/miniaudio/miniaudio.h)).                                                                                               |
+| **MA_MAX_CHANNELS**   | Максимальное число каналов. Значение: **254** (см. [miniaudio.h](../../../../external/miniaudio/miniaudio.h)).                                                                                         |
 
 ---
 

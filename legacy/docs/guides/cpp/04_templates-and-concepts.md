@@ -155,7 +155,8 @@ public:
 4. **Perfect forwarding:** `this Self&& self` работает корректно
 
 > **Связь с философией:** Это пример "zero-cost abstraction"
-> из [02_zero-cost-abstractions.md](../../philosophy/02_paradigms/01_zero-cost-abstractions.md). Deducing This даёт статический
+> из [02_zero-cost-abstractions.md](../../philosophy/02_paradigms/01_zero-cost-abstractions.md). Deducing This даёт
+> статический
 > полиморфизм без runtime-накладных расходов виртуальных функций.
 
 ### Концепты для ECS компонентов

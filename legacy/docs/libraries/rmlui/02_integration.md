@@ -988,9 +988,10 @@ tail -f logs/projectv.log | grep "\[UI\]"
 ```
 
 3. **Анализируйте в Tracy:**
-  - Откройте `tracy.exe`
-  - Подключитесь к процессу ProjectV
-  - Смотрите зоны "RmlUi Update", "RmlUi Render"
+
+- Откройте `tracy.exe`
+- Подключитесь к процессу ProjectV
+- Смотрите зоны "RmlUi Update", "RmlUi Render"
 
 ## 🎯 Итог
 

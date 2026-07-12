@@ -69,6 +69,7 @@ legacy/docs/
 - removed the `latest/` vs `old/` split
 - removed duplicate top-level indexes and merge-report noise from the active tree
 - collapsed the split library roots into one unified corpus while preserving the deeper per-library material
-- restored the older `guides/`, `tutorials/`, and text-based `examples/` into the unified tree instead of leaving them stranded in a parallel root
+- restored the older `guides/`, `tutorials/`, and text-based `examples/` into the unified tree instead of leaving them
+  stranded in a parallel root
 - restored the missing `architecture/future/` subtree and older theory notes that still add useful context
 - preserved only dated roadmap artifacts that are useful for history

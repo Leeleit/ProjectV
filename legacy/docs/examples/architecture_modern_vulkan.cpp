@@ -61,7 +61,7 @@ void createMeshShaderPipeline(VkDevice device, VkShaderModule taskShader, VkShad
 		.stageCount = 2,
 		.pStages = stages,
 		.pVertexInputState = nullptr, // ПРЯМОЙ ВЫВОД ГЕОМЕТРИИ
-		// ... остальные параметры
+									  // ... остальные параметры
 	};
 
 	// vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline);

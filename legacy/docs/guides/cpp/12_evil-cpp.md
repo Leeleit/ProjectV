@@ -6,10 +6,12 @@
 высокопроизводительного кода в воксельном движке.
 
 > **Связь с философией:** Это практическое
-> продолжение [11_evil-hacks-philosophy.md](../../philosophy/01_foundation/04_evil-hacks-philosophy.md). "Evil" техники допустимы
+> продолжение [11_evil-hacks-philosophy.md](../../philosophy/01_foundation/04_evil-hacks-philosophy.md). "Evil" техники
+> допустимы
 > только
 > в hot paths и только после профилирования. См.
-> также [02_zero-cost-abstractions.md](../../philosophy/02_paradigms/01_zero-cost-abstractions.md) — иногда zero-cost требует "
+> также [02_zero-cost-abstractions.md](../../philosophy/02_paradigms/01_zero-cost-abstractions.md) — иногда zero-cost
+> требует "
 > некрасивого" кода.
 
 ---
