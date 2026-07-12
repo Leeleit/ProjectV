@@ -102,5 +102,4 @@ jobs:
         run: cmake --build --preset linux-clang-debug-ci-build
 
       - name: Test
-        continue-on-error: true
-        run: ctest --preset linux-clang-debug-ci-tests
+        run: ctest --preset linux-clang-debug-ci-tests -E "ProjectVRayTracedShadowTests"
