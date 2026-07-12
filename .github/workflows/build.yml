@@ -52,15 +52,16 @@ jobs:
           clang --version
 
       - name: Install Vulkan SDK
-        uses: KyleMayes/install-vulkan-action@v1.3.10
+        uses: jakoch/install-vulkan-sdk-action@v1.6.0
         with:
-          version: ${{ env.VULKAN_SDK_VERSION }}
+          vulkan_version: ${{ env.VULKAN_SDK_VERSION }}
           cache: true
+          install_lavapipe: true
 
       - name: Configure sccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ github.job }}-${{ matrix.os }}-${{ github.ref }}
+          key: ${{ github.job }}-${{ runner.os }}-${{ github.ref }}
           variant: sccache
           max-size: 2G
 

@@ -71,7 +71,7 @@ ctest --preset linux-clang-debug-tests
 
 ## Документация
 
-Вся документация живёт в [`docs/`](docs/). Точка входа — [`docs/README.md`](docs/README.md).
+Вся документация живёт в [`docs/`](docs). Точка входа — [`docs/README.md`](docs/README.md).
 
 Для нового разработчика рекомендуется начать с:
 

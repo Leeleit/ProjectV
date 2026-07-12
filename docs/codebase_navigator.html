@@ -308,10 +308,6 @@
             box-shadow: 0 10px 25px rgba(0, 240, 255, 0.05);
         }
 
-        .module-icon {
-            font-size: 1.8rem;
-        }
-
         .module-card h3 {
             font-size: 1.25rem;
             font-weight: 700;
@@ -321,16 +317,6 @@
             color: var(--text-secondary);
             font-size: 0.85rem;
             line-height: 1.4;
-        }
-
-        .module-stats {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            margin-top: auto;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            padding-top: 0.8rem;
         }
 
         .module-stats span strong {
@@ -400,30 +386,6 @@
             gap: 1rem;
         }
 
-        .file-item {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: 10px;
-            padding: 1.2rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.5rem;
-            transition: all 0.2s;
-        }
-
-        .file-item:hover {
-            background: rgba(255, 255, 255, 0.04);
-            border-color: rgba(255, 255, 255, 0.08);
-        }
-
-        .file-info {
-            display: flex;
-            align-items: center;
-            gap: 1.2rem;
-            flex-grow: 1;
-        }
-
         .file-checkbox {
             position: relative;
             width: 20px;
@@ -488,26 +450,10 @@
             gap: 0.6rem;
         }
 
-        .file-link {
-            color: var(--color-teal);
-            text-decoration: none;
-            transition: opacity 0.2s;
-        }
-
-        .file-link:hover {
-            text-decoration: underline;
-        }
-
         .file-details p {
             font-size: 0.82rem;
             color: var(--text-secondary);
             line-height: 1.4;
-        }
-
-        .file-meta {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
         }
 
         .difficulty-badge {
@@ -523,18 +469,6 @@
             background: rgba(57, 255, 20, 0.1);
             color: var(--color-green);
             border: 1px solid rgba(57, 255, 20, 0.2);
-        }
-
-        .difficulty-badge.medium {
-            background: rgba(255, 215, 0, 0.1);
-            color: var(--color-yellow);
-            border: 1px solid rgba(255, 215, 0, 0.2);
-        }
-
-        .difficulty-badge.hard {
-            background: rgba(255, 59, 48, 0.1);
-            color: var(--color-red);
-            border: 1px solid rgba(255, 59, 48, 0.2);
         }
 
         .lines-badge {
@@ -642,14 +576,6 @@
             gap: 1.2rem;
         }
 
-        .timeline-step-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding-bottom: 1rem;
-        }
-
         .timeline-step-header h3 {
             font-size: 1.4rem;
             font-weight: 800;
@@ -678,12 +604,6 @@
             letter-spacing: 1px;
             color: var(--text-secondary);
             margin-bottom: 0.6rem;
-        }
-
-        .timeline-code-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.6rem;
         }
 
         .timeline-code-tag {
@@ -724,35 +644,6 @@
             gap: 2rem;
         }
 
-        .roadmap-stage {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 2rem;
-            backdrop-filter: blur(10px);
-            position: relative;
-        }
-
-        .roadmap-stage::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(to right, var(--color-teal), var(--color-purple));
-            border-radius: 16px 16px 0 0;
-        }
-
-        .stage-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding-bottom: 0.8rem;
-        }
-
         .stage-header h3 {
             font-size: 1.3rem;
             font-weight: 800;
@@ -777,12 +668,6 @@
             font-size: 0.92rem;
             margin-bottom: 1.5rem;
             line-height: 1.5;
-        }
-
-        .stage-check-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1rem;
         }
 
         .stage-check-item {

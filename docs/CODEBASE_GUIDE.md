@@ -23,14 +23,14 @@ graph TD
         AppState --> ECS[EcsState]
     end
 
-    subgraph Simulation Loop (60 Hz)
+    subgraph "Simulation Loop (60 Hz)"
         AppUpdate[AppUpdate.cpp] --> PhysicsWorld[PhysicsWorld.cpp]
         AppUpdate --> Character[CharacterVirtual / PhysicsWorld_Walk.cpp]
         AppUpdate --> VoxelInt[VoxelInteraction.cpp]
         AppUpdate --> ModelGG[ModelGravigun.cpp]
     end
 
-    subgraph Render Pipeline (Frame Draw)
+    subgraph "Render Pipeline (Frame Draw)"
         DrawFrame[RendererDrawFrame.cpp] --> Mesher[voxel_mesh.comp / VulkanVoxelMeshingPipeline.cpp]
         DrawFrame --> RTX[RayTracedShadows.cpp / rtxShadowMask]
         DrawFrame --> DDGI[RtxGiProbes.cpp / probe_update.comp]
