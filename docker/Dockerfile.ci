@@ -62,11 +62,11 @@ RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.
     libc++-22-dev \
     libc++abi-22-dev \
     libunwind-dev && \
-    update-alternatives --install /usr/bin/clang clang /usr/bin/clang-22 100 && \
-    update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-22 100 && \
-    update-alternatives --install /usr/bin/lld lld /usr/bin/lld-22 100 && \
-    ln -sf /usr/bin/clang /usr/sbin/clang && \
-    ln -sf /usr/bin/clang++ /usr/sbin/clang++ && \
+    ln -sf /usr/bin/clang-22 /usr/bin/clang && \
+    ln -sf /usr/bin/clang++-22 /usr/bin/clang++ && \
+    ln -sf /usr/bin/lld-22 /usr/bin/lld && \
+    ln -sf /usr/bin/clang-22 /usr/sbin/clang && \
+    ln -sf /usr/bin/clang++-22 /usr/sbin/clang++ && \
     rm -rf /var/lib/apt/lists/*
 
 # Vulkan SDK 1.4.350.1 (matches GitHub Actions jakoch/install-vulkan-sdk-action).
