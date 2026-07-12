@@ -14,3 +14,5 @@ Problems/
 docs/api/html/
 docs/api/doxygen-warnings.log
 docs/experiments/sources
+# Local Vulkan SDK cache used by docker/Dockerfile.ci; do not commit.
+docker/vulkansdk.tar.xz

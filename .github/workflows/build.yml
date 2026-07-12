@@ -31,16 +31,24 @@ jobs:
             gnupg \
             libasound2-dev \
             libpulse-dev \
+            libaudio-dev \
+            libjack-dev \
+            libsndio-dev \
             libx11-dev \
             libxext-dev \
             libxrandr-dev \
             libxcursor-dev \
             libxfixes-dev \
             libxi-dev \
+            libxss-dev \
+            libxtst-dev \
             libxkbcommon-dev \
             libwayland-dev \
             wayland-protocols \
-            libegl1-mesa-dev
+            libdecor-0-dev \
+            libpipewire-0.3-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev
 
       - name: Install CMake 3.31
         run: |

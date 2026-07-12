@@ -187,17 +187,10 @@ if (PROJECTV_ENABLE_BENCHMARKS)
     projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/benchmark")
 endif ()
 
-include(FetchContent)
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 set(JSON_Install OFF CACHE INTERNAL "")
-FetchContent_Declare(
-        nlohmann_json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.12.0
-        GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(nlohmann_json)
-projectv_suppress_external_warnings("${nlohmann_json_SOURCE_DIR}")
+add_subdirectory(external/nlohmann_json EXCLUDE_FROM_ALL)
+projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/nlohmann_json")
 
 add_library(projectv_build_options INTERFACE)
 if (MSVC)
@@ -247,6 +240,7 @@ target_include_directories(projectv_build_options INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/external/draco/src"
         "${CMAKE_BINARY_DIR}"
 )
+target_link_libraries(projectv_build_options INTERFACE SDL3::SDL3)
 
 if (PROJECTV_ENABLE_VALIDATION)
     target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_VALIDATION=1)

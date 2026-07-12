@@ -1,0 +1,16 @@
+.git/
+build/
+install/
+.cache/
+.venv/
+.idea/
+.superpowers/
+legacy/
+music/
+problems/
+runtime/captures/
+docs/
+external/
+*.patch
+*.img
+*.iso

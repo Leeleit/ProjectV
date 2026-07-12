@@ -1,0 +1,96 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV VULKAN_SDK_VERSION=1.4.350.1
+
+# Base build tools and the full SDL3 dependency set used by libsdl-org release CI.
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    ninja-build \
+    sccache \
+    python3-pip \
+    wget \
+    software-properties-common \
+    gnupg \
+    git \
+    pkg-config \
+    ca-certificates \
+    gnome-desktop-testing \
+    libasound2-dev \
+    libpulse-dev \
+    libaudio-dev \
+    libjack-dev \
+    libsndio-dev \
+    libusb-1.0-0-dev \
+    libx11-dev \
+    libxext-dev \
+    libxrandr-dev \
+    libxcursor-dev \
+    libxfixes-dev \
+    libxi-dev \
+    libxss-dev \
+    libxtst-dev \
+    libxkbcommon-dev \
+    libwayland-dev \
+    wayland-protocols \
+    libdecor-0-dev \
+    libpipewire-0.3-dev \
+    liburing-dev \
+    libegl1-mesa-dev \
+    libgl1-mesa-dev \
+    libgles2-mesa-dev \
+    libdrm-dev \
+    libgbm-dev \
+    libdbus-1-dev \
+    libibus-1.0-dev \
+    libudev-dev \
+    libthai-dev \
+    libfribidi-dev \
+    mesa-vulkan-drivers \
+    vulkan-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# CMake 3.31.6 (matches GitHub Actions workflow).
+RUN pip3 install cmake==3.31.6 --break-system-packages
+
+# LLVM 22 + libc++ (matches GitHub Actions workflow).
+RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc && \
+    add-apt-repository "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" && \
+    apt-get update && apt-get install -y \
+    clang-22 \
+    lld-22 \
+    libc++-22-dev \
+    libc++abi-22-dev && \
+    update-alternatives --install /usr/bin/clang clang /usr/bin/clang-22 100 && \
+    update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-22 100 && \
+    update-alternatives --install /usr/bin/lld lld /usr/bin/lld-22 100 && \
+    ln -sf /usr/bin/clang /usr/sbin/clang && \
+    ln -sf /usr/bin/clang++ /usr/sbin/clang++ && \
+    rm -rf /var/lib/apt/lists/*
+
+# Vulkan SDK 1.4.350.1 (matches GitHub Actions jakoch/install-vulkan-sdk-action).
+# The tarball is cached locally to avoid slow/fragile network downloads inside the build.
+COPY docker/vulkansdk.tar.xz /tmp/vulkansdk.tar.xz
+RUN mkdir -p /opt/vulkan-sdk && \
+    cd /opt/vulkan-sdk && \
+    tar -xJf /tmp/vulkansdk.tar.xz && \
+    rm /tmp/vulkansdk.tar.xz && \
+    mv "${VULKAN_SDK_VERSION}" sdk
+
+ENV VULKAN_SDK=/opt/vulkan-sdk/sdk/x86_64
+ENV PATH="${VULKAN_SDK}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${VULKAN_SDK}/lib/VulkanLoader/lib:${VULKAN_SDK}/lib:${LD_LIBRARY_PATH:-}"
+ENV VK_LAYER_PATH="${VULKAN_SDK}/share/vulkan/explicit_layer.d"
+ENV CMAKE_PREFIX_PATH="${VULKAN_SDK}:${CMAKE_PREFIX_PATH:-}"
+
+# CMake FindVulkan expects the loader in ${VULKAN_SDK}/lib, but LunarG SDK 1.4.350
+# places it under ${VULKAN_SDK}/lib/VulkanLoader/lib.
+RUN ln -sf "${VULKAN_SDK}/lib/VulkanLoader/lib/libvulkan.so" "${VULKAN_SDK}/lib/libvulkan.so" && \
+    ln -sf "${VULKAN_SDK}/lib/VulkanLoader/lib/libvulkan.so.1" "${VULKAN_SDK}/lib/libvulkan.so.1"
+
+# LLVM 22 on Ubuntu installs C++ modules under /usr/lib/llvm-22/share/libc++/v1,
+# but the build expects the Arch-style /usr/share/libc++/v1 path.
+RUN mkdir -p /usr/share/libc++ && \
+    ln -sf /usr/lib/llvm-22/share/libc++/v1 /usr/share/libc++/v1
+
+WORKDIR /workspace

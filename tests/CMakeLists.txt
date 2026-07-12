@@ -172,7 +172,7 @@ target_include_directories(ProjectVFrustumCullingTests PRIVATE
 )
 
 target_link_libraries(ProjectVFrustumCullingTests PRIVATE projectv_build_options)
-target_link_libraries(ProjectVFrustumCullingTests PRIVATE volk glm GPUOpen::VulkanMemoryAllocator)
+target_link_libraries(ProjectVFrustumCullingTests PRIVATE volk glm GPUOpen::VulkanMemoryAllocator SDL3::SDL3)
 
 add_test(NAME ProjectVFrustumCullingTests COMMAND ProjectVFrustumCullingTests)
 set_tests_properties(ProjectVFrustumCullingTests PROPERTIES LABELS "unit")
@@ -196,6 +196,7 @@ target_link_libraries(ProjectVCFrustumCullingTests PRIVATE
         glm
         GPUOpen::VulkanMemoryAllocator
         projectv_c_kernels
+        SDL3::SDL3
 )
 
 add_test(NAME ProjectVCFrustumCullingTests COMMAND ProjectVCFrustumCullingTests)
@@ -247,6 +248,7 @@ target_link_libraries(ProjectVVisibilityCacheHashTests PRIVATE
         volk
         glm
         GPUOpen::VulkanMemoryAllocator
+        SDL3::SDL3
 )
 
 add_test(NAME ProjectVVisibilityCacheHashTests COMMAND ProjectVVisibilityCacheHashTests)
@@ -398,6 +400,7 @@ if (PROJECTV_ENABLE_BENCHMARKS)
             volk
             glm
             GPUOpen::VulkanMemoryAllocator
+            SDL3::SDL3
     )
 
     projectv_test_add_modules(ProjectVFrustumCullBenchmark)
@@ -681,7 +684,7 @@ target_include_directories(ProjectVLodDownsampleTests PRIVATE
         ${CMAKE_SOURCE_DIR}/external/VulkanMemoryAllocator/include
         ${CMAKE_SOURCE_DIR}/external/draco
         ${CMAKE_SOURCE_DIR}/external/draco/src
-        ${CMAKE_SOURCE_DIR}/build/linux-clang-debug/_deps/nlohmann_json-src/include
+        ${CMAKE_SOURCE_DIR}/external/nlohmann_json/include
 )
 
 target_link_libraries(ProjectVLodDownsampleTests PRIVATE projectv_build_options)
@@ -801,7 +804,7 @@ target_include_directories(ProjectVAppStatePimplTests PRIVATE
         ${CMAKE_SOURCE_DIR}/external/JoltPhysics/Build/..
         ${CMAKE_SOURCE_DIR}/external/draco
         ${CMAKE_SOURCE_DIR}/external/draco/src
-        ${CMAKE_SOURCE_DIR}/build/linux-clang-debug/_deps/nlohmann_json-src/include
+        ${CMAKE_SOURCE_DIR}/external/nlohmann_json/include
         ${CMAKE_SOURCE_DIR}/external/fastgltf/include
         ${CMAKE_SOURCE_DIR}/external/fmt/include
         ${CMAKE_SOURCE_DIR}/external/flecs/include
