@@ -17,6 +17,9 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 ---
 
 ## 1. Now
+
+**2026-07-12 session (CI fix):** Fixed `linux-clang-debug-ci` GitHub Actions configure failure by installing SDL3 build dependencies on the `ubuntu-24.04` runner. Added `libasound2-dev`, `libpulse-dev`, `libx11-dev`, `libxext-dev`, `libxrandr-dev`, `libxcursor-dev`, `libxfixes-dev`, `libxi-dev`, `libxkbcommon-dev`, `libwayland-dev`, `wayland-protocols` and `libegl1-mesa-dev` to the dependency install step in `.github/workflows/build.yml`. SDL3 was failing with "Unable to find the alsa development library" and "SDL could not find X11 or Wayland development libraries".
+
 **2026-07-12 session (follow-up #4) — Откачены бесперспективные попытки обойти DFA/RadGlobal.**
 
 - Попытка разделить TU (`InputReplayLoader.cpp`, `ModelGravigunIntersect.cpp/.hpp`)

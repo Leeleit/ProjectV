@@ -28,7 +28,19 @@ jobs:
             python3-pip \
             wget \
             software-properties-common \
-            gnupg
+            gnupg \
+            libasound2-dev \
+            libpulse-dev \
+            libx11-dev \
+            libxext-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            wayland-protocols \
+            libegl1-mesa-dev
 
       - name: Install CMake 3.31
         run: |
