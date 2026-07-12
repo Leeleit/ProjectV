@@ -1,6 +1,6 @@
 # ProjectV
 
-[![Build & Test](https://github.com/Leeleit/ProjectV/actions/workflows/build.yml/badge.svg)](https://github.com/Leeleit/ProjectV/actions/workflows/build.yml)
+[![CI](https://github.com/Leeleit/ProjectV/actions/workflows/build.yml/badge.svg)](https://github.com/Leeleit/ProjectV/actions/workflows/build.yml)
 
 **C++26 · Vulkan 1.4 · RTX-only voxel sandbox**
 
