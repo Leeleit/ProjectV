@@ -196,8 +196,8 @@ bool UpdateSceneFrameChunkVisibility(
 	uint32_t frameIndex,
 	const ChunkCullingParameters &parameters);
 bool RefreshChunkAabbBuffer(
-	const std::span<const VoxelChunk> chunks,
-	const std::span<const PackedSceneChunkDescriptor> descriptors,
+	std::span<const VoxelChunk> chunks,
+	std::span<const PackedSceneChunkDescriptor> descriptors,
 	SceneFrameResources &frameResources);
 bool RefreshNanoVdbFlattenBuffers(
 	const projectv::voxel::nanovdb::NanoVdbFlattenResult &flatten,

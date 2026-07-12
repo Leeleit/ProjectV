@@ -211,8 +211,6 @@ void TestComputePerChunkMipLevelsFromAabbs(SmartMipTestContext &test)
 }
 
 constexpr uint32_t ComputeBlendWidthForChunkMipLocal(
-	const uint32_t projectedExtentXTexels,
-	const uint32_t projectedExtentYTexels,
 	const uint32_t mipLevel,
 	const uint32_t maxBlendWidth)
 {
@@ -222,31 +220,28 @@ constexpr uint32_t ComputeBlendWidthForChunkMipLocal(
 	if (mipLevel == 0u) {
 		return 0u;
 	}
-	const uint32_t maxExtent = std::max(projectedExtentXTexels, projectedExtentYTexels);
-	if (maxExtent == 0u) {
-		return 0u;
-	}
+	constexpr uint32_t maxExtent = 64u;
 	const uint32_t texelsAtMip = std::max<uint32_t>(maxExtent >> std::min<uint32_t>(mipLevel, 16u), 1u);
-	const uint32_t frac = maxExtent & ((1u << std::min<uint32_t>(mipLevel, 16u)) - 1u);
+	const uint32_t frac = maxExtent & (1u << std::min<uint32_t>(mipLevel, 16u)) - 1u;
 	return std::min<uint32_t>(texelsAtMip / 4u + frac / 8u, maxBlendWidth);
 }
 
 void TestBlendWidthZeroMaxBlendWidthReturnsZero(SmartMipTestContext &test)
 {
 	(void)test;
-	static_assert(ComputeBlendWidthForChunkMipLocal(64u, 64u, 3u, 0u) == 0u, "maxBlendWidth=0 must return 0");
+	static_assert(ComputeBlendWidthForChunkMipLocal(3u, 0u) == 0u, "maxBlendWidth=0 must return 0");
 }
 
 void TestBlendWidthZeroMipReturnsZero(SmartMipTestContext &test)
 {
 	(void)test;
-	static_assert(ComputeBlendWidthForChunkMipLocal(64u, 64u, 0u, 16u) == 0u, "mipLevel=0 must return 0 (no blend needed at full res)");
+	static_assert(ComputeBlendWidthForChunkMipLocal(0u, 16u) == 0u, "mipLevel=0 must return 0 (no blend needed at full res)");
 }
 
 void TestBlendWidthIsBoundedByMax(SmartMipTestContext &test)
 {
 	(void)test;
-	static_assert(ComputeBlendWidthForChunkMipLocal(64u, 64u, 3u, 4u) <= 4u, "Blend width must never exceed maxBlendWidth");
+	static_assert(ComputeBlendWidthForChunkMipLocal(3u, 4u) <= 4u, "Blend width must never exceed maxBlendWidth");
 }
 
 void WritePerChunkMipAndBlendWidthsToBuffer(

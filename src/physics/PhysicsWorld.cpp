@@ -1,7 +1,5 @@
 #include "physics/PhysicsWorld_Internal.hpp"
 
-#include <ranges>
-
 namespace {
 
 void DestroyStaticWorldBody(PhysicsState &physics)
@@ -70,7 +68,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 				static_cast<float>(minX) + halfX,
 				static_cast<float>(minY) + halfY,
 				static_cast<float>(minZ) + halfZ);
-			const JPH::RefConst boxShape = new JPH::BoxShape(halfExtent);
+			const JPH::RefConst<JPH::BoxShape> boxShape = new JPH::BoxShape(halfExtent);
 			compoundSettings.AddShape(
 				center,
 				JPH::Quat::sIdentity(),
@@ -80,7 +78,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 							   static_cast<size_t>(spanZ);
 		}
 	} else {
-		const JPH::RefConst voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
+		const JPH::RefConst<JPH::BoxShape> voxelShape = new JPH::BoxShape(JPH::Vec3(0.5f, 0.5f, 0.5f));
 		for (int z = chunk.min.z; z < chunk.maxExclusive.z; ++z) {
 			for (int y = chunk.min.y; y < chunk.maxExclusive.y; ++y) {
 				for (int x = chunk.min.x; x < chunk.maxExclusive.x; ++x) {
@@ -116,7 +114,7 @@ bool BuildChunkStaticCollisionBody(PhysicsState &physics, const VoxelWorld &worl
 		return false;
 	}
 
-	const JPH::RefConst chunkShape = shapeResult.Get();
+	const JPH::RefConst<JPH::Shape> chunkShape = shapeResult.Get();
 	const JPH::BodyCreationSettings chunkBodySettings(
 		chunkShape,
 		JPH::RVec3::sZero(),
@@ -155,7 +153,8 @@ void DestroyAllChunkStaticBodies(PhysicsState &physics)
 {
 	if (!physics.chunkStaticBodies.empty()) {
 		JPH::BodyInterface &bodyInterface = physics.physicsSystem.GetBodyInterface();
-		for (const JPH::BodyID bodyId : physics.chunkStaticBodies | std::views::values) {
+		for (const auto &pair : physics.chunkStaticBodies) {
+			const JPH::BodyID bodyId = pair.second;
 			bodyInterface.RemoveBody(bodyId);
 			bodyInterface.DestroyBody(bodyId);
 		}
@@ -172,7 +171,8 @@ bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWor
 
 	if (!physics.chunkMergedBoxes.empty()) {
 		JPH::StaticCompoundShapeSettings compoundSettings;
-		for (const auto &boxes : physics.chunkMergedBoxes | std::views::values) {
+		for (const auto &pair : physics.chunkMergedBoxes) {
+			const auto &boxes = pair.second;
 			for (const auto &[minX, minY, minZ, maxX, maxY, maxZ] : boxes) {
 				const int spanX = maxX - minX;
 				const int spanY = maxY - minY;
@@ -188,7 +188,7 @@ bool RebuildStaticWorldBodyFromChunkShapes(PhysicsState &physics, const VoxelWor
 					static_cast<float>(minX) + halfX,
 					static_cast<float>(minY) + halfY,
 					static_cast<float>(minZ) + halfZ);
-				const JPH::RefConst boxShape = new JPH::BoxShape(halfExtent);
+				const JPH::RefConst<JPH::BoxShape> boxShape = new JPH::BoxShape(halfExtent);
 				compoundSettings.AddShape(
 					center,
 					JPH::Quat::sIdentity(),
@@ -248,8 +248,8 @@ uint32_t ProcessChunkRebuildQueue(PhysicsState *physics, const VoxelWorld *world
 	if (physics && world && !physics->pendingChunkRebuilds.empty()) {
 		std::vector<uint32_t> pending;
 		pending.swap(physics->pendingChunkRebuilds);
-		std::ranges::sort(pending);
-		pending.erase(std::ranges::unique(pending).begin(), pending.end());
+		std::sort(pending.begin(), pending.end());
+		pending.erase(std::unique(pending.begin(), pending.end()), pending.end());
 
 		for (const uint32_t chunkIndex : pending) {
 			if (chunkIndex >= world->chunks.size()) {

@@ -216,15 +216,10 @@ void TestComputeGrownNanoVdbCapacitySmallerRequired(TestContext &context)
 
 void TestComputeGrownNanoVdbCapacityLargerRequired(TestContext &context)
 {
-	const uint64_t grown = projectv::voxel::nanovdb::ComputeGrownNanoVdbCapacityForTest(1000u, 3000u);
-	if (grown < 3000u) {
-		std::fprintf(stderr, "grown=%llu required=3000\n", static_cast<unsigned long long>(grown));
-		context.Fail(__LINE__, "Grown capacity must satisfy required capacity");
-	}
-	if (grown < 1500u) {
-		std::fprintf(stderr, "grown=%llu expected>=1500 (current*1.5)\n", static_cast<unsigned long long>(grown));
-		context.Fail(__LINE__, "Grown capacity must include 1.5x growth factor");
-	}
+	(void)context;
+	constexpr uint64_t grown = projectv::voxel::nanovdb::ComputeGrownNanoVdbCapacityForTest(1000u, 3000u);
+	static_assert(grown >= 3000u, "Grown capacity must satisfy required capacity");
+	static_assert(grown >= 1500u, "Grown capacity must include 1.5x growth factor");
 }
 
 }  // namespace

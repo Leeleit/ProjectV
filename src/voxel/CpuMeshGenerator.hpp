@@ -3,7 +3,6 @@
 #include "core/Types.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include "voxel/VoxelMaterials.hpp"
 
-#include <cstdint>
 #include <vector>
 
 namespace projectv::voxel {

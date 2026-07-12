@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-
 #include "core/Types.hpp"
 #include "voxel/VoxelWorld.hpp"
 

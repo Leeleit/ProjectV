@@ -320,9 +320,6 @@ bool RecordHzbAsyncCullPass(
 	if (render.hizCullingPipeline == VK_NULL_HANDLE) {
 		return false;
 	}
-	if (render.sceneFrameResources.empty()) {
-		return false;
-	}
 
 	// EVIL: wait on hzbBuildTimelineSemaphore so the persistent asyncComputeCommandBuffer
 	// is in executable/reset state. Per VUID-vkBeginCommandBuffer-commandBuffer-00049.

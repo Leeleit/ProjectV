@@ -1,10 +1,8 @@
 #pragma once
 
 #include "core/Types.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
-#include "render/SceneResources.hpp"
 
 #include <array>
-#include <cstdint>
 #include <cstdlib>
 
 #include <vulkan/vulkan.h>
@@ -22,14 +20,11 @@ static_assert(sizeof(WorldGenPushConstants) == 64);
 
 inline bool IsWorldGenGpuPipelineRequested()
 {
-	static const bool requested = [] {
-		const char *value = std::getenv("PROJECTV_WORLD_GEN_GPU");
-		if (value == nullptr) {
-			return true;
-		}
-		return value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
-	}();
-	return requested;
+	const char *value = std::getenv("PROJECTV_WORLD_GEN_GPU");
+	if (value == nullptr) {
+		return true;
+	}
+	return value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
 }
 
 inline constexpr VkDeviceSize kWorldGenVoxelBufferBytesPerChunk = sizeof(uint32_t) * 8u * 8u * 8u;

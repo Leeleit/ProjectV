@@ -184,14 +184,11 @@ namespace projectv::render {
 
 bool IsVctGpuPipelineRequested()
 {
-	static const bool requested = [] {
-		const char *value = std::getenv("PROJECTV_VCT_GPU");
-		if (value == nullptr) {
-			return false;
-		}
-		return value[0] != '\0' && value[0] != '0';
-	}();
-	return requested;
+	const char *value = std::getenv("PROJECTV_VCT_GPU");
+	if (value == nullptr) {
+		return false;
+	}
+	return value[0] != '\0' && value[0] != '0';
 }
 
 bool CreateVctClipmapFallbackSamplerOnly(VulkanContextState *context, RenderState *render)

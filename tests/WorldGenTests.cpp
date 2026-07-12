@@ -82,20 +82,15 @@ void TestWorldGenDispatchSkipOnZeroActiveChunks(WorldGenTestContext &test)
 
 void TestWorldGenSeedTickVariability(WorldGenTestContext &test)
 {
-	uint32_t seedA = 1u;
-	uint32_t seedB = 2u;
-	projectv::render::WorldGenPushConstants pushA{};
-	projectv::render::WorldGenPushConstants pushB{};
-	pushA.seed = seedA;
-	pushB.seed = seedB;
-	if (pushA.seed == pushB.seed) {
-		test.Fail(__LINE__, "Different simulation ticks must produce different world gen seeds");
-	}
+	(void)test;
+	constexpr uint32_t seedA = 1u;
+	constexpr uint32_t seedB = 2u;
+	static_assert(seedA != seedB, "Different simulation ticks must produce different world gen seeds");
 	constexpr uint64_t tickA = 1000u;
 	constexpr uint64_t tickB = 1001u;
-	constexpr uint32_t derivedSeedA = static_cast<uint32_t>(tickA);
-	constexpr uint32_t derivedSeedB = static_cast<uint32_t>(tickB);
-	static_assert(derivedSeedA != derivedSeedB, "Cast to uint32 must preserve tick difference for typical tick range");
+	constexpr uint32_t derivedSeedA = tickA;
+	constexpr uint32_t derivedSeedB = tickB;
+	static_assert(derivedSeedA != derivedSeedB, "Conversion to uint32 must preserve tick difference for typical tick range");
 }
 
 }  // namespace

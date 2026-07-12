@@ -8,18 +8,18 @@ namespace {
 
 struct TestContext {
 	int failures = 0;
-	void Fail(const int line, const std::string_view message)
+	void Fail(const std::string_view message)
 	{
-		std::fprintf(stderr, "Test failure at line %d: %.*s\n", line, static_cast<int>(message.size()), message.data());
+		std::fprintf(stderr, "Test failure: %.*s\n", static_cast<int>(message.size()), message.data());
 		++failures;
 	}
 };
 
-#define EXPECT_FALSE(context, condition, line, expr) \
-	do {                                             \
-		if (condition) {                             \
-			(context).Fail(line, expr);              \
-		}                                            \
+#define EXPECT_FALSE(context, condition, expr) \
+	do {                                         \
+		if (condition) {                         \
+			(context).Fail(expr);                \
+		}                                        \
 	} while (false)
 
 #define EXPECT_EQUAL_UINT(context, expected, actual, line, expr)                                                                                                 \
@@ -34,7 +34,7 @@ struct TestContext {
 void TestMeshShaderPipelineRequestedDefaultOff(TestContext &context)
 {
 	const bool requested = projectv::render::IsMeshShaderPipelineRequested();
-	EXPECT_FALSE(context, requested, __LINE__, "PROJECTV_MESH_SHADER_PIPELINE unset -> false");
+	EXPECT_FALSE(context, requested, "PROJECTV_MESH_SHADER_PIPELINE unset -> false");
 }
 
 void TestBuildMeshCullPushConstantsDispatchParams(TestContext &context)

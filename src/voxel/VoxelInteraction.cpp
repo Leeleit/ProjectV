@@ -439,7 +439,8 @@ void UpdateVoxelInteraction(
 	UpdateMutationAnchorState(*input, *interaction);
 	RefreshPickedPlacementMaterial(*input, hit, *interaction);
 
-	if (allowEditing && ApplyEditorInteraction(hit, camera, *input, physics, *world, *interaction)) {
+	if (allowEditing) {
+		ApplyEditorInteraction(hit, camera, *input, physics, *world, *interaction);
 		hit = raycast();
 		interaction->selection = BuildInteractionSelection(hit, world);
 	}

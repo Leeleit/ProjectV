@@ -89,7 +89,7 @@ class RayTracedShadows {
 		VkCommandPool commandPool);
 
 	[[nodiscard]] static VkDeviceSize ComputeBlasBuildScratchSize(
-		uint32_t primitiveCount) noexcept;
+		const uint32_t primitiveCount) noexcept;
 
 	[[nodiscard]] bool BuildChunkBlas(
 		VkCommandBuffer commandBuffer,

@@ -1,4 +1,5 @@
 #include "render/RendererInternal.hpp"
+#include "render/SceneResources.hpp"
 
 SDL_AppResult DrawFrame(
 	AppState *state,

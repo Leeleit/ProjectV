@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
-#include <expected>
 #include <string_view>
 #include <vector>
 

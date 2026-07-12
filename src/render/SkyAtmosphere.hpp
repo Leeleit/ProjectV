@@ -3,7 +3,6 @@
 #include "core/Types.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <array>
-#include <cstdint>
 
 #include <vulkan/vulkan.h>
 
@@ -11,11 +10,8 @@ namespace projectv::render {
 
 inline bool IsSkyAtmosphereEnabled()
 {
-	static const bool enabled = [] {
-		const char *value = std::getenv("PROJECTV_SKY");
-		return value != nullptr && value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
-	}();
-	return enabled;
+	const char *value = std::getenv("PROJECTV_SKY");
+	return value != nullptr && value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
 }
 
 struct SkyAtmospherePushConstants {

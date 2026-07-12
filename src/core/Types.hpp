@@ -28,7 +28,6 @@ class RtxGiProbes;
 
 #include <array>
 #include <cstddef>
-#include <filesystem>
 #include <memory>
 #include <string>
 #include <type_traits>

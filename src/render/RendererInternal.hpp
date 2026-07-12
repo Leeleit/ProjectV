@@ -23,7 +23,6 @@
 
 #include "fmt/format.h"
 
-#include <filesystem>
 #include <SDL3/SDL.h>
 
 struct SwapchainState;

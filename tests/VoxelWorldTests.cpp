@@ -675,7 +675,7 @@ void TestSetVoxelMaterialMarksNeighborChunksDirtyAtBoundaries(TestContext &conte
 
 	EXPECT_EQ(context, static_cast<uint32_t>(8), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(8), world.pendingChunkRebuildIndices.size());
-	std::ranges::sort(world.pendingChunkRebuildIndices);
+	std::sort(world.pendingChunkRebuildIndices.begin(), world.pendingChunkRebuildIndices.end());
 	for (size_t chunkIndex = 0; chunkIndex < 8; ++chunkIndex) {
 		EXPECT_EQ(context, chunkIndex, world.pendingChunkRebuildIndices[chunkIndex]);
 	}
@@ -689,7 +689,7 @@ void TestSetVoxelMaterialMarksOnlyFaceSharingNeighborChunksDirty(TestContext &co
 
 	EXPECT_EQ(context, static_cast<uint32_t>(2), CountDirtyVoxelChunks(world));
 	EXPECT_EQ(context, static_cast<size_t>(2), world.pendingChunkRebuildIndices.size());
-	std::ranges::sort(world.pendingChunkRebuildIndices);
+	std::sort(world.pendingChunkRebuildIndices.begin(), world.pendingChunkRebuildIndices.end());
 	EXPECT_EQ(context, static_cast<size_t>(0), world.pendingChunkRebuildIndices[0]);
 	EXPECT_EQ(context, static_cast<size_t>(1), world.pendingChunkRebuildIndices[1]);
 }
@@ -2578,7 +2578,7 @@ void TestVoxelLabWalkJumpFromCornerEdgeDoesNotImmediatelyDrop(TestContext &conte
 	}
 }
 
-static bool RunVoxelLabReapproachCase(
+bool RunVoxelLabReapproachCase(
 	TestContext &context,
 	const int outwardFrames,
 	const float initialYawRadians,
@@ -2586,7 +2586,6 @@ static bool RunVoxelLabReapproachCase(
 	const int walkFrames,
 	const char *caseName)
 {
-	constexpr float kPi = 3.1415926535f;
 	AppState state{};
 	EXPECT_TRUE(context, CreateVoxelSceneWorld(&state, VoxelScenePreset::VoxelLab));
 	EXPECT_TRUE(context, state.world().voxelWorld != nullptr);
@@ -2618,11 +2617,12 @@ static bool RunVoxelLabReapproachCase(
 
 	camera.yawRadians = postYawRadians;
 	for (int step = 0; step < 24; ++step) {
-		const std::array previousPosition{camera.position[0], camera.position[1], camera.position[2]};
+		const float previousPositionX = camera.position[0];
+		const float previousPositionZ = camera.position[2];
 		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), state.world().voxelWorld.get(), &camera, &input, 1.0f / 60.0f));
 		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
-		const float horizontalDeltaX = camera.position[0] - previousPosition[0];
-		const float horizontalDeltaZ = camera.position[2] - previousPosition[2];
+		const float horizontalDeltaX = camera.position[0] - previousPositionX;
+		const float horizontalDeltaZ = camera.position[2] - previousPositionZ;
 		const float horizontalDeltaSq = horizontalDeltaX * horizontalDeltaX + horizontalDeltaZ * horizontalDeltaZ;
 		if ((camera.position[1] > jumpStartY + 0.3f &&
 			 info.supportState == PhysicsWalkSupportDebugState::Grounded &&
@@ -3515,7 +3515,7 @@ struct WallJumpTestResult {
 	PhysicsWalkDebugInfo finalInfo{};
 };
 
-static WallJumpTestResult RunSneakGlassColumnWallSlideCase(TestContext &context, const bool withWall)
+WallJumpTestResult RunSneakGlassColumnWallSlideCase(TestContext &context, const bool withWall)
 {
 	constexpr float kPi = 3.1415926535f;
 	constexpr int kSimulationFrames = 60;
@@ -3651,7 +3651,7 @@ struct WallCaseTestResult {
 	CameraState finalCamera{};
 };
 
-static WallCaseTestResult RunHeldJumpGlassColumnCase(TestContext &context, const float startX)
+WallCaseTestResult RunHeldJumpGlassColumnCase(TestContext &context, const float startX)
 {
 	constexpr float kPi = 3.1415926535f;
 	VoxelWorld world = MakeWalkGlassColumnWallTestWorld();
@@ -3880,7 +3880,7 @@ struct JumpTestResult {
 	PhysicsWalkDebugInfo finalInfo{};
 };
 
-static JumpTestResult RunAirborneRetryJumpCase(TestContext &context, const bool pressSecondJump)
+JumpTestResult RunAirborneRetryJumpCase(TestContext &context, const bool pressSecondJump)
 {
 	constexpr float kPi = 3.1415926535f;
 	VoxelWorld world = MakeWalkPositiveTwoBlockTestWorld();
@@ -3963,7 +3963,7 @@ struct WallCatchTestResult {
 	CameraState finalCamera{};
 };
 
-static WallCatchTestResult RunHeldJumpForeignWallTopCase(TestContext &context, const float startX)
+WallCatchTestResult RunHeldJumpForeignWallTopCase(TestContext &context, const float startX)
 {
 	constexpr float kPi = 3.1415926535f;
 	VoxelWorld world = MakeWalkPositiveTwoBlockTestWorld();
@@ -4054,7 +4054,7 @@ struct AutoJumpTestResult {
 	float finalZ = 0.0f;
 };
 
-static AutoJumpTestResult RunAutoJumpDelayCase(TestContext &context, const bool delayEnabled)
+AutoJumpTestResult RunAutoJumpDelayCase(TestContext &context, const bool delayEnabled)
 {
 	constexpr float kPi = 3.1415926535f;
 	constexpr int kSimulationFrames = 120;
@@ -4153,7 +4153,7 @@ struct TraversalTestResult {
 	bool touchedBlockTop = false;
 };
 
-static TraversalTestResult RunAutoJumpToggleCase(TestContext &context, const bool autoJumpEnabled)
+TraversalTestResult RunAutoJumpToggleCase(TestContext &context, const bool autoJumpEnabled)
 {
 	constexpr float kPi = 3.1415926535f;
 	constexpr int kSimulationFrames = 120;
@@ -4634,7 +4634,7 @@ struct JumpAirCaseTestResult {
 	float finalZ = 0.0f;
 };
 
-static JumpAirCaseTestResult RunAirborneDirectionLockCase(TestContext &context, const bool releaseForwardAndPressStrafe)
+JumpAirCaseTestResult RunAirborneDirectionLockCase(TestContext &context, const bool releaseForwardAndPressStrafe)
 {
 	constexpr float kPi = 3.1415926535f;
 	const VoxelWorld world = MakeWalkTestWorld();
@@ -4703,7 +4703,7 @@ void TestWalkCharacterAirborneInputDoesNotBendJumpTrajectory(TestContext &contex
 	}
 }
 
-static JumpAirCaseTestResult RunMinecraftAirSteeringCase(TestContext &context, const bool switchToStrafe)
+JumpAirCaseTestResult RunMinecraftAirSteeringCase(TestContext &context, const bool switchToStrafe)
 {
 	constexpr float kPi = 3.1415926535f;
 	const VoxelWorld world = MakeWalkTestWorld();

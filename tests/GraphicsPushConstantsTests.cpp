@@ -78,9 +78,9 @@ int main()
 		Expect(
 			std::abs(m0[0] - 1.0f / (aspect * tanHalfFov)) <= kEpsilon,
 			"identity: VP m00 = 1/(aspect*tanHalfFov)");
-		Expect(std::abs(m1[1] - (-1.0f / tanHalfFov)) <= kEpsilon, "identity: VP m11 = -1/tanHalfFov");
+		Expect(std::abs(m1[1] + 1.0f / tanHalfFov) <= kEpsilon, "identity: VP m11 = -1/tanHalfFov");
 		Expect(std::abs(m2[2] - camera.farPlane / (camera.nearPlane - camera.farPlane)) <= kEpsilon, "identity: VP m22 projection z");
-		Expect(std::abs(m2[3] - (-1.0f)) <= kEpsilon, "identity: VP m23 = -1");
+		Expect(std::abs(m2[3] + 1.0f) <= kEpsilon, "identity: VP m23 = -1");
 		Expect(std::abs(m3[3] - 0.0f) <= kEpsilon, "identity: VP m33 = 0");
 	}
 	std::printf("[OK] identity: projection matrix coefficients\n");
@@ -95,7 +95,7 @@ int main()
 		const GraphicsPushConstants pc =
 			BuildGraphicsPushConstants(camera, extent);
 		Expect(std::abs(pc.cameraPosition[0] - 5.0f) <= kEpsilon, "translated: pos.x");
-		Expect(std::abs(pc.cameraPosition[1] - (-3.0f)) <= kEpsilon, "translated: pos.y");
+		Expect(std::abs(pc.cameraPosition[1] + 3.0f) <= kEpsilon, "translated: pos.y");
 		Expect(std::abs(pc.cameraPosition[2] - 12.0f) <= kEpsilon, "translated: pos.z");
 		const float lenSq = pc.cameraForward[0] * pc.cameraForward[0] +
 			pc.cameraForward[1] * pc.cameraForward[1] +

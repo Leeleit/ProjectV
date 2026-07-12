@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
-
 #include <vulkan/vulkan.h>
 
 namespace projectv::render {

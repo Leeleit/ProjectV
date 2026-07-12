@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -12,7 +11,7 @@ namespace projectv::voxel::nanovdb {
 inline constexpr uint32_t kNanoVdbInvalidIndex = 0xFFFFFFFFu;
 inline constexpr uint32_t kNanoVdbMaxLevelCount = 8u;
 
-inline constexpr uint64_t ComputeGrownNanoVdbCapacityForTest(const uint64_t currentCapacityBytes, const uint64_t requiredCapacityBytes)
+constexpr uint64_t ComputeGrownNanoVdbCapacityForTest(const uint64_t currentCapacityBytes, const uint64_t requiredCapacityBytes)
 {
 	if (currentCapacityBytes == 0u) {
 		return requiredCapacityBytes == 0u ? 1u : requiredCapacityBytes;

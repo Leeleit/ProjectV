@@ -12,11 +12,14 @@ namespace projectv::render {
 
 bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 {
+	if (render == nullptr) {
+		return false;
+	}
 	if (render->worldGenPipelineEnabled) {
 		return true;
 	}
 	PV_CHECK_OR_RETURN(
-		context && render && context->device != VK_NULL_HANDLE,
+		context && context->device != VK_NULL_HANDLE,
 		"Render", "CreateWorldGenPipelines.Preconditions", "missing context");
 	if (!IsWorldGenGpuPipelineRequested()) {
 		return false;

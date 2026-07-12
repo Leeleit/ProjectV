@@ -38,11 +38,8 @@ namespace projectv::render {
 
 bool IsSkyLutPrecomputeEnabled()
 {
-	static const bool enabled = [] {
-		const char *value = std::getenv("PROJECTV_SKY_LUT");
-		return value != nullptr && value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
-	}();
-	return enabled;
+	const char *value = std::getenv("PROJECTV_SKY_LUT");
+	return value != nullptr && value[0] == 'O' && value[1] == 'N' && value[2] == '\0';
 }
 
 void DestroySkyLutResources(VulkanContextState *context, RenderState *render)

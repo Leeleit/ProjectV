@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
-#include <cstdint>
 #include <vector>
 
 #include <vulkan/vulkan.h>

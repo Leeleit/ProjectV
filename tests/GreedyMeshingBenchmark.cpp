@@ -2,7 +2,6 @@
 
 #include "benchmark/benchmark.h"
 
-#include <cstdint>
 #include <vector>
 
 namespace {
@@ -11,8 +10,8 @@ using projectv::voxel::CpuGreedyInput;
 using projectv::voxel::GenerateCpuGreedyMesh;
 
 struct Xorshift32 {
-	uint32_t state;
-	explicit Xorshift32(const uint32_t seed) : state(seed ? seed : 1u) {}
+	uint32_t state = 42u;
+	Xorshift32() = default;
 	uint32_t Next()
 	{
 		uint32_t x = state;
@@ -42,7 +41,7 @@ struct Xorshift32 {
 
 std::vector<uint8_t> MakeRandomChunk(const int size)
 {
-	Xorshift32 rng(42u);
+	Xorshift32 rng;
 	std::vector<uint8_t> voxels(static_cast<size_t>(size) * static_cast<size_t>(size) * static_cast<size_t>(size));
 	for (auto &v : voxels) {
 		v = rng.NextMaterial();

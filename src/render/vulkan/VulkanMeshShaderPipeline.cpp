@@ -95,14 +95,11 @@ namespace projectv::render {
 
 bool IsMeshShaderPipelineRequested()
 {
-	static const bool requested = [] {
-		const char *value = std::getenv("PROJECTV_MESH_SHADER_PIPELINE");
-		if (value == nullptr) {
-			return false;
-		}
-		return value[0] != '\0' && value[0] != '0';
-	}();
-	return requested;
+	const char *value = std::getenv("PROJECTV_MESH_SHADER_PIPELINE");
+	if (value == nullptr) {
+		return false;
+	}
+	return value[0] != '\0' && value[0] != '0';
 }
 
 namespace {

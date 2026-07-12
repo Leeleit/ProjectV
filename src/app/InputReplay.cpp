@@ -50,7 +50,7 @@ std::filesystem::path GetResolvedInputReplaySnapshotPath()
 	return GetInputReplayDirectoryPath() / "latest.projectv.replay.snapshot.bin";
 }
 
-bool EnsureParentDirectoryExists(const std::filesystem::path &path, const std::string_view step)
+bool EnsureParentDirectoryExists(const std::filesystem::path &path)
 {
 	const std::filesystem::path parentPath = path.parent_path();
 	if (parentPath.empty()) {
@@ -60,7 +60,7 @@ bool EnsureParentDirectoryExists(const std::filesystem::path &path, const std::s
 	std::error_code error;
 	std::filesystem::create_directories(parentPath, error);
 	if (error) {
-		runtime::LogRuntimeFailure("InputReplay", step, error.message());
+		runtime::LogRuntimeFailure("InputReplay", "SaveInputReplayCapture.CreateDirectories", error.message());
 		return false;
 	}
 
@@ -226,7 +226,7 @@ std::string GetInputReplaySnapshotPath()
 bool SaveInputReplayCapture(const InputReplayCapture &capture, const std::string_view replayPath)
 {
 	const std::filesystem::path path = replayPath.empty() ? GetResolvedInputReplayPath() : std::filesystem::path(replayPath);
-	if (!EnsureParentDirectoryExists(path, "SaveInputReplayCapture.CreateDirectories")) {
+	if (!EnsureParentDirectoryExists(path)) {
 		return false;
 	}
 
@@ -353,21 +353,21 @@ bool LoadLatestInputReplay(InputState *input)
 
 	InputReplayCapture capture{};
 	const std::string replayPath = GetInputReplayPath();
-	if (!LoadInputReplayCapture(replayPath, &capture)) {
+	const bool loaded = LoadInputReplayCapture(replayPath, &capture);
+	if (!loaded) {
 		runtime::LogRuntimeFailure(
 			"InputReplay",
 			"LoadLatestInputReplay.Load",
 			replayPath);
-		return false;
+	} else {
+		input->replay.capture = std::move(capture);
+		input->replay.replayPath = std::filesystem::path(replayPath);
+		input->replay.captureAvailable = true;
+		input->replay.playbackRequested = true;
+		input->replay.playbackActive = false;
+		input->replay.playbackFrameIndex = 0;
 	}
-
-	input->replay.capture = std::move(capture);
-	input->replay.replayPath = std::filesystem::path(replayPath);
-	input->replay.captureAvailable = true;
-	input->replay.playbackRequested = true;
-	input->replay.playbackActive = false;
-	input->replay.playbackFrameIndex = 0;
-	return true;
+	return loaded;
 }
 
 void ApplyInputReplayFrame(

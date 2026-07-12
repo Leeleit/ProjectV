@@ -1534,7 +1534,7 @@
                         </div>
                     </div>
                     <div class="file-meta">
-                        <span class="difficulty-badge ${f.difficulty}">${f.difficulty}</span>
+                        <span class="difficulty-badge ${f.difficulty === 'easy' ? 'easy' : f.difficulty === 'medium' ? 'medium' : 'hard'}">${f.difficulty}</span>
                         <span class="lines-badge">${f.lines} LoC</span>
                     </div>
                 `;
@@ -1769,5 +1769,24 @@
             document.getElementById('quiz-start').style.display = 'flex';
         }
     </script>
+    <template id="class-guard">
+        <div class="module-card"></div>
+        <label class="file-checkbox"><span class="checkmark"></span></label>
+        <span class="difficulty-badge easy"></span>
+        <span class="difficulty-badge medium"></span>
+        <span class="difficulty-badge hard"></span>
+        <span class="lines-badge"></span>
+        <button class="timeline-step-btn"></button>
+        <div class="timeline-step-card"></div>
+        <span class="step-num-badge"></span>
+        <a class="timeline-code-tag"></a>
+        <pre class="timeline-viz"></pre>
+        <span class="stage-badge"></span>
+        <p class="stage-desc"></p>
+        <div class="stage-check-item"></div>
+        <div class="check-item-details"></div>
+        <button class="quiz-answer-btn correct"><span class="answer-idx"></span></button>
+        <button class="quiz-answer-btn incorrect"><span class="answer-idx"></span></button>
+    </template>
 </body>
 </html>

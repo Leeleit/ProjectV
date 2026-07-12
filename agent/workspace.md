@@ -17,6 +17,29 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 ---
 
 ## 1. Now
+**2026-07-12 session — Финальная зачистка перегенерированного `problems/` без suppression-комментариев.**
+
+- После перегенерации `problems/` оставалось 211 инспекций (без дубликатов `ClangTidy.xml`).
+  Все устранены реальными правками, разделённые на независимые домены и выполненные
+  параллельно: core source DFA/const/unreachable, NanoVDB, test mechanical issues,
+  `VoxelWorldTests` static/DFA/`std::ranges`, `RadGlobal` в `std::ranges`-использованиях,
+  `CppUnusedIncludeDirective` и `CssUnusedSymbol`.
+- Исправлены regression в декларациях (`const` параметров), внесённые ранее:
+  `Cloudscape.hpp`, `SceneResources.hpp`, `VulkanAsyncCompute.hpp`.
+- Убраны redundant `static` в anonymous namespace (`tests/VoxelWorldTests.cpp`) и
+  redundant `inline` у `constexpr` (`src/voxel/NanoVdb.hpp`).
+- `std::ranges` заменены на явные `std::sort`/`std::fill`/`std::count`/`std::copy`/
+  прямые итерации в `AppUpdate.cpp`, `AssetManifest.cpp`, `FrustumCullBenchmark.cpp`,
+  `PhysicsWorld.cpp`, `FluidCATests.cpp`, `VoxelWorldTests.cpp`.
+- Env-gated feature flags (`PROJECTV_WORLD_GEN_GPU`, `PROJECTV_FLUID_CA_GPU`,
+  `PROJECTV_VCT_GPU`, `PROJECTV_SKY`, `PROJECTV_FOG`, `PROJECTV_MESH_SHADER_PIPELINE`,
+  `PROJECTV_SKY_LUT`) переписаны без `static const bool` кэширования — теперь читают
+  `std::getenv` каждый вызов, что устранило 5 падающих тестов, вызванных кэшем.
+- Удалены только безопасные лишние `#include`; восстановлен `SceneResources.hpp`
+  в `RendererDrawFrame.cpp` для компиляции после очистки транзитивных includes.
+- Сборка `ProjectV` green, `ctest` 43/43 pass. Папка `problems/` готова к
+  следующей перегенерации оператором.
+
 **2026-07-12 session — Продолжение зачистки `problems/` без suppression-комментариев.**
 
 - Устранены критические ошибки и механические инспекции:

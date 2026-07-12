@@ -47,12 +47,12 @@ void DestroyCloudscapeResources(
 	RenderState *render);
 
 bool RecordCloudscapeRaymarchPass(
-	const VkCommandBuffer commandBuffer,
+	VkCommandBuffer commandBuffer,
 	RenderState &render,
 	const CloudscapePushConstants &pushConstants,
-	const VkImageView sceneColorView,
-	const VkImageView depthView,
-	const VkExtent2D extent,
-	const uint32_t frameIndex);
+	VkImageView sceneColorView,
+	VkImageView depthView,
+	VkExtent2D extent,
+	uint32_t frameIndex);
 
 } // namespace projectv::render

@@ -59,9 +59,7 @@ bool BuildNanoVdbFlatten(
 	}
 
 	constexpr uint32_t childrenPerNode = GetChildrenPerNode();
-	constexpr uint64_t allChildrenMask = childrenPerNode == 64u
-											 ? ~uint64_t{0}
-											 : (uint64_t{1} << childrenPerNode) - 1u;
+	constexpr uint64_t allChildrenMask = ~uint64_t{0};
 
 	outResult.uppers.reserve(1u);
 	outResult.lowers.resize(childrenPerNode);
@@ -131,9 +129,7 @@ bool BuildNanoVdbFlatten(
 
 			if (childIsLeaf) {
 				if (childMaterial != 0u) {
-					constexpr uint64_t valueMask = childrenPerNode == 64u
-													   ? ~uint64_t{0}
-													   : (uint64_t{1} << childrenPerNode) - 1u;
+					constexpr uint64_t valueMask = ~uint64_t{0};
 
 					NanoVdbLower lower{};
 					lower.childMask = valueMask;

@@ -20,7 +20,7 @@ struct TestContext {
 	}
 };
 
-void ExpectEqualI(TestContext &context, int expected, int actual, int line, std::string_view expr)
+void ExpectEqualI(TestContext &context, const int expected, const int actual, const int line, const std::string_view expr)
 {
 	if (expected != actual) {
 		char buffer[256]{};
@@ -29,7 +29,7 @@ void ExpectEqualI(TestContext &context, int expected, int actual, int line, std:
 	}
 }
 
-void ExpectTrue(TestContext &context, bool condition, int line, std::string_view expr)
+void ExpectTrue(TestContext &context, const bool condition, const int line, const std::string_view expr)
 {
 	if (!condition) {
 		context.Fail(line, expr);
@@ -317,7 +317,7 @@ void TestFullSweepParity(TestContext &context)
 	for (int z = 0; z < sideZ; ++z) {
 		for (int y = 0; y < sideY; ++y) {
 			for (int x = 0; x < sideX; ++x) {
-				const uint8_t m = static_cast<uint8_t>(((x * 3 + y * 5 + z * 7) % 4) + 1);
+				const uint8_t m = static_cast<uint8_t>((x * 3 + y * 5 + z * 7) % 4 + 1);
 				const size_t idx = static_cast<size_t>(x) + static_cast<size_t>(sideX) * (y + static_cast<size_t>(sideY) * z);
 				flat[idx] = m;
 				tree.SetCell(x, y, z, m);

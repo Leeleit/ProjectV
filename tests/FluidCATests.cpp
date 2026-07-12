@@ -65,8 +65,9 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
 
 size_t CountFluid(const VoxelWorld &world)
 {
-	return static_cast<size_t>(std::ranges::count(
-		BuildFlatVoxelSnapshot(world),
+	const auto snapshot = BuildFlatVoxelSnapshot(world);
+	return static_cast<size_t>(std::count(
+		snapshot.begin(), snapshot.end(),
 		static_cast<uint8_t>(VoxelMaterial::Fluid)));
 }
 }
@@ -734,8 +735,9 @@ void TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(TestContext &cont
 		world->depth,
 		world->stats.fluidVoxelCount);
 
-	const size_t initialFluid = static_cast<size_t>(std::ranges::count(
-		BuildFlatVoxelSnapshot(*world),
+	const auto initialSnapshot = BuildFlatVoxelSnapshot(*world);
+	const size_t initialFluid = static_cast<size_t>(std::count(
+		initialSnapshot.begin(), initialSnapshot.end(),
 		static_cast<uint8_t>(VoxelMaterial::Fluid)));
 	const Int3 initialFluidAabbMin = world->fluidCAAabbMin;
 	const Int3 initialFluidAabbMax = world->fluidCAAabbMaxExclusive;
@@ -747,13 +749,14 @@ void TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(TestContext &cont
 		EXPECT_EQ(context, static_cast<uint32_t>(actual), world->stats.fluidVoxelCount);
 	}
 
+	const auto finalSnapshot = BuildFlatVoxelSnapshot(*world);
 	std::fprintf(
 		stderr,
 		"[FluidCA] replay: 300 ticks, totalMoved=%u, fluid preserved=%zu/%zu, AABB grew: y[%d..%d) -> y[%d..%d)\n",
 		totalMoved,
 		initialFluid,
-		static_cast<size_t>(std::ranges::count(
-			BuildFlatVoxelSnapshot(*world),
+		static_cast<size_t>(std::count(
+			finalSnapshot.begin(), finalSnapshot.end(),
 			static_cast<uint8_t>(VoxelMaterial::Fluid))),
 		initialFluidAabbMin.y,
 		initialFluidAabbMax.y,
