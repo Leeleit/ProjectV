@@ -73,6 +73,10 @@ jobs:
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-22 100
           sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-22 100
           sudo update-alternatives --install /usr/bin/lld lld /usr/bin/lld-22 100
+          # CMake/std module probing expects libc++ modules under /usr/share/libc++/v1,
+          # but LLVM 22 packages install them under /usr/lib/llvm-22/share/libc++/v1.
+          sudo mkdir -p /usr/share/libc++
+          sudo ln -sf /usr/lib/llvm-22/share/libc++/v1 /usr/share/libc++/v1
           clang --version
 
       - name: Install Vulkan SDK
