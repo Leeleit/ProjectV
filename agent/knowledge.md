@@ -1196,10 +1196,9 @@ benchmark/regression numbers. ON = full atmospheric look.
   only `capstone` 6.0.0-Alpha9 and `ppqsort` 1.0.6 via `FetchContent`. The two executables
   need separate `TracyServer` static libraries because capture requires
   `TRACY_NO_STATISTICS` while csvexport requires statistics support.
-- **Measurement baseline still incomplete:** Tracy CLI tools build, but automated headless
-  capture + CSV analysis pipeline is not wired into the smoke test yet. NSight Graphics is
-  not installed on this host. Phase 3 tasks 3.2-3.4 remain deferred until the operator
-  provides NSight Graphics or approves proceeding without measured gating.
+- **NSight Graphics CLI baseline established:** `/opt/nsight-graphics/latest/host/linux-desktop-nomad-x64/ngfx-capture` and `ngfx-replay --perf-report-dir` work. Example baseline for current master (frame 45, VoxelLab, validation ON): replayAdjustedFps ≈ 572. Use this as the Phase 3 performance gate for tasks 3.2-3.4.
+- **Tracy CLI capture pipeline automated:** `tools/linux/Invoke-ProjectVTracyCapture.sh` runs ProjectV with `PROJECTV_BENCHMARK_FRAMES` + `PROJECTV_BENCHMARK_QUIT=1` auto-quit, connects `tracy-capture` to the app's Tracy server, and saves the `.tracy` file when the app exits. Capture-to-CSV analysis is still manual via `tracy-csvexport`.
+- **Benchmark auto-quit fix:** `UpdateBenchmarkAutomation` must keep returning `quitWhenDone` after `completed` is set, because multiple `flecs::world::progress()` calls per frame would otherwise overwrite the quit request before `SDL_AppIterate` reads it.
 - **Push descriptors (Task 3.1):** implemented with runtime fallback. When
   `context.features14.pushDescriptor == VK_TRUE`, RT shadow and DDGI compute passes use
   Vulkan 1.4 core `vkCmdPushDescriptorSet` (not the `KHR` alias) and skip descriptor-pool
