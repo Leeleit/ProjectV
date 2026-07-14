@@ -18,6 +18,20 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-14 session (Vulkan 1.4 Phase 3 performance):** Phase 3 partially completed; measurement gate could not be satisfied in headless CLI.
+- Phase 3 setup: Tracy CLI capture tools (`tracy-capture`/`tracy-csvexport`) require CPM downloads of capstone/freetype/zstd/imgui/etc. and timed out during CMake configure; NSight Graphics is not available. Performance baseline therefore not established. Implemented tasks 3.1 and 3.5 anyway because they are low-risk and correctness-verifiable; deferred 3.2-3.4 pending measurable baseline or operator go-ahead.
+- Task 3.1 (push descriptors for RT/DDGI per-frame updates):
+  - Enabled `pushDescriptor` in `BuildEnabledFeatures14` (`src/render/vulkan/VulkanBootstrapFeatures.cpp`).
+  - Added `VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR` to RT shadow pipeline layout (`src/render/RtxShadowPipeline.cpp`) and DDGI compute pipeline layout (`src/render/RtxGiProbesPipeline.cpp`) when the feature is supported.
+  - Replaced `vkUpdateDescriptorSets` + `vkCmdBindDescriptorSets` with `vkCmdPushDescriptorSet` in `RayTracedShadowsPass.cpp` and `RtxGiProbesUpdate.cpp`, with fallback to the old path when `pushDescriptor` is unavailable.
+  - Skipped descriptor-pool/set allocation for RT shadow frames and DDGI when push descriptors are active.
+  - Fix during verification: use Vulkan 1.4 core `vkCmdPushDescriptorSet`, not the `KHR` alias, because volk only loads the alias when `VK_KHR_push_descriptor` extension is enabled.
+- Task 3.5 (TLAS refit):
+  - Added `VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR` to BLAS build/sizing flags in `src/render/RayTracedShadowsBlas.cpp`.
+  - Added `ALLOW_UPDATE` to TLAS build flags and implemented runtime refit detection in `src/render/RayTracedShadowsTlas.cpp`: when `tlasInstanceCount` matches the previous frame, query update scratch size and use `VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR` with `srcAccelerationStructure = m_config.tlas`; otherwise fall back to `BUILD` mode.
+  - Added `m_previousTlasInstanceCount` to `RayTracedShadows` and reset it on shutdown.
+- Verification: `ninja -C build/linux-clang-debug ProjectV` green, `ctest` 44/44 pass, validation smoke (`PROJECTV_ENABLE_VALIDATION=ON`, single `FINAL` view) PASS. Pre-existing Vulkan validation layout warnings for DDGI irradiance/distance images remain (unrelated to this work; present before Phase 3 changes).
+
 **2026-07-14 session (Vulkan 1.4 Phase 2 cleanup):** Phase 2 exit criteria satisfied.
 - Verified Phase 2 prerequisites: zero sync1 (`vkCmdPipelineBarrier` / `vkQueueSubmit`) calls remain in `src/render/`, `ALLOW_COMPACTION_BIT_KHR` removed, `EVIL:` markers reduced to genuine hacks only.
 - Decomposed `SceneResources.cpp` (824 → 145 lines) into `SceneResourcesFrame.cpp` (geometry/indirect/culling/LOD buffers) and `SceneResourcesFrameCompute.cpp` (fluid CA, NanoVDB, world-gen buffers); both new files ≤600 lines.

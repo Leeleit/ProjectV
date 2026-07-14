@@ -60,10 +60,11 @@ bool RtxGiProbes::CreateComputePipeline(const VulkanContextState &context)
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 			.pImmutableSamplers = nullptr}};
 
+	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
 	const VkDescriptorSetLayoutCreateInfo layoutInfo{
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.pNext = nullptr,
-		.flags = 0,
+		.flags = usePushDescriptors ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR : 0u,
 		.bindingCount = static_cast<uint32_t>(bindings.size()),
 		.pBindings = bindings.data()};
 
@@ -134,35 +135,37 @@ bool RtxGiProbes::CreateComputePipeline(const VulkanContextState &context)
 
 	vkDestroyShaderModule(context.device, shaderModule, nullptr);
 
-	std::array poolSizes = {
-		VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5 * MAX_FRAMES_IN_FLIGHT},
-		VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1 * MAX_FRAMES_IN_FLIGHT},
-		VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * MAX_FRAMES_IN_FLIGHT}};
+	if (!usePushDescriptors) {
+		std::array poolSizes = {
+			VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5 * MAX_FRAMES_IN_FLIGHT},
+			VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1 * MAX_FRAMES_IN_FLIGHT},
+			VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * MAX_FRAMES_IN_FLIGHT}};
 
-	const VkDescriptorPoolCreateInfo poolInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.maxSets = MAX_FRAMES_IN_FLIGHT,
-		.poolSizeCount = 3,
-		.pPoolSizes = poolSizes.data()};
+		const VkDescriptorPoolCreateInfo poolInfo{
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.maxSets = MAX_FRAMES_IN_FLIGHT,
+			.poolSizeCount = 3,
+			.pPoolSizes = poolSizes.data()};
 
-	if (vkCreateDescriptorPool(context.device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
-		runtime::LogRuntimeFailure("Render", "RtxGiProbes.CreateComputePipeline.descriptorPool", "vkCreateDescriptorPool failed");
-		return false;
-	}
+		if (vkCreateDescriptorPool(context.device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
+			runtime::LogRuntimeFailure("Render", "RtxGiProbes.CreateComputePipeline.descriptorPool", "vkCreateDescriptorPool failed");
+			return false;
+		}
 
-	std::array layouts = {m_descriptorSetLayout, m_descriptorSetLayout};
-	const VkDescriptorSetAllocateInfo allocInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.pNext = nullptr,
-		.descriptorPool = m_descriptorPool,
-		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
-		.pSetLayouts = layouts.data()};
+		std::array layouts = {m_descriptorSetLayout, m_descriptorSetLayout};
+		const VkDescriptorSetAllocateInfo allocInfo{
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.pNext = nullptr,
+			.descriptorPool = m_descriptorPool,
+			.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
+			.pSetLayouts = layouts.data()};
 
-	if (vkAllocateDescriptorSets(context.device, &allocInfo, m_descriptorSets.data()) != VK_SUCCESS) {
-		runtime::LogRuntimeFailure("Render", "RtxGiProbes.CreateComputePipeline.allocateSets", "vkAllocateDescriptorSets failed");
-		return false;
+		if (vkAllocateDescriptorSets(context.device, &allocInfo, m_descriptorSets.data()) != VK_SUCCESS) {
+			runtime::LogRuntimeFailure("Render", "RtxGiProbes.CreateComputePipeline.allocateSets", "vkAllocateDescriptorSets failed");
+			return false;
+		}
 	}
 
 	return true;

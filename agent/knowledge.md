@@ -1188,6 +1188,29 @@ benchmark/regression numbers. ON = full atmospheric look.
 - **sccache:** `CMAKE_CXX_COMPILER_LAUNCHER sccache` в dev presets
   (linux-clang-debug, linux-clang-release). CI presets также с sccache.
 
+## R6. Vulkan 1.4 Phase 3 performance notes (2026-07-14)
+
+- **Measurement baseline unavailable:** Tracy CLI capture tools (`external/tracy/capture`,
+  `external/tracy/csvexport`) cannot be built in this headless CLI environment because
+  `external/tracy/cmake/vendor.cmake` downloads capstone/freetype/zstd/imgui/etc. via CPM
+  and CMake configure times out before completion. NSight Graphics is not installed.
+  Phase 3 tasks 3.2-3.4 are deferred until a measurable baseline is available or the
+  operator explicitly overrides the gate.
+- **Push descriptors (Task 3.1):** implemented with runtime fallback. When
+  `context.features14.pushDescriptor == VK_TRUE`, RT shadow and DDGI compute passes use
+  Vulkan 1.4 core `vkCmdPushDescriptorSet` (not the `KHR` alias) and skip descriptor-pool
+  allocation. The old `vkUpdateDescriptorSets` + `vkCmdBindDescriptorSets` path remains for
+  hardware without the feature.
+- **TLAS refit (Task 3.5):** implemented. BLAS and TLAS builds use
+  `VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR`. When the visible instance count
+  matches the previous frame and the update scratch size fits in the pre-allocated scratch
+  buffer, `RecordTlasBuild` uses `VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR` with
+  `srcAccelerationStructure = m_config.tlas`; otherwise it falls back to `BUILD` mode.
+- **Known pre-existing validation noise:** DDGI irradiance/distance images trigger
+  `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL` vs `VK_IMAGE_LAYOUT_GENERAL` layout warnings at
+  `vkQueueSubmit2`. This exists before Phase 3 changes and is unrelated to push descriptors
+  or TLAS refit.
+
 ---
 
 # Cross-references

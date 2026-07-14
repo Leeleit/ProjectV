@@ -382,6 +382,7 @@ VkPhysicalDeviceVulkan14Features BuildEnabledFeatures14(const PhysicalDeviceCand
 	enabled.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
 	enabled.maintenance5 = selected.features14.maintenance5 ? VK_TRUE : VK_FALSE;
 	enabled.maintenance6 = selected.features14.maintenance6 ? VK_TRUE : VK_FALSE;
+	enabled.pushDescriptor = selected.features14.pushDescriptor ? VK_TRUE : VK_FALSE;
 	return enabled;
 }
 

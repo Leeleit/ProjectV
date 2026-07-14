@@ -119,8 +119,12 @@ bool RtxShadowPipeline::Initialize(
 	bindings[5].descriptorCount = 1;
 	bindings[5].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
+	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	if (usePushDescriptors) {
+		layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+	}
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
 	layoutInfo.pBindings = bindings.data();
 	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS) {

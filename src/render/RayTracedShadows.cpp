@@ -85,6 +85,7 @@ void RayTracedShadows::Shutdown(const VulkanContextState &context)
 	ReleaseBuffers(context);
 	m_initialized.store(false, std::memory_order_release);
 	m_config.enabled = false;
+	m_previousTlasInstanceCount = 0u;
 }
 
 bool RayTracedShadows::AllocateBuffers(

@@ -161,24 +161,27 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 		return false;
 	}
 
-	std::array<VkDescriptorPoolSize, 4> poolSizes{};
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	poolSizes[0].descriptorCount = 2u * MAX_FRAMES_IN_FLIGHT;
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-	poolSizes[1].descriptorCount = MAX_FRAMES_IN_FLIGHT;
-	poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	poolSizes[2].descriptorCount = MAX_FRAMES_IN_FLIGHT;
-	poolSizes[3].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[3].descriptorCount = MAX_FRAMES_IN_FLIGHT;
-	VkDescriptorPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT;
-	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-	poolInfo.pPoolSizes = poolSizes.data();
-	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &m_rtxDescriptorPool) != VK_SUCCESS) {
-		runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vkCreateDescriptorPool", VK_ERROR_INITIALIZATION_FAILED);
-		ReleaseVoxelAwareRtxResources(context);
-		return false;
+	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
+	if (!usePushDescriptors) {
+		std::array<VkDescriptorPoolSize, 4> poolSizes{};
+		poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		poolSizes[0].descriptorCount = 2u * MAX_FRAMES_IN_FLIGHT;
+		poolSizes[1].type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+		poolSizes[1].descriptorCount = MAX_FRAMES_IN_FLIGHT;
+		poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		poolSizes[2].descriptorCount = MAX_FRAMES_IN_FLIGHT;
+		poolSizes[3].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		poolSizes[3].descriptorCount = MAX_FRAMES_IN_FLIGHT;
+		VkDescriptorPoolCreateInfo poolInfo{};
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT;
+		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+		poolInfo.pPoolSizes = poolSizes.data();
+		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &m_rtxDescriptorPool) != VK_SUCCESS) {
+			runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vkCreateDescriptorPool", VK_ERROR_INITIALIZATION_FAILED);
+			ReleaseVoxelAwareRtxResources(context);
+			return false;
+		}
 	}
 
 	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -203,15 +206,17 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 		cameraUboMappedData = mappedInfo.pMappedData;
 		std::memset(cameraUboMappedData, 0, 96u);
 
-		VkDescriptorSetAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocInfo.descriptorPool = m_rtxDescriptorPool;
-		allocInfo.descriptorSetCount = 1u;
-		allocInfo.pSetLayouts = &m_rtxPipeline.GetDescriptorSetLayout();
-		if (vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
-			runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vkAllocateDescriptorSets", VK_ERROR_INITIALIZATION_FAILED);
-			ReleaseVoxelAwareRtxResources(context);
-			return false;
+		if (!usePushDescriptors) {
+			VkDescriptorSetAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocInfo.descriptorPool = m_rtxDescriptorPool;
+			allocInfo.descriptorSetCount = 1u;
+			allocInfo.pSetLayouts = &m_rtxPipeline.GetDescriptorSetLayout();
+			if (vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
+				runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vkAllocateDescriptorSets", VK_ERROR_INITIALIZATION_FAILED);
+				ReleaseVoxelAwareRtxResources(context);
+				return false;
+			}
 		}
 	}
 

@@ -238,6 +238,7 @@ class RayTracedShadows {
 	RtxShadowPipeline m_rtxPipeline;
 	RtxShadowSBT m_rtxSbt;
 	VkDescriptorPool m_rtxDescriptorPool = VK_NULL_HANDLE;
+	uint32_t m_previousTlasInstanceCount = 0u;
 	VkImage m_shadowMaskImage = VK_NULL_HANDLE;
 	VkImageView m_shadowMaskImageView = VK_NULL_HANDLE;
 	VmaAllocation m_shadowMaskAllocation = nullptr;

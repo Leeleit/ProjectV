@@ -135,12 +135,33 @@ void RayTracedShadows::RecordTlasBuild(
 	VkAccelerationStructureBuildGeometryInfoKHR tlasBuildInfo{};
 	tlasBuildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
 	tlasBuildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-	tlasBuildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
-	tlasBuildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-	tlasBuildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
-	tlasBuildInfo.dstAccelerationStructure = m_config.tlas;
+	tlasBuildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
 	tlasBuildInfo.geometryCount = 1u;
 	tlasBuildInfo.pGeometries = &instancesGeometry;
+
+	const bool canRefit = m_config.tlasInstanceCount == m_previousTlasInstanceCount && m_config.tlasInstanceCount > 0u;
+	if (canRefit) {
+		VkAccelerationStructureBuildGeometryInfoKHR updateSizingInfo = tlasBuildInfo;
+		updateSizingInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+		updateSizingInfo.srcAccelerationStructure = m_config.tlas;
+		updateSizingInfo.dstAccelerationStructure = m_config.tlas;
+		VkAccelerationStructureBuildSizesInfoKHR updateSizeInfo{};
+		updateSizeInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+		vkGetAccelerationStructureBuildSizesKHR(
+			context.device,
+			VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+			&updateSizingInfo,
+			&m_config.tlasInstanceCount,
+			&updateSizeInfo);
+		if (updateSizeInfo.updateScratchSize > 0u && updateSizeInfo.updateScratchSize <= m_config.scratchCapacityBytes) {
+			tlasBuildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+			tlasBuildInfo.srcAccelerationStructure = m_config.tlas;
+		}
+	}
+	if (tlasBuildInfo.mode == VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR) {
+		tlasBuildInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+	}
+	tlasBuildInfo.dstAccelerationStructure = m_config.tlas;
 	tlasBuildInfo.scratchData.deviceAddress = m_config.scratchDeviceAddress;
 
 	VkAccelerationStructureBuildRangeInfoKHR tlasRangeInfo{};
@@ -155,6 +176,8 @@ void RayTracedShadows::RecordTlasBuild(
 		1u,
 		&tlasBuildInfo,
 		tlasRangeInfos);
+
+	m_previousTlasInstanceCount = m_config.tlasInstanceCount;
 
 	VkMemoryBarrier2 tlasToFragmentBarrier{};
 	tlasToFragmentBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;

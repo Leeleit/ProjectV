@@ -126,7 +126,18 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	writes[5].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	writes[5].pBufferInfo = &cameraUboInfo;
 
-	vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()), writes.data(), 0u, nullptr);
+	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
+	if (usePushDescriptors) {
+		vkCmdPushDescriptorSet(
+			commandBuffer,
+			VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+			m_rtxPipeline.GetPipelineLayout(),
+			0u,
+			static_cast<uint32_t>(writes.size()),
+			writes.data());
+	} else {
+		vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()), writes.data(), 0u, nullptr);
+	}
 
 	VkImageMemoryBarrier2 imageBarrier{};
 	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -150,15 +161,17 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 		commandBuffer,
 		VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
 		m_rtxPipeline.GetPipeline());
-	vkCmdBindDescriptorSets(
-		commandBuffer,
-		VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-		m_rtxPipeline.GetPipelineLayout(),
-		0u,
-		1u,
-		&descriptorSet,
-		0u,
-		nullptr);
+	if (!usePushDescriptors) {
+		vkCmdBindDescriptorSets(
+			commandBuffer,
+			VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+			m_rtxPipeline.GetPipelineLayout(),
+			0u,
+			1u,
+			&descriptorSet,
+			0u,
+			nullptr);
+	}
 
 	vkCmdTraceRaysKHR(
 		commandBuffer,

@@ -134,7 +134,18 @@ bool RtxGiProbes::RecordUpdatePass(
 			.pBufferInfo = &volumeDescInfo,
 			.pTexelBufferView = nullptr}};
 
-	vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
+	if (usePushDescriptors) {
+		vkCmdPushDescriptorSet(
+			commandBuffer,
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			m_pipelineLayout,
+			0u,
+			static_cast<uint32_t>(writes.size()),
+			writes.data());
+	} else {
+		vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+	}
 
 	std::array<VkImageMemoryBarrier2, 2> imageBarriers{};
 	imageBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -180,15 +191,17 @@ bool RtxGiProbes::RecordUpdatePass(
 	vkCmdPipelineBarrier2(commandBuffer, &preUpdateDep);
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline);
-	vkCmdBindDescriptorSets(
-		commandBuffer,
-		VK_PIPELINE_BIND_POINT_COMPUTE,
-		m_pipelineLayout,
-		0u,
-		1u,
-		&m_descriptorSets[frameIndex],
-		0u,
-		nullptr);
+	if (!usePushDescriptors) {
+		vkCmdBindDescriptorSets(
+			commandBuffer,
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			m_pipelineLayout,
+			0u,
+			1u,
+			&m_descriptorSets[frameIndex],
+			0u,
+			nullptr);
+	}
 
 	vkCmdPushConstants(
 		commandBuffer,
