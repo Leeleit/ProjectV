@@ -71,9 +71,10 @@ void DestroyShaderModule(const VkDevice device, VkShaderModule &module) noexcept
 
 struct DeferredPipelineCreate {
 	VkDeferredOperationKHR deferredOp = VK_NULL_HANDLE;
-	std::future<VkResult> future;
+	std::vector<std::future<void>> futures;
 	VkPipeline pipeline = VK_NULL_HANDLE;
 	bool wasDeferred = false;
+	uint32_t maxConcurrency = 0u;
 };
 
 bool CreateRayTracingPipelineWithOptionalDeferral(
@@ -106,20 +107,18 @@ bool CreateRayTracingPipelineWithOptionalDeferral(
 
 	if (createResult == VK_OPERATION_DEFERRED_KHR) {
 		out->wasDeferred = true;
-		out->future = std::async(std::launch::async, [device, deferredOp = out->deferredOp, pipelinePtr = &out->pipeline, debugName]() -> VkResult {
-			PV_PROFILE_ZONE_N("RtxShadowPipeline.DeferredJoin");
-			VkResult joinResult = VK_SUCCESS;
-			do {
-				joinResult = vkDeferredOperationJoinKHR(device, deferredOp);
-			} while (joinResult == VK_THREAD_IDLE_KHR);
-			const VkResult opResult = vkGetDeferredOperationResultKHR(device, deferredOp);
-			vkDestroyDeferredOperationKHR(device, deferredOp, nullptr);
-			if (opResult != VK_SUCCESS) {
-				SDL_Log("Render: RtxShadowPipeline.%s: deferred join failed (%d)", debugName, opResult);
-				*pipelinePtr = VK_NULL_HANDLE;
-			}
-			return opResult;
-		});
+		out->maxConcurrency = vkGetDeferredOperationMaxConcurrencyKHR(device, out->deferredOp);
+		const uint32_t joinThreads = out->maxConcurrency > 0u ? out->maxConcurrency : 1u;
+		out->futures.reserve(joinThreads);
+		for (uint32_t i = 0u; i < joinThreads; ++i) {
+			out->futures.emplace_back(std::async(std::launch::async, [device, deferredOp = out->deferredOp]() {
+				PV_PROFILE_ZONE_N("RtxShadowPipeline.DeferredJoin");
+				VkResult joinResult = VK_SUCCESS;
+				do {
+					joinResult = vkDeferredOperationJoinKHR(device, deferredOp);
+				} while (joinResult == VK_THREAD_IDLE_KHR);
+			}));
+		}
 		return true;
 	}
 
@@ -325,22 +324,32 @@ bool RtxShadowPipeline::Initialize(
 			}
 
 			SDL_Log(
-				"Render: RtxShadowPipeline: library deferral (rayGen=%s miss=%s hitGroup=%s)",
+				"Render: RtxShadowPipeline: library deferral (rayGen=%s concurrency=%u miss=%s concurrency=%u hitGroup=%s concurrency=%u)",
 				rayGenCreate.wasDeferred ? "yes" : "no",
+				rayGenCreate.maxConcurrency,
 				missCreate.wasDeferred ? "yes" : "no",
-				hitGroupCreate.wasDeferred ? "yes" : "no");
+				missCreate.maxConcurrency,
+				hitGroupCreate.wasDeferred ? "yes" : "no",
+				hitGroupCreate.maxConcurrency);
 
 			std::array<DeferredPipelineCreate *, 3> libraryCreates{&rayGenCreate, &missCreate, &hitGroupCreate};
 			for (DeferredPipelineCreate *libraryCreate : libraryCreates) {
-				if (libraryCreate->future.valid()) {
-					libraryCreate->future.wait();
+				for (std::future<void> &future : libraryCreate->futures) {
+					future.wait();
 				}
 			}
 			for (DeferredPipelineCreate *libraryCreate : libraryCreates) {
-				if (libraryCreate->future.valid()) {
-					const VkResult result = libraryCreate->future.get();
-					if (result != VK_SUCCESS) {
-						runtime::LogVkFailure("RtxShadowPipeline.DeferredLibraryJoin", result);
+				for (std::future<void> &future : libraryCreate->futures) {
+					future.get();
+				}
+				if (libraryCreate->deferredOp != VK_NULL_HANDLE) {
+					const VkResult opResult = vkGetDeferredOperationResultKHR(device, libraryCreate->deferredOp);
+					vkDestroyDeferredOperationKHR(device, libraryCreate->deferredOp, nullptr);
+					libraryCreate->deferredOp = VK_NULL_HANDLE;
+					if (opResult != VK_SUCCESS) {
+						SDL_Log("Render: RtxShadowPipeline: deferred library join failed (%d)", opResult);
+						libraryCreate->pipeline = VK_NULL_HANDLE;
+						runtime::LogVkFailure("RtxShadowPipeline.DeferredLibraryJoin", opResult);
 						Shutdown(context);
 						return false;
 					}

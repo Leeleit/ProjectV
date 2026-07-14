@@ -1213,12 +1213,14 @@ benchmark/regression numbers. ON = full atmospheric look.
   Baseline cold-start monolithic `vkCreateRayTracingPipelinesKHR` in `RtxShadowPipeline.Initialize`
   is ~8.1 ms (Tracy, 120-frame VoxelLab capture). A second attempt split the pipeline into
   ray-gen, miss, and procedural-hit-group libraries with `VK_PIPELINE_CREATE_LIBRARY_BIT_KHR`,
-  used deferred host operations, and ran joins in parallel. Tracy per-stage breakdown:
-  library kickoffs ~0.2 ms each, deferred joins ~10–16 ms in parallel, final link ~0.35 ms,
-  main-thread `CreatePipeline` total ~16.6 ms. The library path is ~2× slower because the RT
-  shadow pipeline is too small (3 shader groups) for library+link overhead to amortize. The
-  attempt is archived at `legacy/docs/archive/2026-07-14-task34-attempt/`. `VK_KHR_pipeline_library`
-  probing and conditional enablement remain; the monolithic path stays with a Tracy zone.
+  used deferred host operations, and ran joins with the concurrency requested by
+  `vkGetDeferredOperationMaxConcurrencyKHR` (rayGen=1, miss=1, hitGroup=2). Tracy per-stage
+  breakdown: library kickoffs ~0.2–0.5 ms each, deferred joins ~10–16 ms in parallel, final link
+  ~0.5 ms, main-thread `CreatePipeline` total ~17.6 ms. Even with the driver-recommended number
+  of join threads the library path is ~2× slower because the RT shadow pipeline is too small
+  (3 shader groups) for library+link overhead to amortize. The attempt is archived at
+  `legacy/docs/archive/2026-07-14-task34-attempt/`. `VK_KHR_pipeline_library` probing and
+  conditional enablement remain; the monolithic path stays with a Tracy zone.
 - **Known pre-existing validation noise:** DDGI irradiance/distance images trigger
   `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL` vs `VK_IMAGE_LAYOUT_GENERAL` layout warnings at
   `vkQueueSubmit2`. This exists before Phase 3 changes and is unrelated to push descriptors
