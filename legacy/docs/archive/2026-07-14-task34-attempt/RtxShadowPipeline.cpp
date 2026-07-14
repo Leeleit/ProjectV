@@ -1,0 +1,464 @@
+#include "render/RtxShadowPipeline.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+
+#include <array>
+#include <future>
+#include <vector>
+
+#include "SDL3/SDL_log.h"
+#include "core/RuntimeDiagnostics.hpp"
+#include "core/ShaderIO.hpp"
+#include "debug/Profiling.hpp"
+#include "fmt/format.h"
+
+namespace projectv::render {
+
+namespace {
+
+constexpr const char *kRtxShadowRayGenShaderFilename = "voxel_rtx_shadow.rgen.spv";
+constexpr const char *kRtxShadowIntersectionShaderFilename = "voxel_rtx_shadow.rint.spv";
+constexpr const char *kRtxShadowClosestHitShaderFilename = "voxel_rtx_shadow.rchit.spv";
+constexpr const char *kRtxShadowMissShaderFilename = "voxel_rtx_shadow.rmiss.spv";
+
+constexpr const char *kZoneCreatePipeline = "RtxShadowPipeline.CreatePipeline";
+constexpr const char *kZoneCreateRayGenLibrary = "RtxShadowPipeline.CreateRayGenLibrary";
+constexpr const char *kZoneCreateMissLibrary = "RtxShadowPipeline.CreateMissLibrary";
+constexpr const char *kZoneCreateHitGroupLibrary = "RtxShadowPipeline.CreateHitGroupLibrary";
+constexpr const char *kZoneLinkLibraries = "RtxShadowPipeline.LinkLibraries";
+constexpr const char *kZoneJoinRayGenLibrary = "RtxShadowPipeline.JoinRayGenLibrary";
+constexpr const char *kZoneJoinMissLibrary = "RtxShadowPipeline.JoinMissLibrary";
+constexpr const char *kZoneJoinHitGroupLibrary = "RtxShadowPipeline.JoinHitGroupLibrary";
+
+VkShaderModule CreateShaderModule(const VkDevice device, const std::vector<char> &code, const char *debugName)
+{
+	VkShaderModuleCreateInfo moduleInfo{};
+	moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	moduleInfo.codeSize = code.size();
+	moduleInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
+	VkShaderModule module = VK_NULL_HANDLE;
+	if (vkCreateShaderModule(device, &moduleInfo, nullptr, &module) != VK_SUCCESS) {
+		runtime::LogRuntimeFailure(
+			"Render",
+			"RtxShadowPipeline.CreateShaderModule",
+			fmt::format("vkCreateShaderModule failed for {}", debugName));
+		return VK_NULL_HANDLE;
+	}
+	return module;
+}
+
+bool LoadShaderModule(
+	const VkDevice device,
+	const char *filename,
+	VkShaderModule *outModule,
+	const char *debugName)
+{
+	const std::vector<char> code = ReadShaderFile(filename);
+	PV_LOG_AND_RETURN_FALSE(
+		!code.empty(),
+		"Render",
+		"RtxShadowPipeline.LoadShaderModule",
+		fmt::format("{} not found or empty", filename));
+	*outModule = CreateShaderModule(device, code, debugName);
+	return *outModule != VK_NULL_HANDLE;
+}
+
+void DestroyShaderModule(const VkDevice device, VkShaderModule &module) noexcept
+{
+	if (module != VK_NULL_HANDLE) {
+		vkDestroyShaderModule(device, module, nullptr);
+		module = VK_NULL_HANDLE;
+	}
+}
+
+struct DeferredPipelineCreate {
+	VkDeferredOperationKHR deferredOp = VK_NULL_HANDLE;
+	std::future<VkResult> future;
+	VkPipeline pipeline = VK_NULL_HANDLE;
+	bool wasDeferred = false;
+};
+
+bool CreateRayTracingPipelineWithOptionalDeferral(
+	const VkDevice device,
+	const VkPipelineCache pipelineCache,
+	const bool useDeferredHostOperations,
+	const VkRayTracingPipelineCreateInfoKHR &createInfo,
+	const char *debugName,
+	DeferredPipelineCreate *out)
+{
+	if (!useDeferredHostOperations) {
+		const VkResult result = vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, pipelineCache, 1u, &createInfo, nullptr, &out->pipeline);
+		if (result != VK_SUCCESS) {
+			runtime::LogVkFailure(fmt::format("RtxShadowPipeline.{}", debugName).c_str(), result);
+		}
+		return result == VK_SUCCESS && out->pipeline != VK_NULL_HANDLE;
+	}
+
+	VkResult createOpResult = vkCreateDeferredOperationKHR(device, nullptr, &out->deferredOp);
+	if (createOpResult != VK_SUCCESS) {
+		SDL_Log("Render: RtxShadowPipeline.%s: vkCreateDeferredOperationKHR failed (%d); falling back to inline", debugName, createOpResult);
+		const VkResult result = vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, pipelineCache, 1u, &createInfo, nullptr, &out->pipeline);
+		if (result != VK_SUCCESS) {
+			runtime::LogVkFailure(fmt::format("RtxShadowPipeline.{}", debugName).c_str(), result);
+		}
+		return result == VK_SUCCESS && out->pipeline != VK_NULL_HANDLE;
+	}
+
+	const VkResult createResult = vkCreateRayTracingPipelinesKHR(device, out->deferredOp, pipelineCache, 1u, &createInfo, nullptr, &out->pipeline);
+
+	if (createResult == VK_OPERATION_DEFERRED_KHR) {
+		out->wasDeferred = true;
+		out->future = std::async(std::launch::async, [device, deferredOp = out->deferredOp, pipelinePtr = &out->pipeline, debugName]() -> VkResult {
+			PV_PROFILE_ZONE_N("RtxShadowPipeline.DeferredJoin");
+			VkResult joinResult = VK_SUCCESS;
+			do {
+				joinResult = vkDeferredOperationJoinKHR(device, deferredOp);
+			} while (joinResult == VK_THREAD_IDLE_KHR);
+			const VkResult opResult = vkGetDeferredOperationResultKHR(device, deferredOp);
+			vkDestroyDeferredOperationKHR(device, deferredOp, nullptr);
+			if (opResult != VK_SUCCESS) {
+				SDL_Log("Render: RtxShadowPipeline.%s: deferred join failed (%d)", debugName, opResult);
+				*pipelinePtr = VK_NULL_HANDLE;
+			}
+			return opResult;
+		});
+		return true;
+	}
+
+	vkDestroyDeferredOperationKHR(device, out->deferredOp, nullptr);
+	out->deferredOp = VK_NULL_HANDLE;
+	if (createResult != VK_SUCCESS && createResult != VK_OPERATION_NOT_DEFERRED_KHR) {
+		out->pipeline = VK_NULL_HANDLE;
+		runtime::LogVkFailure(fmt::format("RtxShadowPipeline.{}", debugName).c_str(), createResult);
+	}
+	return (createResult == VK_SUCCESS || createResult == VK_OPERATION_NOT_DEFERRED_KHR) && out->pipeline != VK_NULL_HANDLE;
+}
+
+} // namespace
+
+bool RtxShadowPipeline::Initialize(
+	const VulkanContextState &context,
+	const RtxShadowPipelineConfig &config)
+{
+	if (m_pipeline != VK_NULL_HANDLE) {
+		return true;
+	}
+	const VkDevice device = context.device;
+	if (device == VK_NULL_HANDLE) {
+		return false;
+	}
+
+	if (!LoadShaderModule(device, kRtxShadowRayGenShaderFilename, &m_rayGenModule, "rgen")) {
+		return false;
+	}
+	if (!LoadShaderModule(device, kRtxShadowIntersectionShaderFilename, &m_intersectionModule, "rint")) {
+		Shutdown(context);
+		return false;
+	}
+	if (!LoadShaderModule(device, kRtxShadowClosestHitShaderFilename, &m_closestHitModule, "rchit")) {
+		Shutdown(context);
+		return false;
+	}
+	if (!LoadShaderModule(device, kRtxShadowMissShaderFilename, &m_missModule, "rmiss")) {
+		Shutdown(context);
+		return false;
+	}
+
+	std::array<VkDescriptorSetLayoutBinding, 6> bindings{};
+	bindings[0].binding = 1;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[0].descriptorCount = 1;
+	bindings[0].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
+
+	bindings[1].binding = 3;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[1].descriptorCount = 1;
+	bindings[1].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
+	bindings[2].binding = 4;
+	bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[2].descriptorCount = 1;
+	bindings[2].stageFlags = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
+
+	bindings[3].binding = 13;
+	bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+	bindings[3].descriptorCount = 1;
+	bindings[3].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
+	bindings[4].binding = 18;
+	bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	bindings[4].descriptorCount = 1;
+	bindings[4].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
+	bindings[5].binding = 19;
+	bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	bindings[5].descriptorCount = 1;
+	bindings[5].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
+	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	if (usePushDescriptors) {
+		layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+	}
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
+	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS) {
+		runtime::LogVkFailure("RtxShadowPipeline.vkCreateDescriptorSetLayout", VK_ERROR_INITIALIZATION_FAILED);
+		Shutdown(context);
+		return false;
+	}
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1u;
+	pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
+	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
+		runtime::LogVkFailure("RtxShadowPipeline.vkCreatePipelineLayout", VK_ERROR_INITIALIZATION_FAILED);
+		Shutdown(context);
+		return false;
+	}
+
+	const bool usePipelineLibraries = context.rayTracing.pipelineLibrary;
+	const bool useDeferredHostOperations = context.rayTracing.deferredHostOperations;
+
+	{
+		PV_PROFILE_ZONE_N(kZoneCreatePipeline);
+
+		if (usePipelineLibraries) {
+			VkRayTracingPipelineInterfaceCreateInfoKHR libraryInterface{};
+			libraryInterface.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_INTERFACE_CREATE_INFO_KHR;
+			libraryInterface.maxPipelineRayPayloadSize = 16u; // ShadowPayload = 2 floats (8 bytes); pad to 16.
+			libraryInterface.maxPipelineRayHitAttributeSize = 0u;
+
+			auto buildLibraryCreateInfo = [&](const VkPipelineShaderStageCreateInfo *stages, const uint32_t stageCount,
+											const VkRayTracingShaderGroupCreateInfoKHR *groups, const uint32_t groupCount,
+											const uint32_t recursionDepth) -> VkRayTracingPipelineCreateInfoKHR {
+				VkRayTracingPipelineCreateInfoKHR info{};
+				info.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+				info.flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR;
+				info.stageCount = stageCount;
+				info.pStages = stages;
+				info.groupCount = groupCount;
+				info.pGroups = groups;
+				info.pLibraryInterface = &libraryInterface;
+				info.maxPipelineRayRecursionDepth = recursionDepth;
+				info.layout = m_pipelineLayout;
+				return info;
+			};
+
+			DeferredPipelineCreate rayGenCreate{};
+			DeferredPipelineCreate missCreate{};
+			DeferredPipelineCreate hitGroupCreate{};
+
+			{
+				const std::array<VkPipelineShaderStageCreateInfo, 1> rayGenStages{{
+					{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
+				}};
+				std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> rayGenGroups{};
+				rayGenGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+				rayGenGroups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+				rayGenGroups[0].generalShader = 0;
+				rayGenGroups[0].closestHitShader = VK_SHADER_UNUSED_KHR;
+				rayGenGroups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
+				rayGenGroups[0].intersectionShader = VK_SHADER_UNUSED_KHR;
+				{
+					PV_PROFILE_ZONE_N(kZoneCreateRayGenLibrary);
+					if (!CreateRayTracingPipelineWithOptionalDeferral(
+							device,
+							VK_NULL_HANDLE,
+							useDeferredHostOperations,
+							buildLibraryCreateInfo(rayGenStages.data(), static_cast<uint32_t>(rayGenStages.size()), rayGenGroups.data(), static_cast<uint32_t>(rayGenGroups.size()), 1u),
+							"CreateRayGenLibrary",
+							&rayGenCreate)) {
+						Shutdown(context);
+						return false;
+					}
+				}
+
+				const std::array<VkPipelineShaderStageCreateInfo, 1> missStages{{
+					{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_MISS_BIT_KHR, .module = m_missModule, .pName = "main"},
+				}};
+				std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> missGroups{};
+				missGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+				missGroups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+				missGroups[0].generalShader = 0;
+				missGroups[0].closestHitShader = VK_SHADER_UNUSED_KHR;
+				missGroups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
+				missGroups[0].intersectionShader = VK_SHADER_UNUSED_KHR;
+				{
+					PV_PROFILE_ZONE_N(kZoneCreateMissLibrary);
+					if (!CreateRayTracingPipelineWithOptionalDeferral(
+							device,
+							VK_NULL_HANDLE,
+							useDeferredHostOperations,
+							buildLibraryCreateInfo(missStages.data(), static_cast<uint32_t>(missStages.size()), missGroups.data(), static_cast<uint32_t>(missGroups.size()), 1u),
+							"CreateMissLibrary",
+							&missCreate)) {
+						Shutdown(context);
+						return false;
+					}
+				}
+
+				const std::array<VkPipelineShaderStageCreateInfo, 2> hitGroupStages{{
+					{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
+					{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, .module = m_closestHitModule, .pName = "main"},
+				}};
+				std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> hitGroups{};
+				hitGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+				hitGroups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
+				hitGroups[0].generalShader = VK_SHADER_UNUSED_KHR;
+				hitGroups[0].closestHitShader = 1;
+				hitGroups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
+				hitGroups[0].intersectionShader = 0;
+				{
+					PV_PROFILE_ZONE_N(kZoneCreateHitGroupLibrary);
+					if (!CreateRayTracingPipelineWithOptionalDeferral(
+							device,
+							VK_NULL_HANDLE,
+							useDeferredHostOperations,
+							buildLibraryCreateInfo(hitGroupStages.data(), static_cast<uint32_t>(hitGroupStages.size()), hitGroups.data(), static_cast<uint32_t>(hitGroups.size()), 1u),
+							"CreateHitGroupLibrary",
+							&hitGroupCreate)) {
+						Shutdown(context);
+						return false;
+					}
+				}
+			}
+
+			SDL_Log(
+				"Render: RtxShadowPipeline: library deferral (rayGen=%s miss=%s hitGroup=%s)",
+				rayGenCreate.wasDeferred ? "yes" : "no",
+				missCreate.wasDeferred ? "yes" : "no",
+				hitGroupCreate.wasDeferred ? "yes" : "no");
+
+			std::array<DeferredPipelineCreate *, 3> libraryCreates{&rayGenCreate, &missCreate, &hitGroupCreate};
+			for (DeferredPipelineCreate *libraryCreate : libraryCreates) {
+				if (libraryCreate->future.valid()) {
+					libraryCreate->future.wait();
+				}
+			}
+			for (DeferredPipelineCreate *libraryCreate : libraryCreates) {
+				if (libraryCreate->future.valid()) {
+					const VkResult result = libraryCreate->future.get();
+					if (result != VK_SUCCESS) {
+						runtime::LogVkFailure("RtxShadowPipeline.DeferredLibraryJoin", result);
+						Shutdown(context);
+						return false;
+					}
+				}
+			}
+
+			m_rayGenLibrary = rayGenCreate.pipeline;
+			m_missLibrary = missCreate.pipeline;
+			m_hitGroupLibrary = hitGroupCreate.pipeline;
+
+			const std::array<VkPipeline, 3> libraries{{m_rayGenLibrary, m_missLibrary, m_hitGroupLibrary}};
+			VkPipelineLibraryCreateInfoKHR libraryInfo{};
+			libraryInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR;
+			libraryInfo.libraryCount = static_cast<uint32_t>(libraries.size());
+			libraryInfo.pLibraries = libraries.data();
+
+			VkRayTracingPipelineCreateInfoKHR finalPipelineInfo{};
+			finalPipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+			finalPipelineInfo.pLibraryInfo = &libraryInfo;
+			finalPipelineInfo.pLibraryInterface = &libraryInterface;
+			finalPipelineInfo.maxPipelineRayRecursionDepth = 1u;
+			finalPipelineInfo.layout = m_pipelineLayout;
+
+			{
+				PV_PROFILE_ZONE_N(kZoneLinkLibraries);
+				if (vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, context.pipelineCache, 1u, &finalPipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
+					runtime::LogVkFailure("RtxShadowPipeline.vkCreateRayTracingPipelinesKHR.LinkLibraries", VK_ERROR_INITIALIZATION_FAILED);
+					Shutdown(context);
+					return false;
+				}
+			}
+		} else {
+			const std::array<VkPipelineShaderStageCreateInfo, 4> stages{{
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, .module = m_closestHitModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_MISS_BIT_KHR, .module = m_missModule, .pName = "main"},
+			}};
+
+			std::array<VkRayTracingShaderGroupCreateInfoKHR, 3> groups{};
+			groups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+			groups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+			groups[0].generalShader = 0;
+			groups[0].closestHitShader = VK_SHADER_UNUSED_KHR;
+			groups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
+			groups[0].intersectionShader = VK_SHADER_UNUSED_KHR;
+
+			groups[1].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+			groups[1].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+			groups[1].generalShader = 3;
+			groups[1].closestHitShader = VK_SHADER_UNUSED_KHR;
+			groups[1].anyHitShader = VK_SHADER_UNUSED_KHR;
+			groups[1].intersectionShader = VK_SHADER_UNUSED_KHR;
+
+			groups[2].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+			groups[2].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
+			groups[2].generalShader = VK_SHADER_UNUSED_KHR;
+			groups[2].closestHitShader = 2;
+			groups[2].anyHitShader = VK_SHADER_UNUSED_KHR;
+			groups[2].intersectionShader = 1;
+
+			VkRayTracingPipelineCreateInfoKHR pipelineInfo{};
+			pipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+			pipelineInfo.stageCount = static_cast<uint32_t>(stages.size());
+			pipelineInfo.pStages = stages.data();
+			pipelineInfo.groupCount = static_cast<uint32_t>(groups.size());
+			pipelineInfo.pGroups = groups.data();
+			pipelineInfo.maxPipelineRayRecursionDepth = 1u;
+			pipelineInfo.layout = m_pipelineLayout;
+
+			if (vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, context.pipelineCache, 1u, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
+				runtime::LogVkFailure("RtxShadowPipeline.vkCreateRayTracingPipelinesKHR", VK_ERROR_INITIALIZATION_FAILED);
+				Shutdown(context);
+				return false;
+			}
+		}
+	}
+
+	SDL_Log(
+		"Render: RtxShadowPipeline: ready (sbtHandleSize=%u sbtBaseAlign=%u sbtHandleAlign=%u)",
+		config.shaderGroupHandleSize,
+		config.shaderGroupBaseAlignment,
+		config.shaderGroupHandleAlignment);
+	return true;
+}
+
+void RtxShadowPipeline::Shutdown(const VulkanContextState &context) noexcept
+{
+	if (context.device != VK_NULL_HANDLE) {
+		if (m_pipeline != VK_NULL_HANDLE) {
+			vkDestroyPipeline(context.device, m_pipeline, nullptr);
+			m_pipeline = VK_NULL_HANDLE;
+		}
+		if (m_hitGroupLibrary != VK_NULL_HANDLE) {
+			vkDestroyPipeline(context.device, m_hitGroupLibrary, nullptr);
+			m_hitGroupLibrary = VK_NULL_HANDLE;
+		}
+		if (m_missLibrary != VK_NULL_HANDLE) {
+			vkDestroyPipeline(context.device, m_missLibrary, nullptr);
+			m_missLibrary = VK_NULL_HANDLE;
+		}
+		if (m_rayGenLibrary != VK_NULL_HANDLE) {
+			vkDestroyPipeline(context.device, m_rayGenLibrary, nullptr);
+			m_rayGenLibrary = VK_NULL_HANDLE;
+		}
+		if (m_pipelineLayout != VK_NULL_HANDLE) {
+			vkDestroyPipelineLayout(context.device, m_pipelineLayout, nullptr);
+			m_pipelineLayout = VK_NULL_HANDLE;
+		}
+		if (m_descriptorSetLayout != VK_NULL_HANDLE) {
+			vkDestroyDescriptorSetLayout(context.device, m_descriptorSetLayout, nullptr);
+			m_descriptorSetLayout = VK_NULL_HANDLE;
+		}
+	}
+	DestroyShaderModule(context.device, m_rayGenModule);
+	DestroyShaderModule(context.device, m_intersectionModule);
+	DestroyShaderModule(context.device, m_closestHitModule);
+	DestroyShaderModule(context.device, m_missModule);
+}
+
+} // namespace projectv::render
