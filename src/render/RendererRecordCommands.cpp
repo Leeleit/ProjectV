@@ -176,7 +176,7 @@ void RecordGraphicsCommands(
 			.resolveImageView = VK_NULL_HANDLE,
 			.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 			.loadOp = depthLoadOp,
-			.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue = clearDepthValue,
 		};
 		const VkRenderingInfo renderingInfo{
@@ -367,11 +367,11 @@ void RecordGraphicsCommands(
 					&push);
 				constexpr VkDeviceSize vertexOffset = 0;
 				vkCmdBindVertexBuffers(cmd, 0, 1, &instance.vertexBuffer, &vertexOffset);
-				vkCmdBindIndexBuffer(
-					cmd,
-					instance.indexBuffer,
-					0,
-					VK_INDEX_TYPE_UINT32);
+				if (context.maintenance5) {
+					vkCmdBindIndexBuffer2(cmd, instance.indexBuffer, 0, VK_WHOLE_SIZE, VK_INDEX_TYPE_UINT32);
+				} else {
+					vkCmdBindIndexBuffer(cmd, instance.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+				}
 				vkCmdDrawIndexed(cmd, instance.indexCount, 1, 0, 0, 0);
 			}
 		}
@@ -404,6 +404,8 @@ void RecordGraphicsCommands(
 
 		RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
 		RecordDebugHudCommands(render, frameRenderData, cmd);
+
+		vkCmdEndRendering(cmd);
 
 		const bool cloudscapePassActive = projectv::render::IsCloudscapeEnabled() &&
 										  render.cloudscapePipelineEnabled;
@@ -455,8 +457,6 @@ void RecordGraphicsCommands(
 				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 				VK_ACCESS_SHADER_READ_BIT);
 		}
-
-		vkCmdEndRendering(cmd);
 
 		// Scene color → swapchain blit (replaces former TAA resolve pass)
 		bool postFxActive = projectv::render::IsPostFxEnabled();

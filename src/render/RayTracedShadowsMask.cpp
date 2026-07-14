@@ -276,20 +276,23 @@ bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &conte
 		return false;
 	}
 
-	VkImageMemoryBarrier toTransfer{};
-	toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	toTransfer.srcAccessMask = VK_ACCESS_NONE;
-	toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	VkImageMemoryBarrier2 toTransfer{};
+	toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	toTransfer.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+	toTransfer.srcAccessMask = VK_ACCESS_2_NONE;
+	toTransfer.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+	toTransfer.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
 	toTransfer.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toTransfer.image = m_shadowMaskImage;
 	toTransfer.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-	vkCmdPipelineBarrier(cmd,
-						 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-						 VK_PIPELINE_STAGE_TRANSFER_BIT,
-						 0u, 0u, nullptr, 0u, nullptr, 1u, &toTransfer);
+	VkDependencyInfo toTransferDep{};
+	toTransferDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	toTransferDep.imageMemoryBarrierCount = 1u;
+	toTransferDep.pImageMemoryBarriers = &toTransfer;
+	vkCmdPipelineBarrier2(cmd, &toTransferDep);
 
 	VkClearColorValue clearValue{};
 	clearValue.float32[0] = 1.0f;
@@ -299,20 +302,23 @@ bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &conte
 	VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 	vkCmdClearColorImage(cmd, m_shadowMaskImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
 
-	VkImageMemoryBarrier toGeneral{};
-	toGeneral.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	toGeneral.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	toGeneral.dstAccessMask = VK_ACCESS_NONE;
+	VkImageMemoryBarrier2 toGeneral{};
+	toGeneral.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	toGeneral.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+	toGeneral.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+	toGeneral.dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+	toGeneral.dstAccessMask = VK_ACCESS_2_NONE;
 	toGeneral.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 	toGeneral.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 	toGeneral.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toGeneral.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toGeneral.image = m_shadowMaskImage;
 	toGeneral.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-	vkCmdPipelineBarrier(cmd,
-						 VK_PIPELINE_STAGE_TRANSFER_BIT,
-						 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-						 0u, 0u, nullptr, 0u, nullptr, 1u, &toGeneral);
+	VkDependencyInfo toGeneralDep{};
+	toGeneralDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	toGeneralDep.imageMemoryBarrierCount = 1u;
+	toGeneralDep.pImageMemoryBarriers = &toGeneral;
+	vkCmdPipelineBarrier2(cmd, &toGeneralDep);
 
 	vkEndCommandBuffer(cmd);
 
@@ -324,11 +330,14 @@ bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &conte
 		return false;
 	}
 
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1u;
-	submitInfo.pCommandBuffers = &cmd;
-	const VkResult queueSubmitResult = vkQueueSubmit(context.queue, 1u, &submitInfo, fence);
+	VkCommandBufferSubmitInfo commandBufferSubmitInfo{};
+	commandBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+	commandBufferSubmitInfo.commandBuffer = cmd;
+	VkSubmitInfo2 submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+	submitInfo.commandBufferInfoCount = 1u;
+	submitInfo.pCommandBufferInfos = &commandBufferSubmitInfo;
+	const VkResult queueSubmitResult = vkQueueSubmit2(context.queue, 1u, &submitInfo, fence);
 	if (queueSubmitResult == VK_SUCCESS) {
 		vkWaitForFences(context.device, 1u, &fence, VK_TRUE, UINT64_MAX);
 	}

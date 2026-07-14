@@ -79,21 +79,15 @@ constexpr std::array kVoxelMeshingDescriptorBindings{
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 9 = lodDownsampled STORAGE_BUFFER FRAGMENT (used in voxel_mesh.comp
-	// via Stage 4.2 LOD downsample GPU consume path). Was missing in 8x V1 layout per
-	// VUID-VkComputePipelineCreateInfo-layout-07988.
 	VkDescriptorSetLayoutBinding{
-		.binding = 9,
+		.binding = 9, // lodDownsampled STORAGE_BUFFER for Stage 4.2 LOD consume path.
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 10 = chunkLodLevelsBuffer STORAGE_BUFFER FRAGMENT (companion of
-	// binding 9 in Stage 4.2 LOD downsample path). Was missing in 8x V1 layout per
-	// VUID-VkComputePipelineCreateInfo-layout-07988.
 	VkDescriptorSetLayoutBinding{
-		.binding = 10,
+		.binding = 10, // chunkLodLevelsBuffer STORAGE_BUFFER companion of binding 9.
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -157,26 +151,27 @@ bool RefreshVoxelMeshingResourceBindings(
 		return true;
 	}
 
-	if (render->voxelMeshingDescriptorPool) {
-		vkDestroyDescriptorPool(context->device, render->voxelMeshingDescriptorPool, nullptr);
-		render->voxelMeshingDescriptorPool = VK_NULL_HANDLE;
+	if (render->voxelMeshingDescriptorPool != VK_NULL_HANDLE) {
+		vkResetDescriptorPool(context->device, render->voxelMeshingDescriptorPool, 0u);
 	}
 
-	constexpr VkDescriptorPoolCreateInfo poolInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.maxSets = kVoxelMeshingDescriptorSetCount,
-		.poolSizeCount = 1,
-		.pPoolSizes = &kVoxelMeshingDescriptorPoolSize,
-	};
-	const VkResult descriptorPoolResult =
-		vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->voxelMeshingDescriptorPool);
-	if (descriptorPoolResult != VK_SUCCESS) {
-		runtime::LogVkFailure(
-			"RefreshVoxelMeshingResourceBindings.vkCreateDescriptorPool",
-			descriptorPoolResult);
-		return false;
+	if (render->voxelMeshingDescriptorPool == VK_NULL_HANDLE) {
+		constexpr VkDescriptorPoolCreateInfo poolInfo{
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.maxSets = kVoxelMeshingDescriptorSetCount,
+			.poolSizeCount = 1,
+			.pPoolSizes = &kVoxelMeshingDescriptorPoolSize,
+		};
+		const VkResult descriptorPoolResult =
+			vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->voxelMeshingDescriptorPool);
+		if (descriptorPoolResult != VK_SUCCESS) {
+			runtime::LogVkFailure(
+				"RefreshVoxelMeshingResourceBindings.vkCreateDescriptorPool",
+				descriptorPoolResult);
+			return false;
+		}
 	}
 
 	const std::vector setLayouts(render->sceneFrameResources.size(), render->voxelMeshingDescriptorSetLayout);
@@ -501,7 +496,7 @@ bool CreateVoxelMeshingPipeline(
 
 	const VkResult meshingPipelineResult = vkCreateComputePipelines(
 		context->device,
-		VK_NULL_HANDLE,
+		context->pipelineCache,
 		1,
 		&meshingPipelineInfo,
 		nullptr,

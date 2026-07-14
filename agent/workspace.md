@@ -18,6 +18,20 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-14 session (Vulkan 1.4 Phase 2 cleanup):** Phase 2 exit criteria satisfied.
+- Verified Phase 2 prerequisites: zero sync1 (`vkCmdPipelineBarrier` / `vkQueueSubmit`) calls remain in `src/render/`, `ALLOW_COMPACTION_BIT_KHR` removed, `EVIL:` markers reduced to genuine hacks only.
+- Decomposed `SceneResources.cpp` (824 → 145 lines) into `SceneResourcesFrame.cpp` (geometry/indirect/culling/LOD buffers) and `SceneResourcesFrameCompute.cpp` (fluid CA, NanoVDB, world-gen buffers); both new files ≤600 lines.
+- Decomposed `Cloudscape.cpp` (664 → 151 lines) into `Cloudscape.cpp` (destroy + raymarch pass recording) and `CloudscapeResources.cpp` (noise generation, sampler, pipeline, descriptors); both ≤600 lines.
+- Decomposed `VulkanBootstrap.cpp` (1098 lines) into `VulkanBootstrapInit.cpp` (SDL/Vulkan instance/surface/debug messenger), `VulkanBootstrapFeatures.cpp` (device selection, feature queries, extension list), and `VulkanBootstrapDevice.cpp` (logical device, VMA, command pool, frame sync primitives). Created `VulkanBootstrapInternal.hpp` for shared internal types/helpers. All files ≤600 lines.
+- Task 2.9: removed `enabledMeshShaderFeatures.taskShader = VK_TRUE`; mesh shader remains enabled only via `meshShader = VK_TRUE` under `PROJECTV_MESH_SHADER_PIPELINE`.
+- Verification: `ninja -C build/linux-clang-debug ProjectV` green, `ctest` 44/44 pass, validation smoke (`PROJECTV_ENABLE_VALIDATION=ON`, single `FINAL` view) passed with zero validation-layer output.
+
+**2026-07-14 session (Vulkan 1.4 Phase 1 correctness, continuation):** Tasks 1.3 and 1.8 closed; Phase 1 complete.
+- Task 1.3: fixed nested dynamic rendering by ending the main pass before `RecordCloudscapeRaymarchPass`; Cloudscape depth `storeOp` set to `STORE`. Also fixed pre-existing Cloudscape descriptor mismatch (layout/pool `SAMPLED_IMAGE` → `COMBINED_IMAGE_SAMPLER`), transitioned the noise image to `SHADER_READ_ONLY_OPTIMAL`, and added descriptor-set updates. Added `DestroyCloudscapeResources` to `ShutdownVulkan` to prevent VMA leaks.
+- Task 1.8: added `ChooseSharingMode` helper to `VulkanBootstrap.hpp`, extended `CreateBuffer` in `SceneResourcesUtilities.cpp` with sharing-mode parameters, and created async-compute resources (`chunkDescriptorBuffer`, fluid CA ping-pong/stats/active-chunk buffers, `worldGenVoxelBuffer`) with `VK_SHARING_MODE_CONCURRENT` when the dedicated compute queue family differs from the graphics family.
+- Verification: `ninja -C build/linux-clang-debug ProjectV` green, `ctest` 44/44 pass, validation smoke with `PROJECTV_CLOUDS=ON`, `PROJECTV_FLUID_CA_GPU=ON PROJECTV_WORLD_GEN_GPU=ON`, and default config all produce zero Vulkan validation errors and exit cleanly.
+- Phase 1 exit criteria satisfied (API 1.4 floor, zero validation errors, all tests pass, pipeline cache active, dead async-HZB/screenshot code removed).
+
 **2026-07-12 session (post-FX integration and 7.x closure):** Closed the three remaining
 Phase 7 polish items in a single pass:
 - **7.3 tone mapping:** ACES Filmic curve integrated into the voxel shading path; exposure and

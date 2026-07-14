@@ -217,7 +217,7 @@ bool CreateDebugOverlayPipeline(
 
 	const VkResult debugOverlayPipelineResult = vkCreateGraphicsPipelines(
 		context.device,
-		VK_NULL_HANDLE,
+		context.pipelineCache,
 		1,
 		&pipelineInfo,
 		nullptr,
@@ -234,7 +234,7 @@ bool CreateDebugOverlayPipeline(
 	pipelineInfo.pColorBlendState = &crosshairColorBlending;
 	const VkResult debugCrosshairPipelineResult = vkCreateGraphicsPipelines(
 		context.device,
-		VK_NULL_HANDLE,
+		context.pipelineCache,
 		1,
 		&pipelineInfo,
 		nullptr,
@@ -444,7 +444,7 @@ bool CreateDebugHudPipeline(
 
 	const VkResult debugHudPipelineResult = vkCreateGraphicsPipelines(
 		context.device,
-		VK_NULL_HANDLE,
+		context.pipelineCache,
 		1,
 		&pipelineInfo,
 		nullptr,

@@ -132,7 +132,11 @@ target_sources(ProjectV PRIVATE
         render/SceneResourcesVisibility.cpp
         render/SceneResourcesDestroy.cpp
         render/SceneResourcesUpdate.cpp
-        render/HizCulling.cpp
+        render/SceneResourcesFrame.cpp
+        render/SceneResourcesFrameCompute.cpp
+        render/HizCullingSetup.cpp
+        render/HizCullingBuild.cpp
+        render/HizCullingDispatch.cpp
         render/LodDownsampleGpuConsume.cpp
         render/RayTracedShadows.cpp
         render/RayTracedShadowsBlas.cpp
@@ -144,7 +148,9 @@ target_sources(ProjectV PRIVATE
         render/RtxGiProbes.cpp
         render/RtxGiProbesPipeline.cpp
         render/RtxGiProbesUpdate.cpp
-        render/vulkan/VulkanBootstrap.cpp
+        render/vulkan/VulkanBootstrapInit.cpp
+        render/vulkan/VulkanBootstrapFeatures.cpp
+        render/vulkan/VulkanBootstrapDevice.cpp
         render/vulkan/VulkanDebug.cpp
         render/vulkan/VulkanGraphicsPipeline.cpp
         render/vulkan/VulkanGraphicsPipelineBindings.cpp
@@ -156,15 +162,25 @@ target_sources(ProjectV PRIVATE
         render/vulkan/VulkanSwapchain.cpp
         render/vulkan/VulkanSyncPrimitives.cpp
         render/vulkan/VulkanVoxelMeshingPipeline.cpp
-        render/vulkan/VulkanMeshShaderPipeline.cpp
-        render/vulkan/VulkanFluidCaPipeline.cpp
-        render/vulkan/VulkanVoxelizePipeline.cpp
+        render/vulkan/VulkanMeshShaderSetup.cpp
+        render/vulkan/VulkanMeshShaderBindings.cpp
+        render/vulkan/VulkanMeshShaderCull.cpp
+        render/vulkan/VulkanMeshShaderDraw.cpp
+        render/vulkan/VulkanFluidCaSetup.cpp
+        render/vulkan/VulkanFluidCaDispatch.cpp
+        render/vulkan/VulkanVoxelizeSetup.cpp
+        render/vulkan/VulkanVoxelizeMipChain.cpp
         render/vulkan/VulkanWorldGenPipeline.cpp
         render/vulkan/VulkanAsyncCompute.cpp
-        render/SkyAtmosphere.cpp
+        render/SkyAtmosphereLut.cpp
+        render/SkyAtmosphereSetup.cpp
+        render/SkyAtmospherePass.cpp
         render/VolumetricFog.cpp
         render/Cloudscape.cpp
-        render/PostFx.cpp
+        render/CloudscapeResources.cpp
+        render/PostFxSetup.cpp
+        render/PostFxDestroy.cpp
+        render/PostFxPass.cpp
         voxel/VoxelInteraction.cpp
         voxel/VoxelMaterials.cpp
         voxel/VoxelRaycast.cpp

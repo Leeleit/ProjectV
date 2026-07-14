@@ -76,18 +76,18 @@ bool SignalTimelineSemaphoreOnQueue(
 	if (queue == VK_NULL_HANDLE || semaphore == VK_NULL_HANDLE) {
 		return false;
 	}
-	VkTimelineSemaphoreSubmitInfo timelineInfo{};
-	timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-	timelineInfo.signalSemaphoreValueCount = 1u;
-	timelineInfo.pSignalSemaphoreValues = &signalValue;
-	VkSubmitInfo info{};
-	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	info.pNext = &timelineInfo;
-	info.signalSemaphoreCount = 1u;
-	info.pSignalSemaphores = &semaphore;
-	const VkResult result = vkQueueSubmit(queue, 1u, &info, VK_NULL_HANDLE);
+	VkSemaphoreSubmitInfo signalSemaphoreInfo{};
+	signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+	signalSemaphoreInfo.semaphore = semaphore;
+	signalSemaphoreInfo.value = signalValue;
+	signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+	VkSubmitInfo2 info{};
+	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+	info.signalSemaphoreInfoCount = 1u;
+	info.pSignalSemaphoreInfos = &signalSemaphoreInfo;
+	const VkResult result = vkQueueSubmit2(queue, 1u, &info, VK_NULL_HANDLE);
 	if (result != VK_SUCCESS) {
-		runtime::LogVkFailure("SignalTimelineSemaphoreOnQueue.vkQueueSubmit", result);
+		runtime::LogVkFailure("SignalTimelineSemaphoreOnQueue.vkQueueSubmit2", result);
 		return false;
 	}
 	return true;

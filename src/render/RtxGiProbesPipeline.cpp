@@ -126,7 +126,7 @@ bool RtxGiProbes::CreateComputePipeline(const VulkanContextState &context)
 		.basePipelineHandle = VK_NULL_HANDLE,
 		.basePipelineIndex = 0};
 
-	if (vkCreateComputePipelines(context.device, VK_NULL_HANDLE, 1, &computePipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
+	if (vkCreateComputePipelines(context.device, context.pipelineCache, 1, &computePipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
 		runtime::LogRuntimeFailure("Render", "RtxGiProbes.CreateComputePipeline.pipeline", "vkCreateComputePipelines failed");
 		vkDestroyShaderModule(context.device, shaderModule, nullptr);
 		return false;

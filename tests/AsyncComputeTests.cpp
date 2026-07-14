@@ -75,71 +75,6 @@ void TestSubmitToComputeQueueRejectsNullCommandBuffer(TestContext &context)
 	}
 }
 
-void TestRecordHzbAsyncCullPassRejectsNullCommandBuffer(TestContext &context)
-{
-	VulkanContextState contextState{};
-	RenderState render{};
-	std::array<float, 16> identityMatrix{};
-	identityMatrix.fill(0.0f);
-	identityMatrix[0] = 1.0f;
-	identityMatrix[5] = 1.0f;
-	identityMatrix[10] = 1.0f;
-	identityMatrix[15] = 1.0f;
-	if (projectv::render::RecordHzbAsyncCullPass(
-			VK_NULL_HANDLE,
-			contextState,
-			render,
-			*reinterpret_cast<const float (*)[16]>(identityMatrix.data()),
-			0u)) {
-		context.Fail(__LINE__, "RecordHzbAsyncCullPass(null CB) must return false");
-	}
-}
-
-void TestSubmitHzbAsyncCullToComputeQueueRejectsNullContext(TestContext &context)
-{
-	uint64_t outValue = 0u;
-	if (projectv::render::SubmitHzbAsyncCullToComputeQueue(nullptr, VK_NULL_HANDLE, &outValue)) {
-		context.Fail(__LINE__, "SubmitHzbAsyncCullToComputeQueue(nullptr) must return false");
-	}
-}
-
-void TestSubmitHzbAsyncCullToComputeQueueRejectsNullCommandBuffer(TestContext &context)
-{
-	VulkanContextState contextState{};
-	uint64_t outValue = 0u;
-	if (projectv::render::SubmitHzbAsyncCullToComputeQueue(&contextState, VK_NULL_HANDLE, &outValue)) {
-		context.Fail(__LINE__, "SubmitHzbAsyncCullToComputeQueue(null CB) must return false");
-	}
-}
-
-void TestHzbBuildTimelineSemaphoreDefaultsNull(TestContext &context)
-{
-	(void)context;
-	constexpr VulkanContextState contextState{};
-	static_assert(contextState.hzbBuildTimelineSemaphore == VK_NULL_HANDLE, "default hzbBuildTimelineSemaphore must be VK_NULL_HANDLE");
-	static_assert(contextState.hzbBuildLastTimelineValue == 0u, "default hzbBuildLastTimelineValue must be 0");
-}
-
-void TestRecordHzbAsyncCullPassRejectsEmptySceneFrameResources(TestContext &context)
-{
-	VulkanContextState contextState{};
-	RenderState render{};
-	std::array<float, 16> identityMatrix{};
-	identityMatrix.fill(0.0f);
-	identityMatrix[0] = 1.0f;
-	identityMatrix[5] = 1.0f;
-	identityMatrix[10] = 1.0f;
-	identityMatrix[15] = 1.0f;
-	if (projectv::render::RecordHzbAsyncCullPass(
-			VK_NULL_HANDLE,
-			contextState,
-			render,
-			*reinterpret_cast<const float (*)[16]>(identityMatrix.data()),
-			0u)) {
-		context.Fail(__LINE__, "RecordHzbAsyncCullPass(empty render) must return false");
-	}
-}
-
 } // namespace
 
 int main()
@@ -152,11 +87,6 @@ int main()
 	TestIsAsyncComputeResourcesAllocatedDefaultsFalse(context);
 	TestSubmitToComputeQueueRejectsNullContext(context);
 	TestSubmitToComputeQueueRejectsNullCommandBuffer(context);
-	TestRecordHzbAsyncCullPassRejectsNullCommandBuffer(context);
-	TestRecordHzbAsyncCullPassRejectsEmptySceneFrameResources(context);
-	TestSubmitHzbAsyncCullToComputeQueueRejectsNullContext(context);
-	TestSubmitHzbAsyncCullToComputeQueueRejectsNullCommandBuffer(context);
-	TestHzbBuildTimelineSemaphoreDefaultsNull(context);
 
 	if (context.failures > 0) {
 		std::fprintf(stderr, "ProjectVAsyncComputeTests: %d failure(s)\n", context.failures);

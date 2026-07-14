@@ -128,24 +128,23 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 
 	vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()), writes.data(), 0u, nullptr);
 
-	VkImageMemoryBarrier imageBarrier{};
-	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	imageBarrier.srcAccessMask = VK_ACCESS_NONE;
-	imageBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	VkImageMemoryBarrier2 imageBarrier{};
+	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+	imageBarrier.srcAccessMask = VK_ACCESS_2_NONE;
+	imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+	imageBarrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 	imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 	imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	imageBarrier.image = m_shadowMaskImage;
 	imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
-		0u,
-		0u, nullptr,
-		0u, nullptr,
-		1u, &imageBarrier);
+	VkDependencyInfo imageDepInfo{};
+	imageDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	imageDepInfo.imageMemoryBarrierCount = 1u;
+	imageDepInfo.pImageMemoryBarriers = &imageBarrier;
+	vkCmdPipelineBarrier2(commandBuffer, &imageDepInfo);
 
 	vkCmdBindPipeline(
 		commandBuffer,
@@ -171,24 +170,23 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 		m_shadowMaskHeight,
 		1u);
 
-	VkImageMemoryBarrier readBarrier{};
-	readBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	readBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-	readBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	VkImageMemoryBarrier2 readBarrier{};
+	readBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	readBarrier.srcStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+	readBarrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+	readBarrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+	readBarrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 	readBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
 	readBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	readBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	readBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	readBarrier.image = m_shadowMaskImage;
 	readBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		0u,
-		0u, nullptr,
-		0u, nullptr,
-		1u, &readBarrier);
+	VkDependencyInfo readDepInfo{};
+	readDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	readDepInfo.imageMemoryBarrierCount = 1u;
+	readDepInfo.pImageMemoryBarriers = &readBarrier;
+	vkCmdPipelineBarrier2(commandBuffer, &readDepInfo);
 
 	m_config.shadowRayDispatchCount += 1u;
 	return true;

@@ -53,101 +53,57 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 11 = vctClipmap sampler3D FRAGMENT. Per TODO §5.1 (VCT consume in voxel.frag).
-	// Always declared even when VCT gate is OFF (env PROJECTV_VCT_GPU=ON default OFF per
-	// `agent/knowledge.md` Step 1) — fallback 1x1x1 RGBA16F dummy bound instead.
-	// Type = COMBINED_IMAGE_SAMPLER because shader `sampler3D` = OpTypeSampledImage (VUID-layout-07990).
 	VkDescriptorSetLayoutBinding{
-		.binding = 11,
+		.binding = 11, // vctClipmap sampler3D FRAGMENT; dummy bound when VCT gate OFF.
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 12 = volumetricFog sampler3D FRAGMENT. Per TODO §5.4 (volumetric fog consume
-	// in voxel.frag via Wronski 2014 froxel grid). Always declared even when fog gate is OFF
-	// (env PROJECTV_FOG=ON default OFF per `agent/knowledge.md` Step 1) — fallback
-	// 1x1x1 RGBA16F dummy bound instead.
-	// Type = COMBINED_IMAGE_SAMPLER because shader `sampler3D` = OpTypeSampledImage (VUID-layout-07990).
 	VkDescriptorSetLayoutBinding{
-		.binding = 12,
+		.binding = 12, // volumetricFog sampler3D FRAGMENT; dummy bound when fog gate OFF.
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 13 = RTX top-level acceleration structure (TLAS) for ray-query
-	// smooth specular GI per Stage 5.2 (TraceRtxSmoothSpecularRay) AND 5.2.B sun shadow
-	// ray query (TraceRtxSunShadowRay) AND 5.4 AO (TraceRtxAmbientOcclusionRay). Bound to
-	// scene TLAS when RTX env-gate ON; otherwise (non-RTX compile) binding slot is unused.
-	// Per docs/VulkanSDK-Linux-Docs-1.4.350.1/chunked_spec/chap63.html the
-	// accelerationStructureEXT uniform is GLSL-side; C++ side uses
-	// VkAccelerationStructureKHR via VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR.
 	VkDescriptorSetLayoutBinding{
-		.binding = 13,
+		.binding = 13, // scene TLAS for ray-query specular GI / sun shadow / AO.
 		.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 14 = RTX GI probe irradiance 3D texture (8x8x8 probes x 16x16
-	// octahedral R11G11B10F = ~256 KiB). Per Stage 5.5 DDGI (Dynamic Diffuse Global
-	// Illumination) shader consume via DDGIGetVolumeIrradiance trilinear sample in
-	// voxel.frag vctDiffuseIrradiance path. Bound to RtxGiProbes.irradianceImage when
-	// RTX env-gate ON; otherwise (non-RTX compile or RTX alloc failed) binding slot
-	// is unused. Type = COMBINED_IMAGE_SAMPLER because shader `sampler3D` =
-	// OpTypeSampledImage (VUID-layout-07990).
 	VkDescriptorSetLayoutBinding{
-		.binding = 14,
+		.binding = 14, // RTX GI probe irradiance 3D texture.
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 15 = RTX GI probe distance 3D texture (8x8x8 probes x 16x16 RG16F).
-	// Per Stage 5.5 DDGI visibility back-face check via DDGIGetProbeDistance. Bound
-	// to RtxGiProbes.distanceImage when RTX env-gate ON; otherwise binding slot is
-	// unused. Type = COMBINED_IMAGE_SAMPLER (sampler3D requires OpTypeSampledImage).
 	VkDescriptorSetLayoutBinding{
-		.binding = 15,
+		.binding = 15, // RTX GI probe distance 3D texture.
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 16 = RTX GI probe data 2D texture (1x1 RGBA16F fallback; real
-	// layout will be uvec4 per-probe state when DDGI probe classification is wired
-	// in 5.5+). Bound to RtxGiProbes.probeDataImage when RTX env-gate ON; otherwise
-	// binding slot is unused.
 	VkDescriptorSetLayoutBinding{
-		.binding = 16,
+		.binding = 16, // RTX GI probe data texture (currently 1x1 fallback).
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 17 = RTX GI volume descriptor SSBO (VolumeDescGpu, 64 bytes per
-	// std430 layout matching GLSL-side struct). Per Stage 5.5 DDGI consume via
-	// DDGIGetVolumeIrradiance world position -> probe grid lookup. Bound to
-	// RtxGiProbes.volumeDescBuffer when RTX env-gate ON; otherwise binding slot is
-	// unused.
 	VkDescriptorSetLayoutBinding{
-		.binding = 17,
+		.binding = 17, // RTX GI volume descriptor SSBO (VolumeDescGpu).
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.pImmutableSamplers = nullptr,
 	},
-	// EVIL: binding 18 = voxel-aware RTX shadow mask (R8_UNORM storage image written
-	// by voxel_rtx_shadow.rgen via vkCmdTraceRaysKHR, sampled by voxel.frag as a
-	// COMBINED_IMAGE_SAMPLER). Per Stage 5.2.E the AABB BLAS + ray-query path is
-	// replaced by an RT pipeline + procedural intersection shader that performs DDA
-	// over PackedChunkVoxelPayload and writes a per-pixel shadow factor into this
-	// mask. Bound to RayTracedShadows.GetShadowMaskImageView() when voxel-aware path
-	// is active; otherwise a 1x1 R8 dummy image so the slot stays valid for shaders
-	// that compiled with VOXEL_RTX_ENABLED.
 	VkDescriptorSetLayoutBinding{
-		.binding = 18,
+		.binding = 18, // voxel-aware RTX shadow mask (R8_UNORM storage image).
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -437,7 +393,7 @@ bool CreateGraphicsPipeline(
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.OpaquePipeline");
 		const VkResult result = vkCreateGraphicsPipelines(
 			context->device,
-			VK_NULL_HANDLE,
+			context->pipelineCache,
 			1,
 			&opaqueInfo,
 			nullptr,
@@ -463,7 +419,7 @@ bool CreateGraphicsPipeline(
 			PV_PROFILE_ZONE_N("CreateGraphicsPipeline.OpaqueRtxPipeline");
 			const VkResult result = vkCreateGraphicsPipelines(
 				context->device,
-				VK_NULL_HANDLE,
+				context->pipelineCache,
 				1,
 				&opaqueInfoRtx,
 				nullptr,
@@ -491,7 +447,7 @@ bool CreateGraphicsPipeline(
 		PV_PROFILE_ZONE_N("CreateGraphicsPipeline.TransparentPipeline");
 		const VkResult result = vkCreateGraphicsPipelines(
 			context->device,
-			VK_NULL_HANDLE,
+			context->pipelineCache,
 			1,
 			&transparentInfo,
 			nullptr,
@@ -516,14 +472,7 @@ bool CreateGraphicsPipeline(
 	// structs above are retained for ABI compatibility (they are still
 	// constructed but not consumed). No shadow pipeline is created.
 
-	// EVIL: RefreshGraphicsResourceBindings deferred to VulkanInit after
-	// CreateVolumetricFogFallbackOnly (8x V C bug: bindings 11/12 fallback image
-	// did not exist when CreateGraphicsPipeline wrote descriptor sets, producing
-	// VK_NULL_HANDLE imageView writes under VUID-VkWriteDescriptorSet-descriptorType-02997).
-	// The descriptor pool + layout are created here; the actual descriptor writes
-	// are deferred to VulkanInit::CreateRayTracedShadowResources-safe stage.
-
-	if (!CreateDebugOverlayPipeline(*context, *swapchain, *render)) {
+	if (!CreateDebugOverlayPipeline(*context, *swapchain, *render)) { // EVIL: descriptor writes deferred to VulkanInit until fallback images exist (8x V C bug).
 		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.DebugOverlay", "debug overlay pipeline creation failed");
 		destroyShaderModules();
 		DestroyGraphicsPipeline(context, render);

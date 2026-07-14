@@ -43,33 +43,25 @@ bool RefreshGraphicsResourceBindings(
 		return true;
 	}
 
-	if (render->graphicsDescriptorPool) {
-		vkDestroyDescriptorPool(context->device, render->graphicsDescriptorPool, nullptr);
-		render->graphicsDescriptorPool = VK_NULL_HANDLE;
+	if (render->graphicsDescriptorPool != VK_NULL_HANDLE) {
+		vkResetDescriptorPool(context->device, render->graphicsDescriptorPool, 0u);
 	}
 
-	const bool rtxLayoutActive = context->rayTracing.rayQuery && context->rayTracing.accelerationStructure && projectv::render::IsRayTracedShadowEnabled(*context);
-	std::vector<VkDescriptorPoolSize> poolSizes{};
-	poolSizes.reserve(kGraphicsDescriptorPoolSizes.size());
-	for (const VkDescriptorPoolSize &size : kGraphicsDescriptorPoolSizes) {
-		if (size.type == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR && !rtxLayoutActive) {
-			continue;
+	if (render->graphicsDescriptorPool == VK_NULL_HANDLE) {
+		const VkDescriptorPoolCreateInfo poolInfo{
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.maxSets = kGraphicsDescriptorSetCount,
+			.poolSizeCount = static_cast<uint32_t>(kGraphicsDescriptorPoolSizes.size()),
+			.pPoolSizes = kGraphicsDescriptorPoolSizes.data(),
+		};
+		const VkResult descriptorPoolResult =
+			vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->graphicsDescriptorPool);
+		if (descriptorPoolResult != VK_SUCCESS) {
+			LogGraphicsPipelineVkFailure("RefreshGraphicsResourceBindings.vkCreateDescriptorPool", descriptorPoolResult);
+			return false;
 		}
-		poolSizes.push_back(size);
-	}
-	const VkDescriptorPoolCreateInfo poolInfo{
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.maxSets = kGraphicsDescriptorSetCount,
-		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-		.pPoolSizes = poolSizes.data(),
-	};
-	const VkResult descriptorPoolResult =
-		vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &render->graphicsDescriptorPool);
-	if (descriptorPoolResult != VK_SUCCESS) {
-		LogGraphicsPipelineVkFailure("RefreshGraphicsResourceBindings.vkCreateDescriptorPool", descriptorPoolResult);
-		return false;
 	}
 
 	const std::vector setLayouts(render->sceneFrameResources.size(), render->graphicsDescriptorSetLayout);

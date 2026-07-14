@@ -208,7 +208,7 @@ bool CreateModelPipeline(
 	pipelineInfo.pDynamicState = &dynamicState;
 	pipelineInfo.layout = sharedPipelineLayout;
 
-	if (vkCreateGraphicsPipelines(context->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &render->modelPipeline) != VK_SUCCESS) {
+	if (vkCreateGraphicsPipelines(context->device, context->pipelineCache, 1, &pipelineInfo, nullptr, &render->modelPipeline) != VK_SUCCESS) {
 		vkDestroyShaderModule(context->device, vertexModule, nullptr);
 		vkDestroyShaderModule(context->device, fragmentModule, nullptr);
 		runtime::LogRuntimeFailure("Model", "CreateModelPipeline.vkCreateGraphicsPipelines", "model pipeline creation failed");

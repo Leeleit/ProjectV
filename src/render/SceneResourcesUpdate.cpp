@@ -200,8 +200,7 @@ bool UploadSceneFrameResources(
 			uploadedVoxelChunkCount = static_cast<uint32_t>(render.sceneChunkVoxelPayloadRanges.size());
 		}
 
-		// EVIL: missing vmaFlushAllocation caused GPU to read stale chunkVoxelPayload / chunkDescriptor data on non-coherent drivers → DDA in rint saw old voxel occupancy → sliced shadows / leaks through visible blocks, intermittent on edits (P1A-4). Flush both allocations after every payload upload.
-		if (context != nullptr && context->allocator != nullptr) {
+		if (context != nullptr && context->allocator != nullptr) { // EVIL: flush payload/descriptor allocations after upload to avoid stale reads on non-coherent drivers (P1A-4).
 			if (frameResources.chunkVoxelPayloadAllocation != nullptr && uploadedChunkVoxelWordCount > 0u) {
 				vmaFlushAllocation(context->allocator, frameResources.chunkVoxelPayloadAllocation, 0u, VK_WHOLE_SIZE);
 			}

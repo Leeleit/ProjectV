@@ -192,11 +192,7 @@ SDL_AppResult DrawFrame(
 		}
 		render->rayTracedShadows->BuildDirtyBlases(*context, context->commandPool);
 
-		// EVIL: visibleChunkIndices/transforms assembled from non-empty chunks whose BLAS
-		// is already built (blasDeviceAddresses[i] != 0). For each frame this drives TLAS
-		// population; ray query in voxel.frag.rtx.spv reads the resulting instance list.
-		// Per Stage 5.2.A DoD: smoke log must show tlasInstanceCount > 0 (now wired).
-		if (state->world().voxelWorld != nullptr) {
+		if (state->world().voxelWorld != nullptr) { // EVIL: visible chunk list assembled from non-empty chunks with valid BLAS for TLAS population.
 			std::vector<uint32_t> visibleChunkIndices{};
 			std::vector<VkTransformMatrixKHR> visibleChunkTransforms{};
 			const VoxelWorld &world = *state->world().voxelWorld;
@@ -230,7 +226,7 @@ SDL_AppResult DrawFrame(
 	if (render->rayTracedShadows != nullptr) {
 		if (render->rayTracedShadows->IsEnabled()) {
 			PV_PROFILE_GPU_ZONE(render->tracyGraphicsContext, cmd, "TLAS Build");
-			render->rayTracedShadows->RecordTlasBuild(cmd, *context); // EVIL: build TLAS on current frame before RT shadow trace — kills 1-frame latency / shimmer (P1A-3b).
+			render->rayTracedShadows->RecordTlasBuild(cmd, *context); // EVIL: build TLAS on current frame before RT shadow trace to kill 1-frame latency/shimmer (P1A-3b).
 		}
 		PV_PROFILE_ZONE_N("RecordVoxelAwareRtxShadowPass");
 		const SceneFrameResources &shadowFrameResources = render->sceneFrameResources[frame->currentFrame];
@@ -287,13 +283,6 @@ SDL_AppResult DrawFrame(
 		render->rayTracedShadows->RecordDebugReport();
 	}
 
-	const bool asyncComputeHzbPathActive =
-		projectv::render::IsAsyncComputeEnabled() &&
-		projectv::render::IsAsyncComputeResourcesAllocated(*context) &&
-		projectv::render::IsHzbCullingEnabled() &&
-		render->hizBuffer.image != VK_NULL_HANDLE &&
-		frame->renderData.hizCullingDescriptorSet != VK_NULL_HANDLE;
-
 	if (projectv::render::IsHzbCullingEnabled() &&
 		render->hizBuffer.image != VK_NULL_HANDLE) {
 		projectv::render::BuildHizMipChain(
@@ -303,8 +292,7 @@ SDL_AppResult DrawFrame(
 			render->hizBuffer);
 		if (render->hizBuffer.imageView != VK_NULL_HANDLE &&
 			render->hizBuffer.sampler != VK_NULL_HANDLE &&
-			frame->renderData.hizCullingDescriptorSet != VK_NULL_HANDLE &&
-			!asyncComputeHzbPathActive) {
+			frame->renderData.hizCullingDescriptorSet != VK_NULL_HANDLE) {
 			projectv::math::Mat4 inverseViewProjection =
 				projectv::math::inverse(frame->renderData.graphicsPushConstants.viewProjection);
 			std::array<float, 16> inverseViewProjectionFlat{};
@@ -322,10 +310,9 @@ SDL_AppResult DrawFrame(
 	}
 
 	const bool asyncComputePathActive =
-		asyncComputeHzbPathActive ||
-		(projectv::render::IsAsyncComputeEnabled() &&
-		 projectv::render::IsAsyncComputeResourcesAllocated(*context) &&
-		 (render->fluidCaPipelineEnabled || render->worldGenPipelineEnabled));
+		projectv::render::IsAsyncComputeEnabled() &&
+		projectv::render::IsAsyncComputeResourcesAllocated(*context) &&
+		(render->fluidCaPipelineEnabled || render->worldGenPipelineEnabled);
 
 	if (!asyncComputePathActive && render->fluidCaPipelineEnabled && state->simulation().fluidGpuTicksPending > 0u) {
 		PV_PROFILE_ZONE_N("RecordFluidCaCommands");
@@ -457,20 +444,9 @@ SDL_AppResult DrawFrame(
 
 	signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-	std::array<VkSemaphoreSubmitInfo, 2> allSignalSemaphoreInfos{};
+	std::array<VkSemaphoreSubmitInfo, 1u> allSignalSemaphoreInfos{};
 	allSignalSemaphoreInfos[0] = signalSemaphoreInfo;
-	uint32_t signalSemaphoreInfoCount = 1u;
-
-	VkSemaphoreSubmitInfo hzbSignalSemaphoreInfo{};
-	if (asyncComputeHzbPathActive && context->hzbBuildTimelineSemaphore != VK_NULL_HANDLE) {
-		context->hzbBuildLastTimelineValue += 1u;
-		hzbSignalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-		hzbSignalSemaphoreInfo.semaphore = context->hzbBuildTimelineSemaphore;
-		hzbSignalSemaphoreInfo.value = context->hzbBuildLastTimelineValue;
-		hzbSignalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-		allSignalSemaphoreInfos[1] = hzbSignalSemaphoreInfo;
-		signalSemaphoreInfoCount = 2u;
-	}
+	constexpr uint32_t signalSemaphoreInfoCount = 1u;
 
 	VkCommandBufferSubmitInfo cmdBufferInfo{};
 	cmdBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;

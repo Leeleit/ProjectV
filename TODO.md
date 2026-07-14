@@ -625,3 +625,4 @@ narrative — `agent/workspace.md`.
 | 5. RTX-Driven Lighting & Temporal     | 5.2 RTX shadows (A/B/C/D/E) · 5.3 TAA MV · 5.4 RTX AO · 5.5 DDGI · 5.6 RTX refraction · 5.7 RTX multi-bounce | ✅ all closed                      |
 | 6. Refactoring                        | 6.1 ECS, 6.3 Async Compute                                                                                   | ✅ · 6.2 PIMPL 🔒 deferred-pending |
 | 7. Rendering Polish (post-RTX-shadow) | 7.1 VCT cones · 7.3 tonemap · 7.4 post-FX                                                                    | ✅ all closed                      |
+| 8. Vulkan 1.4 Cleanup                 | Phase 1 correctness · Phase 2 cleanup/modernization · Phase 3 perf · Phase 4 hardware-gated                  | ✅ Phase 1-2 closed                |

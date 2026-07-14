@@ -85,48 +85,40 @@ void RayTracedShadows::RecordTlasBuild(
 		return;
 	}
 
-	VkBufferMemoryBarrier instanceBarrier{};
-	instanceBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	instanceBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-	instanceBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	VkBufferMemoryBarrier2 instanceBarrier{};
+	instanceBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+	instanceBarrier.srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT;
+	instanceBarrier.srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT;
+	instanceBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+	instanceBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 	instanceBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	instanceBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	instanceBarrier.buffer = m_config.tlasInstanceBuffer;
 	instanceBarrier.offset = 0u;
 	instanceBarrier.size = static_cast<VkDeviceSize>(m_config.tlasInstanceCount) * sizeof(VkAccelerationStructureInstanceKHR);
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_HOST_BIT,
-		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-		0u,
-		0u,
-		nullptr,
-		1u,
-		&instanceBarrier,
-		0u,
-		nullptr);
+	VkDependencyInfo instanceDep{};
+	instanceDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	instanceDep.bufferMemoryBarrierCount = 1u;
+	instanceDep.pBufferMemoryBarriers = &instanceBarrier;
+	vkCmdPipelineBarrier2(commandBuffer, &instanceDep);
 
 	if (m_config.scratchBuffer != VK_NULL_HANDLE && m_config.scratchCapacityBytes > 0u) {
-		VkBufferMemoryBarrier scratchBarrier{};
-		scratchBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-		scratchBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-		scratchBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+		VkBufferMemoryBarrier2 scratchBarrier{};
+		scratchBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+		scratchBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+		scratchBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+		scratchBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+		scratchBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 		scratchBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		scratchBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		scratchBarrier.buffer = m_config.scratchBuffer;
 		scratchBarrier.offset = 0u;
 		scratchBarrier.size = m_config.scratchCapacityBytes;
-		vkCmdPipelineBarrier(
-			commandBuffer,
-			VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-			VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-			0u,
-			0u,
-			nullptr,
-			1u,
-			&scratchBarrier,
-			0u,
-			nullptr);
+		VkDependencyInfo scratchDep{};
+		scratchDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		scratchDep.bufferMemoryBarrierCount = 1u;
+		scratchDep.pBufferMemoryBarriers = &scratchBarrier;
+		vkCmdPipelineBarrier2(commandBuffer, &scratchDep);
 	}
 
 	VkAccelerationStructureGeometryInstancesDataKHR instancesData{};
@@ -164,21 +156,17 @@ void RayTracedShadows::RecordTlasBuild(
 		&tlasBuildInfo,
 		tlasRangeInfos);
 
-	VkMemoryBarrier tlasToFragmentBarrier{};
-	tlasToFragmentBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-	tlasToFragmentBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-	tlasToFragmentBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-		VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		0u,
-		1u,
-		&tlasToFragmentBarrier,
-		0u,
-		nullptr,
-		0u,
-		nullptr);
+	VkMemoryBarrier2 tlasToFragmentBarrier{};
+	tlasToFragmentBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+	tlasToFragmentBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+	tlasToFragmentBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+	tlasToFragmentBarrier.dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+	tlasToFragmentBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	VkDependencyInfo tlasDep{};
+	tlasDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	tlasDep.memoryBarrierCount = 1u;
+	tlasDep.pMemoryBarriers = &tlasToFragmentBarrier;
+	vkCmdPipelineBarrier2(commandBuffer, &tlasDep);
 
 	m_config.shadowRayDispatchCount += 1u;
 }

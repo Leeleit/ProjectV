@@ -117,7 +117,7 @@ bool CreateWorldGenPipelines(VulkanContextState *context, RenderState *render)
 				.stage = stage,
 				.layout = render->worldGenPipelineLayout,
 			};
-			if (vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->worldGenPipeline) != VK_SUCCESS) {
+			if (vkCreateComputePipelines(context->device, context->pipelineCache, 1u, &pipelineInfo, nullptr, &render->worldGenPipeline) != VK_SUCCESS) {
 				ok = false;
 			} else {
 				SetVulkanObjectName(

@@ -68,12 +68,15 @@ void RayTracedShadows::BuildDirtyBlases(
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	VkFence fence = VK_NULL_HANDLE;
 	if (vkCreateFence(context.device, &fenceInfo, nullptr, &fence) == VK_SUCCESS) {
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1u;
-		submitInfo.pCommandBuffers = &cmd;
+		VkCommandBufferSubmitInfo commandBufferSubmitInfo{};
+		commandBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+		commandBufferSubmitInfo.commandBuffer = cmd;
+		VkSubmitInfo2 submitInfo{};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+		submitInfo.commandBufferInfoCount = 1u;
+		submitInfo.pCommandBufferInfos = &commandBufferSubmitInfo;
 		const VkQueue submitQueue = context.queue;
-		if (vkQueueSubmit(submitQueue, 1u, &submitInfo, fence) == VK_SUCCESS) {
+		if (vkQueueSubmit2(submitQueue, 1u, &submitInfo, fence) == VK_SUCCESS) {
 			vkWaitForFences(context.device, 1u, &fence, VK_TRUE, UINT64_MAX);
 		}
 		vkDestroyFence(context.device, fence, nullptr);
@@ -126,26 +129,22 @@ bool RayTracedShadows::BuildChunkBlas(
 
 	vkCmdUpdateBuffer(commandBuffer, m_config.aabbScratchBuffer, 0u, sizeof(VkAabbPositionsKHR), &aabb);
 
-	VkBufferMemoryBarrier updateBarrier{};
-	updateBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	updateBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	updateBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	VkBufferMemoryBarrier2 updateBarrier{};
+	updateBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+	updateBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+	updateBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+	updateBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+	updateBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 	updateBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	updateBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	updateBarrier.buffer = m_config.aabbScratchBuffer;
 	updateBarrier.offset = 0u;
 	updateBarrier.size = sizeof(VkAabbPositionsKHR);
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-		0u,
-		0u,
-		nullptr,
-		1u,
-		&updateBarrier,
-		0u,
-		nullptr);
+	VkDependencyInfo updateDep{};
+	updateDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	updateDep.bufferMemoryBarrierCount = 1u;
+	updateDep.pBufferMemoryBarriers = &updateBarrier;
+	vkCmdPipelineBarrier2(commandBuffer, &updateDep);
 
 	VkAccelerationStructureGeometryAabbsDataKHR aabbData{};
 	aabbData.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR;
@@ -161,7 +160,7 @@ bool RayTracedShadows::BuildChunkBlas(
 	VkAccelerationStructureBuildGeometryInfoKHR buildInfo{};
 	buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
 	buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
+	buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
 	buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
 	buildInfo.geometryCount = 1u;
 	buildInfo.pGeometries = &geometry;
@@ -181,20 +180,24 @@ bool RayTracedShadows::BuildChunkBlas(
 		&buildInfo,
 		rangeInfos);
 
-	VkBufferMemoryBarrier blasWriteBarrier{};
-	blasWriteBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	blasWriteBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-	blasWriteBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	VkBufferMemoryBarrier2 blasWriteBarrier{};
+	blasWriteBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+	blasWriteBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+	blasWriteBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+	blasWriteBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+	blasWriteBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 	blasWriteBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	blasWriteBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	blasWriteBarrier.buffer = m_config.blasStorageBuffers[chunkIndex];
 	blasWriteBarrier.offset = 0u;
 	blasWriteBarrier.size = m_config.blasStorageCapacityBytes[chunkIndex];
 
-	VkBufferMemoryBarrier scratchBarrier{};
-	scratchBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	scratchBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-	scratchBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	VkBufferMemoryBarrier2 scratchBarrier{};
+	scratchBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+	scratchBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+	scratchBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	scratchBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+	scratchBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 	scratchBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	scratchBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	scratchBarrier.buffer = m_config.scratchBuffer;
@@ -202,38 +205,28 @@ bool RayTracedShadows::BuildChunkBlas(
 	scratchBarrier.size = m_config.scratchCapacityBytes;
 
 	std::array buildBarriers = {blasWriteBarrier, scratchBarrier};
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-		0u,
-		0u,
-		nullptr,
-		static_cast<uint32_t>(buildBarriers.size()),
-		buildBarriers.data(),
-		0u,
-		nullptr);
+	VkDependencyInfo buildDep{};
+	buildDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	buildDep.bufferMemoryBarrierCount = static_cast<uint32_t>(buildBarriers.size());
+	buildDep.pBufferMemoryBarriers = buildBarriers.data();
+	vkCmdPipelineBarrier2(commandBuffer, &buildDep);
 
-	VkBufferMemoryBarrier aabbScratchBarrier{};
-	aabbScratchBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	aabbScratchBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-	aabbScratchBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	VkBufferMemoryBarrier2 aabbScratchBarrier{};
+	aabbScratchBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+	aabbScratchBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+	aabbScratchBarrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+	aabbScratchBarrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+	aabbScratchBarrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
 	aabbScratchBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	aabbScratchBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	aabbScratchBarrier.buffer = m_config.aabbScratchBuffer;
 	aabbScratchBarrier.offset = 0u;
 	aabbScratchBarrier.size = sizeof(VkAabbPositionsKHR);
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		0u,
-		0u,
-		nullptr,
-		1u,
-		&aabbScratchBarrier,
-		0u,
-		nullptr);
+	VkDependencyInfo aabbDep{};
+	aabbDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	aabbDep.bufferMemoryBarrierCount = 1u;
+	aabbDep.pBufferMemoryBarriers = &aabbScratchBarrier;
+	vkCmdPipelineBarrier2(commandBuffer, &aabbDep);
 
 	m_config.blasRebuildCount += 1u;
 	return true;

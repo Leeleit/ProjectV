@@ -732,10 +732,12 @@ struct VulkanContextState {
 	VkCommandPool asyncComputeCommandPool = VK_NULL_HANDLE;
 	VkCommandBuffer asyncComputeCommandBuffer = VK_NULL_HANDLE;
 	uint64_t asyncComputeLastTimelineValue = 0;
-	VkSemaphore hzbBuildTimelineSemaphore = VK_NULL_HANDLE;
-	uint64_t hzbBuildLastTimelineValue = 0;
+	VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
 	bool supportsDynamicRenderingUnusedAttachments = false;
+	VkPhysicalDeviceVulkan14Features features14{};
+	bool maintenance5 = false;
+	bool maintenance6 = false;
 	projectv::render::HardwareRayTracingSupport rayTracing{};
 };
 

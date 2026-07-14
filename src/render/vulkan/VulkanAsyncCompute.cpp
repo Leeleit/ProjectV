@@ -66,11 +66,7 @@ bool EnsureAsyncComputeResources(VulkanContextState *context)
 		return false;
 	}
 	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(context->asyncComputeCommandBuffer), VK_OBJECT_TYPE_COMMAND_BUFFER, "AsyncComputeCommandBuffer");
-	// EVIL: reset the persistent asyncComputeCommandBuffer once at allocation so the
-	// validation layer sees it in initial state (not pending). Without this, the
-	// validation layer flags VUID-vkBeginCommandBuffer-commandBuffer-00049 if/when
-	// vkBeginCommandBuffer is later called without a prior wait/reset cycle.
-	vkResetCommandBuffer(context->asyncComputeCommandBuffer, 0u);
+	vkResetCommandBuffer(context->asyncComputeCommandBuffer, 0u); // EVIL: reset persistent cmd buffer once at allocation so validation sees initial state.
 	return true;
 }
 
@@ -107,15 +103,7 @@ bool RecordAsyncComputePass(
 		return false;
 	}
 
-	// EVIL: wait on renderTimelineSemaphore so the persistent asyncComputeCommandBuffer
-	// is in executable/reset state before vkBeginCommandBuffer. Per Vulkan spec
-	// VUID-vkBeginCommandBuffer-commandBuffer-00049 the cmd buffer must not be in
-	// pending/recording state when recording begins. SubmitToComputeQueue signals
-	// renderTimelineSemaphore (NOT hzbBuildTimelineSemaphore, which is for HZB
-	// async cull); we must wait on the same semaphore that was used to signal
-	// the previous submission. Waiting on hzbBuildTimelineSemaphore is wrong
-	// because it does not synchronize this cmd buffer's previous submission.
-	if (context.renderTimelineSemaphore != VK_NULL_HANDLE && context.renderTimelineValue > 0u) {
+	if (context.renderTimelineSemaphore != VK_NULL_HANDLE && context.renderTimelineValue > 0u) { // EVIL: wait on renderTimelineSemaphore so persistent cmd buffer is reset before recording.
 		const VkSemaphoreWaitInfo waitInfo{
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 			.pNext = nullptr,
@@ -295,161 +283,6 @@ bool SubmitToComputeQueue(
 	if (result != VK_SUCCESS) {
 		runtime::LogVkFailure("SubmitToComputeQueue.vkQueueSubmit2", result);
 		context->renderTimelineValue -= 1u;
-		if (outTimelineValue != nullptr) {
-			*outTimelineValue = 0u;
-		}
-		return false;
-	}
-	return true;
-}
-
-bool RecordHzbAsyncCullPass(
-	const VkCommandBuffer asyncCommandBuffer,
-	VulkanContextState &context,
-	RenderState &render,
-	const float (&inverseViewProjection)[16],
-	const uint32_t chunkDescriptorCount)
-{
-	PV_PROFILE_ZONE_N("RecordHzbAsyncCullPass");
-	if (asyncCommandBuffer == VK_NULL_HANDLE) {
-		return false;
-	}
-	if (context.device == VK_NULL_HANDLE) {
-		return false;
-	}
-	if (render.hizCullingPipeline == VK_NULL_HANDLE) {
-		return false;
-	}
-
-	// EVIL: wait on hzbBuildTimelineSemaphore so the persistent asyncComputeCommandBuffer
-	// is in executable/reset state. Per VUID-vkBeginCommandBuffer-commandBuffer-00049.
-	if (context.hzbBuildTimelineSemaphore != VK_NULL_HANDLE && context.hzbBuildLastTimelineValue > 0u) {
-		const VkSemaphoreWaitInfo waitInfo{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.semaphoreCount = 1u,
-			.pSemaphores = &context.hzbBuildTimelineSemaphore,
-			.pValues = &context.hzbBuildLastTimelineValue,
-		};
-		const VkResult waitResult = vkWaitSemaphores(context.device, &waitInfo, UINT64_MAX);
-		if (waitResult != VK_SUCCESS) {
-			runtime::LogVkFailure("RecordHzbAsyncCullPass.vkWaitSemaphores", waitResult);
-			return false;
-		}
-	}
-
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.pNext = nullptr;
-	beginInfo.flags = 0u;
-	beginInfo.pInheritanceInfo = nullptr;
-	const VkResult beginResult = vkBeginCommandBuffer(asyncCommandBuffer, &beginInfo);
-	if (beginResult != VK_SUCCESS) {
-		runtime::LogVkFailure("RecordHzbAsyncCullPass.vkBeginCommandBuffer", beginResult);
-		return false;
-	}
-
-	static constexpr uint32_t currentFrame = 0u;
-	SceneFrameResources &frameResources = render.sceneFrameResources[currentFrame];
-
-	VkImageMemoryBarrier2 hizBarrier{};
-	hizBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	hizBarrier.pNext = nullptr;
-	hizBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-	hizBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-	hizBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-	hizBarrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-	hizBarrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	hizBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	hizBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	hizBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	hizBarrier.image = render.hizBuffer.image;
-	hizBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, render.hizBuffer.mipLevelCount, 0u, 1u};
-
-	VkDependencyInfo hizDepInfo{};
-	hizDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	hizDepInfo.imageMemoryBarrierCount = 1u;
-	hizDepInfo.pImageMemoryBarriers = &hizBarrier;
-	vkCmdPipelineBarrier2(asyncCommandBuffer, &hizDepInfo);
-
-	const bool recorded = RecordHzbCullingDispatch(
-		asyncCommandBuffer,
-		&context,
-		render,
-		frameResources,
-		inverseViewProjection,
-		chunkDescriptorCount);
-
-	if (!recorded) {
-		runtime::LogRuntimeFailure(
-			"Render",
-			"RecordHzbAsyncCullPass.RecordHzbCullingDispatch",
-			"RecordHzbCullingDispatch returned false on async compute CB");
-	}
-
-	const VkResult endResult = vkEndCommandBuffer(asyncCommandBuffer);
-	if (endResult != VK_SUCCESS) {
-		runtime::LogVkFailure("RecordHzbAsyncCullPass.vkEndCommandBuffer", endResult);
-		return false;
-	}
-	return recorded;
-}
-
-bool SubmitHzbAsyncCullToComputeQueue(
-	VulkanContextState *context,
-	const VkCommandBuffer asyncCommandBuffer,
-	uint64_t *outTimelineValue)
-{
-	PV_PROFILE_ZONE_N("SubmitHzbAsyncCullToComputeQueue");
-	if (context == nullptr) {
-		return false;
-	}
-	if (context->dedicatedComputeQueue == VK_NULL_HANDLE) {
-		return false;
-	}
-	if (context->hzbBuildTimelineSemaphore == VK_NULL_HANDLE) {
-		return false;
-	}
-	if (asyncCommandBuffer == VK_NULL_HANDLE) {
-		return false;
-	}
-
-	context->hzbBuildLastTimelineValue += 1u;
-	const uint64_t timelineValue = context->hzbBuildLastTimelineValue;
-	if (outTimelineValue != nullptr) {
-		*outTimelineValue = timelineValue;
-	}
-
-	VkCommandBufferSubmitInfo commandBufferSubmitInfo{};
-	commandBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-	commandBufferSubmitInfo.commandBuffer = asyncCommandBuffer;
-
-	VkSemaphoreSubmitInfo waitSemaphoreInfo{};
-	waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-	waitSemaphoreInfo.semaphore = context->hzbBuildTimelineSemaphore;
-	waitSemaphoreInfo.value = timelineValue - 1u;
-	waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-
-	VkSemaphoreSubmitInfo signalSemaphoreInfo{};
-	signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-	signalSemaphoreInfo.semaphore = context->hzbBuildTimelineSemaphore;
-	signalSemaphoreInfo.value = timelineValue;
-	signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-
-	VkSubmitInfo2 submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-	submitInfo.commandBufferInfoCount = 1u;
-	submitInfo.pCommandBufferInfos = &commandBufferSubmitInfo;
-	submitInfo.waitSemaphoreInfoCount = 1u;
-	submitInfo.pWaitSemaphoreInfos = &waitSemaphoreInfo;
-	submitInfo.signalSemaphoreInfoCount = 1u;
-	submitInfo.pSignalSemaphoreInfos = &signalSemaphoreInfo;
-
-	const VkResult result = vkQueueSubmit2(context->dedicatedComputeQueue, 1u, &submitInfo, VK_NULL_HANDLE);
-	if (result != VK_SUCCESS) {
-		runtime::LogVkFailure("SubmitHzbAsyncCullToComputeQueue.vkQueueSubmit2", result);
-		context->hzbBuildLastTimelineValue -= 1u;
 		if (outTimelineValue != nullptr) {
 			*outTimelineValue = 0u;
 		}

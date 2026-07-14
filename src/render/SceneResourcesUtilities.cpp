@@ -23,13 +23,20 @@ bool CreateBuffer(
 	const VmaAllocationCreateInfo &allocationInfo,
 	VkBuffer *outBuffer,
 	VmaAllocation *outAllocation,
-	VmaAllocationInfo *outAllocationInfo = nullptr)
+	VmaAllocationInfo *outAllocationInfo,
+	const VkSharingMode sharingMode,
+	const uint32_t *queueFamilyIndices,
+	const uint32_t queueFamilyIndexCount)
 {
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.size = size;
 	bufferInfo.usage = usage;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	bufferInfo.sharingMode = sharingMode;
+	if (sharingMode == VK_SHARING_MODE_CONCURRENT && queueFamilyIndices != nullptr && queueFamilyIndexCount > 0) {
+		bufferInfo.queueFamilyIndexCount = queueFamilyIndexCount;
+		bufferInfo.pQueueFamilyIndices = queueFamilyIndices;
+	}
 
 	return vmaCreateBuffer(
 			   context->allocator,

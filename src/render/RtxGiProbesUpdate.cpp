@@ -136,10 +136,12 @@ bool RtxGiProbes::RecordUpdatePass(
 
 	vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 
-	std::array<VkImageMemoryBarrier, 2> imageBarriers{};
-	imageBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	imageBarriers[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	imageBarriers[0].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	std::array<VkImageMemoryBarrier2, 2> imageBarriers{};
+	imageBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	imageBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	imageBarriers[0].srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+	imageBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	imageBarriers[0].dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 	imageBarriers[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageBarriers[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
 	imageBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -147,9 +149,11 @@ bool RtxGiProbes::RecordUpdatePass(
 	imageBarriers[0].image = m_config.irradianceImage;
 	imageBarriers[0].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
 
-	imageBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	imageBarriers[1].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-	imageBarriers[1].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	imageBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	imageBarriers[1].srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	imageBarriers[1].srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+	imageBarriers[1].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	imageBarriers[1].dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 	imageBarriers[1].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageBarriers[1].newLayout = VK_IMAGE_LAYOUT_GENERAL;
 	imageBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -159,24 +163,21 @@ bool RtxGiProbes::RecordUpdatePass(
 
 	if (m_config.updateDispatchCount > 0u) {
 		imageBarriers[0].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageBarriers[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		imageBarriers[0].srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
 		imageBarriers[1].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageBarriers[1].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		imageBarriers[1].srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
 	} else {
 		imageBarriers[0].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageBarriers[0].srcAccessMask = VK_ACCESS_NONE;
+		imageBarriers[0].srcAccessMask = VK_ACCESS_2_NONE;
 		imageBarriers[1].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageBarriers[1].srcAccessMask = VK_ACCESS_NONE;
+		imageBarriers[1].srcAccessMask = VK_ACCESS_2_NONE;
 	}
 
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		0u,
-		0u, nullptr,
-		0u, nullptr,
-		static_cast<uint32_t>(imageBarriers.size()), imageBarriers.data());
+	VkDependencyInfo preUpdateDep{};
+	preUpdateDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	preUpdateDep.imageMemoryBarrierCount = static_cast<uint32_t>(imageBarriers.size());
+	preUpdateDep.pImageMemoryBarriers = imageBarriers.data();
+	vkCmdPipelineBarrier2(commandBuffer, &preUpdateDep);
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline);
 	vkCmdBindDescriptorSets(
@@ -200,24 +201,25 @@ bool RtxGiProbes::RecordUpdatePass(
 	const uint32_t totalProbes = m_config.probeCountAxisX * m_config.probeCountAxisY * m_config.probeCountAxisZ;
 	vkCmdDispatch(commandBuffer, 1, 1, totalProbes);
 
-	imageBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-	imageBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	imageBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	imageBarriers[0].srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+	imageBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+	imageBarriers[0].dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 	imageBarriers[0].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
 	imageBarriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-	imageBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-	imageBarriers[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	imageBarriers[1].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	imageBarriers[1].srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+	imageBarriers[1].dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+	imageBarriers[1].dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 	imageBarriers[1].oldLayout = VK_IMAGE_LAYOUT_GENERAL;
 	imageBarriers[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-		0u,
-		0u, nullptr,
-		0u, nullptr,
-		static_cast<uint32_t>(imageBarriers.size()), imageBarriers.data());
+	VkDependencyInfo postUpdateDep{};
+	postUpdateDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	postUpdateDep.imageMemoryBarrierCount = static_cast<uint32_t>(imageBarriers.size());
+	postUpdateDep.pImageMemoryBarriers = imageBarriers.data();
+	vkCmdPipelineBarrier2(commandBuffer, &postUpdateDep);
 
 	m_config.totalRaysDispatched += totalProbes * m_config.raysPerProbe;
 	++m_config.updateDispatchCount;

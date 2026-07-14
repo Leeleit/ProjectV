@@ -25,30 +25,17 @@ static_assert(sizeof(SkyAtmospherePushConstants) == 64);
 
 constexpr uint32_t kSkyAtmosphereResolution = 256u;
 
-// EVIL: Sky-View LUT per Hillaire 2020 EGSR (lat-long mapping). 256×128 RGBA16F
-// captures single-scattering transmittance + inscattering as function of
-// (view_zenith × view_azimuth_at_zenith) × sun_zenith. Per AirGuanZ/AtmosphereRenderer
-// reference: 64×64 = 0.036 ms on GTX 1060; 256×128 = ~4× = ~0.15 ms at 4K,
-// sufficient for non-Frostbite production. Stage 5.x foundation uses analytical
-// fallback when PROJECTV_SKY_HILL_LUT=ON not set.
-constexpr uint32_t kSkyViewLutWidth = 256u;
-constexpr uint32_t kSkyViewLutHeight = 128u;
+constexpr uint32_t kSkyViewLutWidth = 256u;	 // Sky-View LUT width per Hillaire 2020 EGSR lat-long mapping.
+constexpr uint32_t kSkyViewLutHeight = 128u; // 256×128 RGBA16F captures single-scattering transmittance + inscattering.
 constexpr uint32_t kSkyViewLutChannels = 4u;
 constexpr VkFormat kSkyViewLutFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
-// EVIL: Multi-Scattering LUT per Hillaire 2020 EGSR. 32×32 RGBA16F captures the
-// 2D Wrenninge-style multiple scattering approximation as function of
-// (altitude × sun_zenith). Per Hillaire 2020 paper Section 4.3: "2-octave
-// accumulation of single scattering" + isotropic normalization. Cheap enough
-// for per-frame recompute when sun direction changes.
-constexpr uint32_t kMultiScatteringLutWidth = 32u;
-constexpr uint32_t kMultiScatteringLutHeight = 32u;
+constexpr uint32_t kMultiScatteringLutWidth = 32u;	// Multi-Scattering LUT width per Hillaire 2020 EGSR.
+constexpr uint32_t kMultiScatteringLutHeight = 32u; // 32×32 RGBA16F for the 2D multiple-scattering approximation.
 constexpr uint32_t kMultiScatteringLutChannels = 4u;
 constexpr VkFormat kMultiScatteringLutFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
-// EVIL: hard-coded Rayleigh coefficients per Hillaire 2020 (lambda^-4 scaling
-// R=680nm, G=550nm, B=440nm wavelengths). Same as sky_atmosphere.frag analytical
-// path — keep consistent with closed precomputed-atmospheric-sky experiment.
+// Rayleigh coefficients per Hillaire 2020 (lambda^-4 scaling at R=680nm, G=550nm, B=440nm).
 namespace sky_atmosphere_constants {
 constexpr float kPlanetRadius = 6371000.0f;
 constexpr float kAtmosphereHeight = 100000.0f;

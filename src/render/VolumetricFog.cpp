@@ -284,16 +284,9 @@ bool CreateVolumetricFogFallbackOnly(VulkanContextState *context, RenderState *r
 	if (!CreateVolumetricFogFallbackImage(context, render)) {
 		return false;
 	}
-	// EVIL: Sampler must exist before any descriptor set write for binding 12
-	// (was deferred to CreateVolumetricFogResources which only runs when env gate ON,
-	// causing VUID-VkWriteDescriptorSet-descriptorType-00325 when gate OFF).
-	if (!CreateVolumetricFogSampler(context, render)) {
+	if (!CreateVolumetricFogSampler(context, render)) { // EVIL: sampler must exist before binding-12 descriptor write (gate OFF path).
 		return false;
 	}
-	// EVIL: Transition UNDEFINED -> SHADER_READ_ONLY_OPTIMAL so the fallback image
-	// can be bound in voxel.frag binding 12 without VUID-vkCmdDraw-None-09600.
-	// One-shot command buffer per VulkanInit (sync barrier ensures completion before
-	// first frame submission).
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.commandPool = context->commandPool;
@@ -322,15 +315,18 @@ bool CreateVolumetricFogFallbackOnly(VulkanContextState *context, RenderState *r
 	depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
 	depInfo.imageMemoryBarrierCount = 1u;
 	depInfo.pImageMemoryBarriers = &imageBarrier;
-	vkCmdPipelineBarrier2(cmd, &depInfo);
+	vkCmdPipelineBarrier2(cmd, &depInfo); // EVIL: transition fallback image UNDEFINED -> SHADER_READ_ONLY_OPTIMAL for binding 12.
 	vkEndCommandBuffer(cmd);
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1u;
-	submitInfo.pCommandBuffers = &cmd;
-	const VkResult submitResult = vkQueueSubmit(context->queue, 1u, &submitInfo, VK_NULL_HANDLE);
+	VkCommandBufferSubmitInfo commandBufferSubmitInfo{};
+	commandBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+	commandBufferSubmitInfo.commandBuffer = cmd;
+	VkSubmitInfo2 submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+	submitInfo.commandBufferInfoCount = 1u;
+	submitInfo.pCommandBufferInfos = &commandBufferSubmitInfo;
+	const VkResult submitResult = vkQueueSubmit2(context->queue, 1u, &submitInfo, VK_NULL_HANDLE);
 	if (submitResult != VK_SUCCESS) {
-		runtime::LogVkFailure("CreateVolumetricFogFallbackOnly.vkQueueSubmit", submitResult);
+		runtime::LogVkFailure("CreateVolumetricFogFallbackOnly.vkQueueSubmit2", submitResult);
 		vkFreeCommandBuffers(context->device, context->commandPool, 1u, &cmd);
 		return true;
 	}
@@ -423,7 +419,7 @@ bool CreateVolumetricFogResources(VulkanContextState *context, RenderState *rend
 
 	VkComputePipelineCreateInfo pipelineInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .stage = stage};
 	pipelineInfo.layout = render->volumetricFogPipelineLayout;
-	if (vkCreateComputePipelines(context->device, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &render->volumetricFogPipeline) != VK_SUCCESS) {
+	if (vkCreateComputePipelines(context->device, context->pipelineCache, 1u, &pipelineInfo, nullptr, &render->volumetricFogPipeline) != VK_SUCCESS) {
 		DestroyVolumetricFogResources(context, render);
 		return false;
 	}
@@ -533,24 +529,23 @@ bool RecordVolumetricFogAccumulationPass(
 		return false;
 	}
 
-	VkImageMemoryBarrier preBarrier{};
-	preBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	preBarrier.srcAccessMask = 0u;
-	preBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	VkImageMemoryBarrier2 preBarrier{};
+	preBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	preBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+	preBarrier.srcAccessMask = VK_ACCESS_2_NONE;
+	preBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	preBarrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 	preBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	preBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 	preBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	preBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	preBarrier.image = render.volumetricFogFroxelImage;
 	preBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-	vkCmdPipelineBarrier(
-		commandBuffer,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		0u,
-		0u, nullptr,
-		0u, nullptr,
-		1u, &preBarrier);
+	VkDependencyInfo preDepInfo{};
+	preDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	preDepInfo.imageMemoryBarrierCount = 1u;
+	preDepInfo.pImageMemoryBarriers = &preBarrier;
+	vkCmdPipelineBarrier2(commandBuffer, &preDepInfo);
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, render.volumetricFogPipeline);
 	vkCmdBindDescriptorSets(

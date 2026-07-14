@@ -177,7 +177,7 @@ bool RtxShadowPipeline::Initialize(
 	pipelineInfo.maxPipelineRayRecursionDepth = 1u;
 	pipelineInfo.layout = m_pipelineLayout;
 
-	if (vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, VK_NULL_HANDLE, 1u, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
+	if (vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, context.pipelineCache, 1u, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
 		runtime::LogVkFailure("RtxShadowPipeline.vkCreateRayTracingPipelinesKHR", VK_ERROR_INITIALIZATION_FAILED);
 		Shutdown(context);
 		return false;

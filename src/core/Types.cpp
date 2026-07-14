@@ -18,10 +18,14 @@ import projectv.string_id;
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
+#include "render/Cloudscape.hpp"
 #include "render/PostFx.hpp"
 #include "render/SkyAtmosphere.hpp"
 #include "render/VolumetricFog.hpp"
 #include "voxel/VoxelWorld.hpp"
+
+#include <filesystem>
+#include <fstream>
 
 void ShutdownVulkan(AppState *state)
 {
@@ -32,6 +36,25 @@ void ShutdownVulkan(AppState *state)
 
 	if (state->context().device) {
 		vkDeviceWaitIdle(state->context().device);
+
+		const std::filesystem::path cachePath = std::filesystem::current_path() / ".cache" / "vulkan_pipeline_cache.bin";
+		if (state->context().pipelineCache != VK_NULL_HANDLE) {
+			size_t cacheSize = 0;
+			vkGetPipelineCacheData(state->context().device, state->context().pipelineCache, &cacheSize, nullptr);
+			if (cacheSize > 0) {
+				std::vector<char> cacheData(cacheSize);
+				if (vkGetPipelineCacheData(
+						state->context().device,
+						state->context().pipelineCache,
+						&cacheSize,
+						cacheData.data()) == VK_SUCCESS) {
+					std::filesystem::create_directories(cachePath.parent_path());
+					std::ofstream file(cachePath, std::ios::binary);
+					file.write(cacheData.data(), static_cast<std::streamsize>(cacheSize));
+				}
+			}
+		}
+
 		profiling::CollectVulkanGpuHost(state->render().tracyGraphicsContext);
 		profiling::DestroyVulkanGpuContext(state->render().tracyGraphicsContext);
 		state->render().tracyGraphicsContext = nullptr;
@@ -42,6 +65,7 @@ void ShutdownVulkan(AppState *state)
 		projectv::render::DestroyWorldGenPipelines(&state->context(), &state->render());
 		projectv::render::DestroySkyAtmospherePipelines(&state->context(), &state->render());
 		projectv::render::DestroyVolumetricFogResources(&state->context(), &state->render());
+		projectv::render::DestroyCloudscapeResources(&state->context(), &state->render());
 		projectv::render::DestroyPostFxResources(&state->context(), &state->render());
 		projectv::render::DestroySkyLutResources(&state->context(), &state->render());
 		projectv::render::DestroyRayTracedShadowResources(&state->context(), &state->render());
@@ -75,6 +99,11 @@ void ShutdownVulkan(AppState *state)
 		DestroySceneResources(&state->context(), &state->render());
 		projectv::asset::UnloadAllModels(&state->context(), &state->render());
 		projectv::asset::DestroyModelPipeline(&state->context(), &state->render());
+
+		if (state->context().pipelineCache != VK_NULL_HANDLE) {
+			vkDestroyPipelineCache(state->context().device, state->context().pipelineCache, nullptr);
+			state->context().pipelineCache = VK_NULL_HANDLE;
+		}
 	}
 
 	state->physics().reset();
@@ -114,11 +143,6 @@ void ShutdownVulkan(AppState *state)
 		if (state->context().renderTimelineSemaphore) {
 			vkDestroySemaphore(state->context().device, state->context().renderTimelineSemaphore, nullptr);
 			state->context().renderTimelineSemaphore = VK_NULL_HANDLE;
-		}
-
-		if (state->context().hzbBuildTimelineSemaphore) {
-			vkDestroySemaphore(state->context().device, state->context().hzbBuildTimelineSemaphore, nullptr);
-			state->context().hzbBuildTimelineSemaphore = VK_NULL_HANDLE;
 		}
 	}
 

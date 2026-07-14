@@ -101,10 +101,7 @@ uint32_t ComputePerChunkMipAndBlendWidthsFromAabbs(
 	uint32_t maxBlendWidth,
 	std::vector<uint32_t> &outMipAndBlendWidths);
 
-// EVIL: kHizMipAndBlendWidthWordsPerChunk = 2 (mip + blendWidth packed).
-// Must match shader's `perChunkMipAndBlendWidth[i*2]` / `perChunkMipAndBlendWidth[i*2+1]`
-// access pattern in hzb_cull.comp. Stride is 2 uint32 per chunk, total = chunkCount * 8 bytes.
-inline constexpr uint32_t kHizMipAndBlendWidthWordsPerChunk = 2u;
+inline constexpr uint32_t kHizMipAndBlendWidthWordsPerChunk = 2u; // mip + blendWidth packed; matches shader's perChunkMipAndBlendWidth stride.
 
 void WritePerChunkMipAndBlendWidthsToBuffer(
 	void *mappedData,

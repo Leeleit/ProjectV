@@ -483,6 +483,42 @@ set_tests_properties(ProjectVPresentModeTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVPresentModeTests)
 
+add_executable(ProjectVVulkanBootstrapTests
+        VulkanBootstrapTests.cpp
+        vma_implementation.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanBootstrapInit.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/HardwareRayTracingProbe.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+)
+
+target_compile_definitions(ProjectVVulkanBootstrapTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVVulkanBootstrapTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(ProjectVVulkanBootstrapTests PRIVATE projectv_build_options)
+target_link_libraries(ProjectVVulkanBootstrapTests PRIVATE
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+        SDL3::SDL3
+        fmt::fmt
+)
+
+if (PROJECTV_ENABLE_TRACY)
+    target_link_libraries(ProjectVVulkanBootstrapTests PRIVATE Tracy::TracyClient)
+endif ()
+
+add_test(NAME ProjectVVulkanBootstrapTests COMMAND ProjectVVulkanBootstrapTests)
+set_tests_properties(ProjectVVulkanBootstrapTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVVulkanBootstrapTests)
+
 add_executable(ProjectVSparse64TreeTests
         Sparse64TreeTests.cpp
 )
@@ -570,7 +606,9 @@ projectv_test_add_modules(ProjectVCpuMeshGeneratorTests)
 add_executable(ProjectVHzbCullingTests
         HzbCullingTests.cpp
         vma_implementation.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/HizCulling.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/HizCullingSetup.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/HizCullingBuild.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/HizCullingDispatch.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
         ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
@@ -606,7 +644,10 @@ projectv_test_add_modules(ProjectVHzbCullingTests)
 
 add_executable(ProjectVMeshShaderTests
         MeshShaderTests.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanMeshShaderPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanMeshShaderSetup.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanMeshShaderBindings.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanMeshShaderCull.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanMeshShaderDraw.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
         ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
@@ -637,7 +678,8 @@ projectv_test_add_modules(ProjectVMeshShaderTests)
 
 add_executable(ProjectVFluidCAGpuTests
         FluidCAGpuTests.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaSetup.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaDispatch.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanSyncPrimitives.cpp
@@ -736,10 +778,13 @@ projectv_test_add_modules(ProjectVLodDownsampleGpuConsumeTests)
 
 add_executable(ProjectVAsyncComputeTests
         AsyncComputeTests.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaPipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaSetup.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaDispatch.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanAsyncCompute.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanWorldGenPipeline.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/HizCulling.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/HizCullingSetup.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/HizCullingBuild.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/HizCullingDispatch.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
@@ -933,7 +978,8 @@ add_executable(ProjectVWorldGenTests
 
 add_executable(ProjectVVoxelizePipelineTests
         VoxelizePipelineTests.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanVoxelizePipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanVoxelizeSetup.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanVoxelizeMipChain.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
@@ -1120,7 +1166,9 @@ set_tests_properties(ProjectVHzbSmartMipTests PROPERTIES LABELS "unit")
 
 add_executable(ProjectVSkyAtmosphereTests
         SkyAtmosphereTests.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/SkyAtmosphere.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/SkyAtmosphereLut.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/SkyAtmosphereSetup.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/SkyAtmospherePass.cpp
         ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp

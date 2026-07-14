@@ -258,10 +258,13 @@ bool TransitionPostFxImagesToGeneral(
 
 	vkEndCommandBuffer(cmd);
 
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &cmd;
+	VkCommandBufferSubmitInfo commandBufferSubmitInfo{};
+	commandBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+	commandBufferSubmitInfo.commandBuffer = cmd;
+	VkSubmitInfo2 submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+	submitInfo.commandBufferInfoCount = 1u;
+	submitInfo.pCommandBufferInfos = &commandBufferSubmitInfo;
 	VkFenceCreateInfo fenceInfo{};
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	VkFence fence = VK_NULL_HANDLE;
@@ -271,7 +274,7 @@ bool TransitionPostFxImagesToGeneral(
 		return false;
 	}
 
-	vkQueueSubmit(context->queue, 1, &submitInfo, fence);
+	vkQueueSubmit2(context->queue, 1u, &submitInfo, fence);
 	const VkResult waitResult = vkWaitForFences(context->device, 1, &fence, VK_TRUE, UINT64_MAX);
 	vkDestroyFence(context->device, fence, nullptr);
 	vkFreeCommandBuffers(context->device, context->commandPool, 1, &cmd);
@@ -356,7 +359,7 @@ bool CreatePostFxPipeline(
 
 	const VkResult pipelineResult = vkCreateComputePipelines(
 		context->device,
-		VK_NULL_HANDLE,
+		context->pipelineCache,
 		1,
 		&pipelineInfo,
 		nullptr,
@@ -400,7 +403,6 @@ void DispatchPostFx(
 } // namespace
 
 namespace projectv::render {
-
 bool CreatePostFxResources(
 	VulkanContextState *context,
 	RenderState *render,
@@ -576,370 +578,4 @@ bool CreatePostFxResources(
 	render->aerialPerspectivePipelineEnabled = IsAerialPerspectiveEnabled();
 	return true;
 }
-
-void DestroyPostFxResources(
-	VulkanContextState *context,
-	RenderState *render)
-{
-	if (!context || !render || context->device == VK_NULL_HANDLE) {
-		return;
-	}
-
-	if (render->bloomCompositePipeline != VK_NULL_HANDLE) {
-		vkDestroyPipeline(context->device, render->bloomCompositePipeline, nullptr);
-		render->bloomCompositePipeline = VK_NULL_HANDLE;
-	}
-	if (render->bloomUpsamplePipeline != VK_NULL_HANDLE) {
-		vkDestroyPipeline(context->device, render->bloomUpsamplePipeline, nullptr);
-		render->bloomUpsamplePipeline = VK_NULL_HANDLE;
-	}
-	if (render->bloomDownsamplePipeline != VK_NULL_HANDLE) {
-		vkDestroyPipeline(context->device, render->bloomDownsamplePipeline, nullptr);
-		render->bloomDownsamplePipeline = VK_NULL_HANDLE;
-	}
-	if (render->bloomThresholdPipeline != VK_NULL_HANDLE) {
-		vkDestroyPipeline(context->device, render->bloomThresholdPipeline, nullptr);
-		render->bloomThresholdPipeline = VK_NULL_HANDLE;
-	}
-
-	if (render->bloomCompositeShaderModule != VK_NULL_HANDLE) {
-		vkDestroyShaderModule(context->device, render->bloomCompositeShaderModule, nullptr);
-		render->bloomCompositeShaderModule = VK_NULL_HANDLE;
-	}
-	if (render->bloomUpsampleShaderModule != VK_NULL_HANDLE) {
-		vkDestroyShaderModule(context->device, render->bloomUpsampleShaderModule, nullptr);
-		render->bloomUpsampleShaderModule = VK_NULL_HANDLE;
-	}
-	if (render->bloomDownsampleShaderModule != VK_NULL_HANDLE) {
-		vkDestroyShaderModule(context->device, render->bloomDownsampleShaderModule, nullptr);
-		render->bloomDownsampleShaderModule = VK_NULL_HANDLE;
-	}
-	if (render->bloomThresholdShaderModule != VK_NULL_HANDLE) {
-		vkDestroyShaderModule(context->device, render->bloomThresholdShaderModule, nullptr);
-		render->bloomThresholdShaderModule = VK_NULL_HANDLE;
-	}
-
-	if (render->postFxDescriptorPool != VK_NULL_HANDLE) {
-		vkDestroyDescriptorPool(context->device, render->postFxDescriptorPool, nullptr);
-		render->postFxDescriptorPool = VK_NULL_HANDLE;
-	}
-	render->postFxDescriptorSets.clear();
-
-	if (render->postFxPipelineLayout != VK_NULL_HANDLE) {
-		vkDestroyPipelineLayout(context->device, render->postFxPipelineLayout, nullptr);
-		render->postFxPipelineLayout = VK_NULL_HANDLE;
-	}
-	if (render->postFxDescriptorSetLayout != VK_NULL_HANDLE) {
-		vkDestroyDescriptorSetLayout(context->device, render->postFxDescriptorSetLayout, nullptr);
-		render->postFxDescriptorSetLayout = VK_NULL_HANDLE;
-	}
-
-	for (VkImageView view : render->bloomScratchMipViews) {
-		if (view != VK_NULL_HANDLE) {
-			vkDestroyImageView(context->device, view, nullptr);
-		}
-	}
-	render->bloomScratchMipViews.clear();
-
-	if (render->postFxOutputImageView != VK_NULL_HANDLE) {
-		vkDestroyImageView(context->device, render->postFxOutputImageView, nullptr);
-		render->postFxOutputImageView = VK_NULL_HANDLE;
-	}
-	if (render->postFxOutputImage != VK_NULL_HANDLE) {
-		vmaDestroyImage(context->allocator, render->postFxOutputImage, render->postFxOutputImageAllocation);
-		render->postFxOutputImage = VK_NULL_HANDLE;
-		render->postFxOutputImageAllocation = nullptr;
-	}
-
-	if (render->bloomResultImageView != VK_NULL_HANDLE) {
-		vkDestroyImageView(context->device, render->bloomResultImageView, nullptr);
-		render->bloomResultImageView = VK_NULL_HANDLE;
-	}
-	if (render->bloomResultImage != VK_NULL_HANDLE) {
-		vmaDestroyImage(context->allocator, render->bloomResultImage, render->bloomResultImageAllocation);
-		render->bloomResultImage = VK_NULL_HANDLE;
-		render->bloomResultImageAllocation = nullptr;
-	}
-
-	if (render->bloomScratchImageView != VK_NULL_HANDLE) {
-		vkDestroyImageView(context->device, render->bloomScratchImageView, nullptr);
-		render->bloomScratchImageView = VK_NULL_HANDLE;
-	}
-	if (render->bloomScratchImage != VK_NULL_HANDLE) {
-		vmaDestroyImage(context->allocator, render->bloomScratchImage, render->bloomScratchImageAllocation);
-		render->bloomScratchImage = VK_NULL_HANDLE;
-		render->bloomScratchImageAllocation = nullptr;
-	}
-
-	if (render->postFxLinearSampler != VK_NULL_HANDLE) {
-		vkDestroySampler(context->device, render->postFxLinearSampler, nullptr);
-		render->postFxLinearSampler = VK_NULL_HANDLE;
-	}
-
-	render->bloomPipelineEnabled = false;
-	render->aerialPerspectivePipelineEnabled = false;
-	render->postFxExtent = VkExtent2D{0u, 0u};
-}
-
-bool RecordPostFxPass(
-	VkCommandBuffer commandBuffer,
-	VulkanContextState &context,
-	RenderState &render,
-	const VoxelSceneLighting &lighting,
-	const FrameRenderData &frameRenderData,
-	const VkExtent2D extent,
-	const uint32_t frameIndex)
-{
-	PV_PROFILE_ZONE_N("RecordPostFxPass");
-	if (commandBuffer == VK_NULL_HANDLE) {
-		return false;
-	}
-	if (!IsPostFxEnabled()) {
-		return true;
-	}
-	if (render.postFxDescriptorSets.empty()) {
-		return false;
-	}
-
-	const VkExtent2D halfExtent{
-		std::max(extent.width / 2u, 1u),
-		std::max(extent.height / 2u, 1u)};
-
-	const bool bloomEnabled = IsBloomEnabled();
-	const bool aerialEnabled = IsAerialPerspectiveEnabled();
-
-	// Transition sceneColor from COLOR_ATTACHMENT_OPTIMAL to SHADER_READ_ONLY_OPTIMAL.
-	::TransitionImage(
-		commandBuffer,
-		render.sceneColorImage,
-		VK_IMAGE_ASPECT_COLOR_BIT,
-		render.sceneColorCurrentLayout,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-	render.sceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-	// Transition depth to DEPTH_READ_ONLY_OPTIMAL for composite sampler.
-	::TransitionImage(
-		commandBuffer,
-		render.depthImage,
-		VK_IMAGE_ASPECT_DEPTH_BIT,
-		render.depthImageCurrentLayout,
-		VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-		VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-	render.depthImageCurrentLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
-
-	// Transition postFxOutput to GENERAL for compute writes.
-	::TransitionImage(
-		commandBuffer,
-		render.postFxOutputImage,
-		VK_IMAGE_ASPECT_COLOR_BIT,
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_PIPELINE_STAGE_2_NONE,
-		0,
-		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		VK_ACCESS_2_SHADER_WRITE_BIT);
-
-	PostFxPushConstants push{};
-	push.params0[0] = 0.8f;								   // threshold
-	push.params0[1] = 0.5f;								   // softKnee
-	push.params0[2] = 0.5f;								   // bloomIntensity
-	push.params1[0] = lighting.skyColorAndFogDensity[3];   // fogDensity
-	push.params1[1] = lighting.horizonColorAndFogStart[3]; // fogMax
-	push.params1[2] = lighting.postProcess[0];			   // exposure
-	push.params2[0] = lighting.sunDirectionAndWrap[0];
-	push.params2[1] = lighting.sunDirectionAndWrap[1];
-	push.params2[2] = lighting.sunDirectionAndWrap[2];
-	push.params3[0] = frameRenderData.graphicsPushConstants.cameraPosition.x;
-	push.params3[1] = frameRenderData.graphicsPushConstants.cameraPosition.y;
-	push.params3[2] = frameRenderData.graphicsPushConstants.cameraPosition.z;
-	push.params4[0] = lighting.horizonColorAndFogStart[0];
-	push.params4[1] = lighting.horizonColorAndFogStart[1];
-	push.params4[2] = lighting.horizonColorAndFogStart[2];
-
-	constexpr uint32_t kSetsPerFrame = kPostFxDescriptorSetCount / MAX_FRAMES_IN_FLIGHT;
-	uint32_t setIndex = frameIndex * kSetsPerFrame;
-	const auto allocateSet = [&]() -> VkDescriptorSet {
-		if (setIndex >= render.postFxDescriptorSets.size()) {
-			return VK_NULL_HANDLE;
-		}
-		return render.postFxDescriptorSets[setIndex++];
-	};
-
-	// Helper to update a descriptor set with up to four bindings.
-	const auto updateSet = [&](
-							   VkDescriptorSet descriptorSet,
-							   VkSampler sampler,
-							   VkImageView view0,
-							   VkImageLayout layout0,
-							   VkImageView view1,
-							   VkImageLayout layout1,
-							   VkImageView view2,
-							   VkImageLayout layout2,
-							   VkImageView view3,
-							   VkImageLayout layout3,
-							   bool useView1,
-							   bool useView3) {
-		std::array<VkDescriptorImageInfo, 4> infos{};
-		std::array<VkWriteDescriptorSet, 4> writes{};
-		uint32_t writeCount = 0;
-
-		infos[0] = {sampler, view0, layout0};
-		writes[writeCount] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &infos[0], nullptr, nullptr};
-		++writeCount;
-
-		// Binding 1 is only used by the composite shader; provide a valid fallback view when unused.
-		infos[1] = {sampler, useView1 ? view1 : view0, layout1};
-		writes[writeCount] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &infos[1], nullptr, nullptr};
-		++writeCount;
-
-		infos[2] = {VK_NULL_HANDLE, view2, layout2};
-		writes[writeCount] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSet, 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &infos[2], nullptr, nullptr};
-		++writeCount;
-
-		infos[3] = {sampler, useView3 ? view3 : view0, layout3};
-		writes[writeCount] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSet, 3, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &infos[3], nullptr, nullptr};
-		++writeCount;
-
-		vkUpdateDescriptorSets(context.device, writeCount, writes.data(), 0, nullptr);
-	};
-
-	if (bloomEnabled) {
-		// Bloom threshold: sceneColor -> bloom scratch mip 0.
-		{
-			const VkDescriptorSet descriptorSet = allocateSet();
-			if (descriptorSet == VK_NULL_HANDLE) {
-				return false;
-			}
-			push.params0[3] = 0.0f;
-			updateSet(
-				descriptorSet,
-				render.postFxLinearSampler,
-				render.sceneColorImageView,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				render.sceneColorImageView,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				render.bloomScratchMipViews[0],
-				VK_IMAGE_LAYOUT_GENERAL,
-				render.sceneColorImageView,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				false,
-				false);
-
-			const uint32_t groupsX = (halfExtent.width + 15) / 16;
-			const uint32_t groupsY = (halfExtent.height + 15) / 16;
-			DispatchPostFx(commandBuffer, render.bloomThresholdPipeline, render.postFxPipelineLayout, descriptorSet, push, groupsX, groupsY);
-		}
-
-		PostFxMemoryBarrier(commandBuffer);
-
-		// Bloom downsample chain.
-		for (uint32_t mip = 0; mip + 1 < kBloomMipCount; ++mip) {
-			const VkDescriptorSet descriptorSet = allocateSet();
-			if (descriptorSet == VK_NULL_HANDLE) {
-				return false;
-			}
-			const VkExtent2D dstExtent{
-				std::max(halfExtent.width >> (mip + 1), 1u),
-				std::max(halfExtent.height >> (mip + 1), 1u)};
-			push.params0[3] = static_cast<float>(mip);
-
-			updateSet(
-				descriptorSet,
-				render.postFxLinearSampler,
-				render.bloomScratchMipViews[mip],
-				VK_IMAGE_LAYOUT_GENERAL,
-				render.bloomScratchMipViews[mip],
-				VK_IMAGE_LAYOUT_GENERAL,
-				render.bloomScratchMipViews[mip + 1],
-				VK_IMAGE_LAYOUT_GENERAL,
-				render.bloomScratchMipViews[mip],
-				VK_IMAGE_LAYOUT_GENERAL,
-				false,
-				false);
-
-			const uint32_t groupsX = (dstExtent.width + 15) / 16;
-			const uint32_t groupsY = (dstExtent.height + 15) / 16;
-			DispatchPostFx(commandBuffer, render.bloomDownsamplePipeline, render.postFxPipelineLayout, descriptorSet, push, groupsX, groupsY);
-
-			PostFxMemoryBarrier(commandBuffer);
-		}
-
-		// Bloom upsample chain: start from top mip and write into bloomResultImage.
-		{
-			const VkDescriptorSet descriptorSet = allocateSet();
-			if (descriptorSet == VK_NULL_HANDLE) {
-				return false;
-			}
-			push.params0[3] = static_cast<float>(kBloomMipCount - 1);
-
-			updateSet(
-				descriptorSet,
-				render.postFxLinearSampler,
-				render.bloomScratchMipViews[kBloomMipCount - 1],
-				VK_IMAGE_LAYOUT_GENERAL,
-				render.bloomScratchMipViews[kBloomMipCount - 1],
-				VK_IMAGE_LAYOUT_GENERAL,
-				render.bloomResultImageView,
-				VK_IMAGE_LAYOUT_GENERAL,
-				render.bloomScratchMipViews[kBloomMipCount - 1],
-				VK_IMAGE_LAYOUT_GENERAL,
-				false,
-				false);
-
-			const uint32_t groupsX = (halfExtent.width + 15) / 16;
-			const uint32_t groupsY = (halfExtent.height + 15) / 16;
-			DispatchPostFx(commandBuffer, render.bloomUpsamplePipeline, render.postFxPipelineLayout, descriptorSet, push, groupsX, groupsY);
-			PostFxMemoryBarrier(commandBuffer);
-		}
-	}
-
-	// Composite pass: sceneColor + depth + bloomResult -> postFxOutput.
-	{
-		const VkDescriptorSet descriptorSet = allocateSet();
-		if (descriptorSet == VK_NULL_HANDLE) {
-			return false;
-		}
-		push.params0[3] = aerialEnabled ? 1.0f : 0.0f;
-
-		updateSet(
-			descriptorSet,
-			render.postFxLinearSampler,
-			render.sceneColorImageView,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			render.depthImageView,
-			VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-			render.postFxOutputImageView,
-			VK_IMAGE_LAYOUT_GENERAL,
-			bloomEnabled ? render.bloomResultImageView : render.sceneColorImageView,
-			bloomEnabled ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			true,
-			bloomEnabled);
-
-		const uint32_t groupsX = (extent.width + 15) / 16;
-		const uint32_t groupsY = (extent.height + 15) / 16;
-		DispatchPostFx(commandBuffer, render.bloomCompositePipeline, render.postFxPipelineLayout, descriptorSet, push, groupsX, groupsY);
-	}
-
-	// Transition postFxOutput to TRANSFER_SRC for blit.
-	::TransitionImage(
-		commandBuffer,
-		render.postFxOutputImage,
-		VK_IMAGE_ASPECT_COLOR_BIT,
-		VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		VK_ACCESS_2_SHADER_WRITE_BIT,
-		VK_PIPELINE_STAGE_2_COPY_BIT,
-		VK_ACCESS_2_TRANSFER_READ_BIT);
-
-	return true;
-}
-
 } // namespace projectv::render

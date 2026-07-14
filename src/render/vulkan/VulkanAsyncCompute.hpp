@@ -24,16 +24,9 @@ bool SubmitToComputeQueue(
 	VkCommandBuffer commandBuffer,
 	uint64_t *outTimelineValue);
 
-bool RecordHzbAsyncCullPass(
-	VkCommandBuffer asyncCommandBuffer,
-	VulkanContextState &context,
-	RenderState &render,
-	const float (&inverseViewProjection)[16],
-	uint32_t chunkDescriptorCount);
-
-bool SubmitHzbAsyncCullToComputeQueue(
+bool SubmitToComputeQueue(
 	VulkanContextState *context,
-	VkCommandBuffer asyncCommandBuffer,
+	VkCommandBuffer commandBuffer,
 	uint64_t *outTimelineValue);
 
 } // namespace projectv::render

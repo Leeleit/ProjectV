@@ -306,12 +306,7 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 					"failed to allocate RTX shadow mask fallback image");
 	}
 
-	// EVIL: deferred from CreateGraphicsPipeline (8x V C bug: descriptor set writes
-	// happened before fallback image existed). Now fallback is ready, do the writes
-	// so bindings 11/12 get a valid imageView instead of null. Failures here are
-	// non-fatal — subsequent per-frame RefreshGraphicsResourceBindings in swapchain
-	// recreation will retry with current state.
-	RefreshGraphicsResourceBindings(&state->context(), &state->render());
+	RefreshGraphicsResourceBindings(&state->context(), &state->render()); // EVIL: deferred descriptor writes until fallback images exist (8x V C bug).
 
 	if (projectv::render::IsVolumetricFogEnabled()) {
 		if (!projectv::render::CreateVolumetricFogResources(&state->context(), &state->render())) {
@@ -338,17 +333,14 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 					"RTX-capable GPU required (NVIDIA RTX 20 series or newer with RT cores)");
 	}
 
-	// EVIL: re-run RefreshGraphicsResourceBindings now that rayTracedShadows is
-	// allocated. The earlier call (line 308) ran before rayTracedShadows was set
-	// on RenderState, so the rtxTlas binding (binding 13) was skipped. Without
-	// this second pass, the rtxTlas descriptor is never updated and ray query
-	// dispatch in voxel.frag.rtx.spv reads an undefined handle.
-	RefreshGraphicsResourceBindings(&state->context(), &state->render());
+	RefreshGraphicsResourceBindings(&state->context(), &state->render()); // EVIL: re-run after rayTracedShadows allocation so binding 13 TLAS is updated.
 
 	if (!projectv::render::CreateRtxGiProbeResources(&state->context(), &state->render())) {
 		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
 					"InitVulkan.CreateRtxGiProbeResources: probe field init failed; shader will fall back to VCT diffuse");
 	}
+
+	RefreshGraphicsResourceBindings(&state->context(), &state->render()); // 3rd pass: rtxGiProbes ready → bindings 14-17 now writable
 
 	if (projectv::render::IsAsyncComputeEnabled()) {
 		if (!projectv::render::EnsureAsyncComputeResources(&state->context())) {
