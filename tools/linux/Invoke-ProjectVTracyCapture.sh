@@ -23,8 +23,13 @@
 #       [--build-dir build/linux-clang-debug] \
 #       [--output build/tracy-captures/phase3.tracy] \
 #       [--frames 120] [--warmup 30] \
-#       [--timeout 180] \
-#       [--validation ON|OFF]
+#       [--timeout 60] \
+#       [--validation ON|OFF] \
+#       [--smoke]
+#
+# The --smoke flag is a convenience that runs a minimal 1-frame capture with
+# no warmup and a short timeout; it is equivalent to --frames 1 --warmup 0
+# --timeout 30.
 #
 # Exit code:
 #   0  capture succeeded and .tracy file was written
@@ -43,13 +48,14 @@ build_dir="${PROJECT_ROOT}/build/linux-clang-debug"
 output_path=""
 frames="120"
 warmup="30"
-total_timeout="180"
+total_timeout="60"
 validation="OFF"
+smoke_mode="false"
 tracy_capture="${PROJECT_ROOT}/build/tracy-capture-cli/tracy-capture"
 tracy_port="8086"
 
 usage() {
-    sed -n '2,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,42p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     exit 1
 }
 
@@ -62,10 +68,17 @@ while [[ $# -gt 0 ]]; do
         --timeout)        total_timeout="$2"; shift 2 ;;
         --validation)     validation="$2"; shift 2 ;;
         --tracy-capture)  tracy_capture="$2"; shift 2 ;;
+        --smoke)          smoke_mode="true"; shift ;;
         -h|--help)        usage ;;
         *)                printf 'unknown argument: %s\n' "$1" >&2; usage ;;
     esac
 done
+
+if [[ "${smoke_mode}" == "true" ]]; then
+    frames="1"
+    warmup="0"
+    total_timeout="30"
+fi
 
 exe_path="${build_dir}/bin/ProjectV"
 if [[ ! -x "${exe_path}" ]]; then
