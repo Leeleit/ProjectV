@@ -1237,6 +1237,7 @@ projectv_test_add_modules(ProjectVVolumetricFogTests)
 add_executable(ProjectVCloudscapeTests
         CloudscapeTests.cpp
         ${CMAKE_SOURCE_DIR}/src/render/Cloudscape.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/CloudscapeResources.cpp
         ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
         ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
