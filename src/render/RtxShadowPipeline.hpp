@@ -45,6 +45,11 @@ class RtxShadowPipeline {
 	VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
 	VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
 	VkPipeline m_pipeline = VK_NULL_HANDLE;
+
+	// Pipeline-library path. Kept as members so Shutdown can destroy them in order.
+	VkPipeline m_rayGenLibrary = VK_NULL_HANDLE;
+	VkPipeline m_missLibrary = VK_NULL_HANDLE;
+	VkPipeline m_hitGroupLibrary = VK_NULL_HANDLE;
 };
 
 } // namespace projectv::render
