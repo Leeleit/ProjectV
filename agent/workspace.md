@@ -18,7 +18,9 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
-**2026-07-14 Phase 4 exit:** Hardware-gated Vulkan 1.4 features + Phase 3 carry-over landed on `master`. Active plan: `docs/superpowers/plans/2026-07-14-vulkan-1.4-phase-4-hardware-gated.md` (supersedes 2026-07-12 draft).
+**2026-07-14:** Default branch renamed `master` → `main` (AGENTS.md §5.4, CI, active plans/docs). Legacy archives left as historical.
+
+**2026-07-14 Phase 4 exit:** Hardware-gated Vulkan 1.4 features + Phase 3 carry-over landed on `main`. Active plan: `docs/superpowers/plans/2026-07-14-vulkan-1.4-phase-4-hardware-gated.md` (supersedes 2026-07-12 draft).
 
 ### Phase 4 exit report
 
@@ -356,7 +358,7 @@ views and exited cleanly. Only pre-existing Vulkan validation warnings remain (D
 
 Свежий baseline после operator-инициированного reset `2026-06-24`:
 - 274 pre-reset коммитов squashed в один `chore(reset): pre-fresh-start baseline`
-  (`ec6ce4d`). Только master branch; `forge/rtx-feature-lab`,
+  (`ec6ce4d`). Только `main` branch; `forge/rtx-feature-lab`,
   `forge/backlog-diversification` удалены.
 - `legacy/docs/archive/2026-06-24-pre-reset-snapshot/` — полный pre-reset git history
   bundle + 4 service files (`CHANGELOG.md`, `COMMENTS.md`, `knowledge.md`,
