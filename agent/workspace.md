@@ -18,8 +18,10 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
-**2026-07-14 session (Vulkan 1.4 Phase 3 performance):** Phase 3 partially completed; measurement gate could not be satisfied in headless CLI.
-- Phase 3 setup: Tracy CLI capture tools (`tracy-capture`/`tracy-csvexport`) require CPM downloads of capstone/freetype/zstd/imgui/etc. and timed out during CMake configure; NSight Graphics is not available. Performance baseline therefore not established. Implemented tasks 3.1 and 3.5 anyway because they are low-risk and correctness-verifiable; deferred 3.2-3.4 pending measurable baseline or operator go-ahead.
+**2026-07-14 session (Vulkan 1.4 Phase 3 performance):** Phase 3 partially completed; measurement gate could not be satisfied in headless CLI until Tracy CLI was rebuilt.
+- Phase 3 setup (initial): Tracy's own `external/tracy/capture` CMake could not configure because `external/tracy/cmake/vendor.cmake` downloads capstone/freetype/zstd/imgui/etc. via CPM and timed out. NSight Graphics is not installed.
+- Tracy CLI build fixed: created `tools/tracy-standalone/capture/CMakeLists.txt`, a minimal build that uses system `libzstd`, downloads only `capstone` 6.0.0-Alpha9 and `ppqsort` 1.0.6, and builds two `TracyServer` variants (`TRACY_NO_STATISTICS` for capture, statistics-enabled for csvexport). Both `tracy-capture` and `tracy-csvexport` now compile and run. Automated capture-to-CSV pipeline is not yet wired to the smoke test.
+- Implemented tasks 3.1 and 3.5 because they are low-risk and correctness-verifiable; deferred 3.2-3.4 pending a working measurement baseline or operator override.
 - Task 3.1 (push descriptors for RT/DDGI per-frame updates):
   - Enabled `pushDescriptor` in `BuildEnabledFeatures14` (`src/render/vulkan/VulkanBootstrapFeatures.cpp`).
   - Added `VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR` to RT shadow pipeline layout (`src/render/RtxShadowPipeline.cpp`) and DDGI compute pipeline layout (`src/render/RtxGiProbesPipeline.cpp`) when the feature is supported.

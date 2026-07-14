@@ -1190,12 +1190,16 @@ benchmark/regression numbers. ON = full atmospheric look.
 
 ## R6. Vulkan 1.4 Phase 3 performance notes (2026-07-14)
 
-- **Measurement baseline unavailable:** Tracy CLI capture tools (`external/tracy/capture`,
-  `external/tracy/csvexport`) cannot be built in this headless CLI environment because
-  `external/tracy/cmake/vendor.cmake` downloads capstone/freetype/zstd/imgui/etc. via CPM
-  and CMake configure times out before completion. NSight Graphics is not installed.
-  Phase 3 tasks 3.2-3.4 are deferred until a measurable baseline is available or the
-  operator explicitly overrides the gate.
+- **Tracy CLI capture tools now build:** `tools/tracy-capture-cli` is a minimal CMake
+  project that builds `tracy-capture` and `tracy-csvexport` without the heavy CPM vendor
+  downloads in `external/tracy/cmake/vendor.cmake`. It uses system `libzstd` and downloads
+  only `capstone` 6.0.0-Alpha9 and `ppqsort` 1.0.6 via `FetchContent`. The two executables
+  need separate `TracyServer` static libraries because capture requires
+  `TRACY_NO_STATISTICS` while csvexport requires statistics support.
+- **Measurement baseline still incomplete:** Tracy CLI tools build, but automated headless
+  capture + CSV analysis pipeline is not wired into the smoke test yet. NSight Graphics is
+  not installed on this host. Phase 3 tasks 3.2-3.4 remain deferred until the operator
+  provides NSight Graphics or approves proceeding without measured gating.
 - **Push descriptors (Task 3.1):** implemented with runtime fallback. When
   `context.features14.pushDescriptor == VK_TRUE`, RT shadow and DDGI compute passes use
   Vulkan 1.4 core `vkCmdPushDescriptorSet` (not the `KHR` alias) and skip descriptor-pool
