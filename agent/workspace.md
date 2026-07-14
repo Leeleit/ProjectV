@@ -18,6 +18,15 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-14 session continuation (Task 3.4):** Added `PROJECTV_RTX_PIPELINE_LIBRARY` env var; async deferred compile remains blocked by driver deadlock.
+- Added `PROJECTV_RTX_PIPELINE_LIBRARY` env var to `src/render/RtxShadowPipeline.cpp`. `ON`/`1` keeps the pipeline-library path (batched deferred host operations, ~15 ms init join); `OFF`/`0` forces the monolithic path (~8 ms init, higher FPS). Default follows device capability.
+- Smoke-test numbers (validation OFF, 10 frames): monolithic mean_ms=1.588; library path mean_ms=1.828. Both paths ready and render voxel-aware RT shadows.
+- Async deferred pipeline compilation was attempted (archived at `legacy/docs/archive/2026-07-14-task34-attempt/`). Offloading `vkCreateRayTracingPipelinesKHR` with `VkDeferredOperationKHR` to a worker thread while the main thread renders deadlocks on this driver/loader; the worker freezes inside the create call and never reaches join. Tested with validation ON and OFF. True non-blocking async requires render-loop restructuring to defer SBT/shadow-mask creation until the pipeline is ready, which is out of scope for the current increment.
+- AGENTS.md §7.2 strengthened: unsuccessful code attempts must be copied to `legacy/` before deletion, not thrown away.
+- Verification: `ninja -C build/linux-clang-debug ProjectV` green, `ctest` 44/44 pass, validation smoke passes for both `PROJECTV_RTX_PIPELINE_LIBRARY=OFF` and default library path.
+
+## Previous session
+
 **2026-07-14 session (Vulkan 1.4 Phase 3 performance):** Phase 3 partially completed; measurement gate could not be satisfied in headless CLI until Tracy CLI was rebuilt.
 - Phase 3 setup (initial): Tracy's own `external/tracy/capture` CMake could not configure because `external/tracy/cmake/vendor.cmake` downloads capstone/freetype/zstd/imgui/etc. via CPM and timed out. NSight Graphics is not installed.
 - Tracy CLI build fixed: created `tools/tracy-standalone/capture/CMakeLists.txt`, a minimal build that uses system `libzstd`, downloads only `capstone` 6.0.0-Alpha9 and `ppqsort` 1.0.6, and builds two `TracyServer` variants (`TRACY_NO_STATISTICS` for capture, statistics-enabled for csvexport). Both `tracy-capture` and `tracy-csvexport` now compile and run. Automated capture-to-CSV pipeline is not yet wired to the smoke test.

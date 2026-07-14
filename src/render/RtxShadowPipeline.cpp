@@ -1,10 +1,12 @@
 #include "render/RtxShadowPipeline.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <array>
+#include <cstring>
 #include <future>
 #include <vector>
 
 #include "SDL3/SDL_log.h"
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
@@ -149,8 +151,26 @@ bool RtxShadowPipeline::Initialize(
 		return false;
 	}
 
-	const bool usePipelineLibraries = context.rayTracing.pipelineLibrary;
-	const bool useDeferredHostOperations = context.rayTracing.deferredHostOperations;
+	const bool deviceSupportsPipelineLibrary = context.rayTracing.pipelineLibrary;
+	const char *const pipelineLibraryEnv = projectv::core::GetEnvVar("PROJECTV_RTX_PIPELINE_LIBRARY");
+	bool usePipelineLibraries = deviceSupportsPipelineLibrary;
+	if (pipelineLibraryEnv != nullptr) {
+		if (std::strcmp(pipelineLibraryEnv, "OFF") == 0 || std::strcmp(pipelineLibraryEnv, "0") == 0) {
+			usePipelineLibraries = false;
+		} else if (std::strcmp(pipelineLibraryEnv, "ON") == 0 || std::strcmp(pipelineLibraryEnv, "1") == 0) {
+			usePipelineLibraries = deviceSupportsPipelineLibrary;
+			if (!deviceSupportsPipelineLibrary) {
+				SDL_Log("Render: RtxShadowPipeline: PROJECTV_RTX_PIPELINE_LIBRARY=ON requested but device does not support pipeline libraries; using monolithic path");
+			}
+		}
+	}
+	const bool useDeferredHostOperations = context.rayTracing.deferredHostOperations && usePipelineLibraries;
+
+	SDL_Log(
+		"Render: RtxShadowPipeline: pipeline library path %s (env=%s device=%d)",
+		usePipelineLibraries ? "enabled" : "disabled",
+		pipelineLibraryEnv != nullptr ? pipelineLibraryEnv : "<unset>",
+		deviceSupportsPipelineLibrary ? 1 : 0);
 
 	{
 		PV_PROFILE_ZONE_N(kZoneCreatePipeline);
