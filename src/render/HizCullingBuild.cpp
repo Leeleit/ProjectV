@@ -1,15 +1,20 @@
+#include "volk.h"
 #include "render/HizCulling.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
-#include "core/RuntimeDiagnostics.hpp"
+#include "core/Types.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 
 namespace projectv::render {
 void BuildHizMipChain(
 	VkCommandBuffer commandBuffer,
 	VkImage depthImage,
 	const VkImageLayout depthImageLayout,
-	const HizBuffer &hizBuffer)
+	const HizBuffer &hizBuffer,
+	RenderState *render,
+	VulkanContextState *context)
 {
 	if (commandBuffer == VK_NULL_HANDLE ||
 		depthImage == VK_NULL_HANDLE ||
@@ -21,6 +26,16 @@ void BuildHizMipChain(
 	if (mipLevels == 0u) {
 		return;
 	}
+
+	const bool useMinReduce =
+		context != nullptr &&
+		context->device != VK_NULL_HANDLE &&
+		render != nullptr &&
+		render->hizMinifyEnabled &&
+		IsHzbMinMipEnabled() &&
+		render->hizMinifyPipeline != VK_NULL_HANDLE &&
+		hizBuffer.mipStorageViewCount >= mipLevels &&
+		(render->hizMinifyUsesPushDescriptors || render->hizMinifyDescriptorSet != VK_NULL_HANDLE);
 
 	VkImageMemoryBarrier2 barriers[2]{};
 	barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -80,95 +95,205 @@ void BuildHizMipChain(
 
 	uint32_t srcWidth = hizBuffer.baseWidth;
 	uint32_t srcHeight = hizBuffer.baseHeight;
-	for (uint32_t mipLevel = 1u; mipLevel < mipLevels; ++mipLevel) {
-		const uint32_t dstWidth = std::max(1u, srcWidth >> 1u);
-		const uint32_t dstHeight = std::max(1u, srcHeight >> 1u);
 
-		VkImageMemoryBarrier2 mipBarrier{};
-		mipBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-		mipBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		mipBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-		mipBarrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		mipBarrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-		mipBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-		mipBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		mipBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		mipBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		mipBarrier.image = hizBuffer.image;
-		mipBarrier.subresourceRange = {
-			VK_IMAGE_ASPECT_COLOR_BIT,
-			mipLevel - 1u,
-			1u,
-			0u,
-			1u,
-		};
-		VkDependencyInfo mipDep{};
-		mipDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-		mipDep.imageMemoryBarrierCount = 1u;
-		mipDep.pImageMemoryBarriers = &mipBarrier;
-		vkCmdPipelineBarrier2(commandBuffer, &mipDep);
+	if (useMinReduce) {
+		for (uint32_t mipLevel = 1u; mipLevel < mipLevels; ++mipLevel) {
+			const uint32_t dstWidth = std::max(1u, srcWidth >> 1u);
+			const uint32_t dstHeight = std::max(1u, srcHeight >> 1u);
 
-		VkImageBlit mipBlit{};
-		mipBlit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mipLevel - 1u, 0u, 1u};
-		mipBlit.srcOffsets[0] = {0, 0, 0};
-		mipBlit.srcOffsets[1] = {
-			static_cast<int32_t>(srcWidth),
-			static_cast<int32_t>(srcHeight),
-			1,
-		};
-		mipBlit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, 0u, 1u};
-		mipBlit.dstOffsets[0] = {0, 0, 0};
-		mipBlit.dstOffsets[1] = {
-			static_cast<int32_t>(dstWidth),
-			static_cast<int32_t>(dstHeight),
-			1,
-		};
-		vkCmdBlitImage(
-			commandBuffer,
-			hizBuffer.image,
-			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			hizBuffer.image,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			1u,
-			&mipBlit,
-			VK_FILTER_LINEAR);
+			VkImageMemoryBarrier2 toGeneral[2]{};
+			toGeneral[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+			toGeneral[0].srcStageMask =
+				(mipLevel == 1u) ? VK_PIPELINE_STAGE_2_TRANSFER_BIT : VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+			toGeneral[0].srcAccessMask =
+				(mipLevel == 1u) ? VK_ACCESS_2_TRANSFER_WRITE_BIT : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+			toGeneral[0].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+			toGeneral[0].dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+			toGeneral[0].oldLayout =
+				(mipLevel == 1u) ? VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
+			toGeneral[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			toGeneral[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toGeneral[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toGeneral[0].image = hizBuffer.image;
+			toGeneral[0].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, mipLevel - 1u, 1u, 0u, 1u};
 
-		srcWidth = dstWidth;
-		srcHeight = dstHeight;
+			toGeneral[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+			toGeneral[1].srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+			toGeneral[1].srcAccessMask = VK_ACCESS_2_NONE;
+			toGeneral[1].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+			toGeneral[1].dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+			toGeneral[1].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			toGeneral[1].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			toGeneral[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toGeneral[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			toGeneral[1].image = hizBuffer.image;
+			toGeneral[1].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, 1u, 0u, 1u};
+
+			VkDependencyInfo genDep{};
+			genDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+			genDep.imageMemoryBarrierCount = 2u;
+			genDep.pImageMemoryBarriers = toGeneral;
+			vkCmdPipelineBarrier2(commandBuffer, &genDep);
+
+			const VkDescriptorImageInfo srcInfo{
+				.sampler = VK_NULL_HANDLE,
+				.imageView = hizBuffer.mipStorageViews[mipLevel - 1u],
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL};
+			const VkDescriptorImageInfo dstInfo{
+				.sampler = VK_NULL_HANDLE,
+				.imageView = hizBuffer.mipStorageViews[mipLevel],
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL};
+			std::array<VkWriteDescriptorSet, 2> writes{};
+			writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writes[0].dstBinding = 0;
+			writes[0].descriptorCount = 1u;
+			writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			writes[0].pImageInfo = &srcInfo;
+			writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writes[1].dstBinding = 1;
+			writes[1].descriptorCount = 1u;
+			writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			writes[1].pImageInfo = &dstInfo;
+
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, render->hizMinifyPipeline);
+			if (render->hizMinifyUsesPushDescriptors) {
+				vkCmdPushDescriptorSet(
+					commandBuffer,
+					VK_PIPELINE_BIND_POINT_COMPUTE,
+					render->hizMinifyPipelineLayout,
+					0u,
+					static_cast<uint32_t>(writes.size()),
+					writes.data());
+			} else {
+				writes[0].dstSet = render->hizMinifyDescriptorSet;
+				writes[1].dstSet = render->hizMinifyDescriptorSet;
+				vkUpdateDescriptorSets(context->device, static_cast<uint32_t>(writes.size()), writes.data(), 0u, nullptr);
+				vkCmdBindDescriptorSets(
+					commandBuffer,
+					VK_PIPELINE_BIND_POINT_COMPUTE,
+					render->hizMinifyPipelineLayout,
+					0u,
+					1u,
+					&render->hizMinifyDescriptorSet,
+					0u,
+					nullptr);
+			}
+			const uint32_t groupsX = (dstWidth + 7u) / 8u;
+			const uint32_t groupsY = (dstHeight + 7u) / 8u;
+			vkCmdDispatch(commandBuffer, groupsX, groupsY, 1u);
+
+			srcWidth = dstWidth;
+			srcHeight = dstHeight;
+		}
+
+		VkImageMemoryBarrier2 finalBarrier{};
+		finalBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+		finalBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		finalBarrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		finalBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+		finalBarrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+		finalBarrier.oldLayout = (mipLevels > 1u) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		finalBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		finalBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		finalBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		finalBarrier.image = hizBuffer.image;
+		finalBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, mipLevels, 0u, 1u};
+		VkDependencyInfo finalDep{};
+		finalDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		finalDep.imageMemoryBarrierCount = 1u;
+		finalDep.pImageMemoryBarriers = &finalBarrier;
+		vkCmdPipelineBarrier2(commandBuffer, &finalDep);
+	} else {
+		for (uint32_t mipLevel = 1u; mipLevel < mipLevels; ++mipLevel) {
+			const uint32_t dstWidth = std::max(1u, srcWidth >> 1u);
+			const uint32_t dstHeight = std::max(1u, srcHeight >> 1u);
+
+			VkImageMemoryBarrier2 mipBarrier{};
+			mipBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+			mipBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+			mipBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+			mipBarrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+			mipBarrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+			mipBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+			mipBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			mipBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			mipBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			mipBarrier.image = hizBuffer.image;
+			mipBarrier.subresourceRange = {
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				mipLevel - 1u,
+				1u,
+				0u,
+				1u,
+			};
+			VkDependencyInfo mipDep{};
+			mipDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+			mipDep.imageMemoryBarrierCount = 1u;
+			mipDep.pImageMemoryBarriers = &mipBarrier;
+			vkCmdPipelineBarrier2(commandBuffer, &mipDep);
+
+			VkImageBlit mipBlit{};
+			mipBlit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mipLevel - 1u, 0u, 1u};
+			mipBlit.srcOffsets[0] = {0, 0, 0};
+			mipBlit.srcOffsets[1] = {
+				static_cast<int32_t>(srcWidth),
+				static_cast<int32_t>(srcHeight),
+				1,
+			};
+			mipBlit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, 0u, 1u};
+			mipBlit.dstOffsets[0] = {0, 0, 0};
+			mipBlit.dstOffsets[1] = {
+				static_cast<int32_t>(dstWidth),
+				static_cast<int32_t>(dstHeight),
+				1,
+			};
+			vkCmdBlitImage(
+				commandBuffer,
+				hizBuffer.image,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				hizBuffer.image,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1u,
+				&mipBlit,
+				VK_FILTER_LINEAR);
+
+			srcWidth = dstWidth;
+			srcHeight = dstHeight;
+		}
+
+		VkImageMemoryBarrier2 finalBarriers[2]{};
+		finalBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+		finalBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+		finalBarriers[0].srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		finalBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+		finalBarriers[0].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+		finalBarriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		finalBarriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		finalBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		finalBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		finalBarriers[0].image = hizBuffer.image;
+		finalBarriers[0].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, mipLevels - 1u, 1u, 0u, 1u};
+
+		if (mipLevels > 1u) {
+			finalBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+			finalBarriers[1].srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+			finalBarriers[1].srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+			finalBarriers[1].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+			finalBarriers[1].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+			finalBarriers[1].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			finalBarriers[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			finalBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			finalBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			finalBarriers[1].image = hizBuffer.image;
+			finalBarriers[1].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, mipLevels - 1u, 0u, 1u};
+		}
+
+		VkDependencyInfo finalDep{};
+		finalDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		finalDep.imageMemoryBarrierCount = (mipLevels > 1u) ? 2u : 1u;
+		finalDep.pImageMemoryBarriers = finalBarriers;
+		vkCmdPipelineBarrier2(commandBuffer, &finalDep);
 	}
-
-	VkImageMemoryBarrier2 finalBarriers[2]{};
-	finalBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	finalBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-	finalBarriers[0].srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-	finalBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-	finalBarriers[0].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-	finalBarriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	finalBarriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	finalBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	finalBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	finalBarriers[0].image = hizBuffer.image;
-	finalBarriers[0].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, mipLevels - 1u, 1u, 0u, 1u};
-
-	if (mipLevels > 1u) {
-		finalBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-		finalBarriers[1].srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-		finalBarriers[1].srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-		finalBarriers[1].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-		finalBarriers[1].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-		finalBarriers[1].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-		finalBarriers[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		finalBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		finalBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		finalBarriers[1].image = hizBuffer.image;
-		finalBarriers[1].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, mipLevels - 1u, 0u, 1u};
-	}
-
-	VkDependencyInfo finalDep{};
-	finalDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	finalDep.imageMemoryBarrierCount = (mipLevels > 1u) ? 2u : 1u;
-	finalDep.pImageMemoryBarriers = finalBarriers;
-	vkCmdPipelineBarrier2(commandBuffer, &finalDep);
 
 	VkImageMemoryBarrier2 restoreDepth{};
 	restoreDepth.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;

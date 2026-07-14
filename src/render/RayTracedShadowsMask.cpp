@@ -87,6 +87,28 @@ bool RayTracedShadows::RecreateShadowMaskForExtent(const VulkanContextState &con
 	return true;
 }
 
+bool RayTracedShadows::TryFinishVoxelAwareRtxResources(const VulkanContextState &context)
+{
+	if (m_voxelAwareRtxActive) {
+		m_voxelAwareRtxPending = false;
+		return true;
+	}
+	if (!m_voxelAwareRtxPending || m_voxelAwareRtxFailed) {
+		return false;
+	}
+	if (!CreateVoxelAwareRtxResources(context)) {
+		m_voxelAwareRtxFailed = true;
+		m_voxelAwareRtxPending = false;
+		SDL_Log("Render: RayTracedShadows: voxel-aware RT pipeline unavailable; falling back to ray-query AABB shadows");
+		return false;
+	}
+	if (!InitializeShadowMaskClear(context)) {
+		SDL_Log("Render: RayTracedShadows: shadow mask clear failed; first frame may sample undefined data");
+	}
+	m_voxelAwareRtxPending = false;
+	return true;
+}
+
 bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &context)
 {
 	if (!context.rayTracing.rayTracingPipeline) {
@@ -104,6 +126,7 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	pipelineConfig.shaderGroupHandleSize = context.rayTracing.shaderGroupHandleSize;
 	pipelineConfig.shaderGroupBaseAlignment = context.rayTracing.shaderGroupBaseAlignment;
 	pipelineConfig.shaderGroupHandleAlignment = context.rayTracing.shaderGroupHandleAlignment;
+	pipelineConfig.shaderInvocationReorderEnabled = context.rayTracingInvocationReorderEnabled;
 	if (!m_rtxPipeline.Initialize(context, pipelineConfig)) {
 		SDL_Log("Render: RtxShadowPipeline.Initialize failed; voxel-aware RT shadows disabled");
 		return false;
@@ -255,6 +278,7 @@ void RayTracedShadows::ReleaseVoxelAwareRtxResources(const VulkanContextState &c
 	m_shadowMaskWidth = 0u;
 	m_shadowMaskHeight = 0u;
 	m_voxelAwareRtxActive = false;
+	m_voxelAwareRtxPending = false;
 }
 
 bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &context) const

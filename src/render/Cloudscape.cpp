@@ -53,6 +53,7 @@ void DestroyCloudscapeResources(VulkanContextState *context, RenderState *render
 		render->cloudscapeNoiseImage = VK_NULL_HANDLE;
 		render->cloudscapeNoiseAllocation = nullptr;
 	}
+	render->cloudscapeNoiseHostCopied = false;
 	render->cloudscapePipelineEnabled = false;
 }
 

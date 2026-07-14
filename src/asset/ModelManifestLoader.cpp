@@ -54,7 +54,15 @@ bool LoadAndRegisterModelsFromManifest(
 		const BakedPrimitive &prim = baked.primitives.front();
 		MeshGpuResources gpu;
 		std::string uploadError;
-		if (!UploadBakedPrimitiveToGpu(context->device, context->allocator, commandPool, queue, prim, gpu, &uploadError)) {
+		if (!UploadBakedPrimitiveToGpu(
+				context->device,
+				context->allocator,
+				commandPool,
+				queue,
+				context->indexTypeUint8,
+				prim,
+				gpu,
+				&uploadError)) {
 			runtime::LogRuntimeFailure(
 				"Model",
 				"LoadAndRegisterModelsFromManifest.UploadBakedPrimitiveToGpu",
@@ -118,6 +126,7 @@ bool LoadAndRegisterModelsFromManifest(
 		};
 		instance.vertexBuffer = reg.gpu.vertexBuffer;
 		instance.indexBuffer = reg.gpu.indexBuffer;
+		instance.indexType = reg.gpu.indexType;
 		instance.indexCount = reg.gpu.indexCount;
 		instance.sourceAabbMin = {
 			static_cast<float>(reg.aabbMin[0]),

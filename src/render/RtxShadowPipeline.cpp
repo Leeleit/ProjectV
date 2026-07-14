@@ -172,6 +172,19 @@ bool RtxShadowPipeline::Initialize(
 		pipelineLibraryEnv != nullptr ? pipelineLibraryEnv : "<unset>",
 		deviceSupportsPipelineLibrary ? 1 : 0);
 
+	const uint32_t serSpecializationValue = config.shaderInvocationReorderEnabled ? 1u : 0u;
+	const VkSpecializationMapEntry serSpecializationEntry{
+		.constantID = 0u,
+		.offset = 0u,
+		.size = sizeof(serSpecializationValue),
+	};
+	const VkSpecializationInfo serSpecialization{
+		.mapEntryCount = 1u,
+		.pMapEntries = &serSpecializationEntry,
+		.dataSize = sizeof(serSpecializationValue),
+		.pData = &serSpecializationValue,
+	};
+
 	{
 		PV_PROFILE_ZONE_N(kZoneCreatePipeline);
 
@@ -198,7 +211,7 @@ bool RtxShadowPipeline::Initialize(
 			};
 
 			const std::array<VkPipelineShaderStageCreateInfo, 1> rayGenStages{{
-				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pSpecializationInfo = &serSpecialization, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
 			}};
 			std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> rayGenGroups{};
 			rayGenGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
@@ -334,7 +347,7 @@ bool RtxShadowPipeline::Initialize(
 			}
 		} else {
 			const std::array<VkPipelineShaderStageCreateInfo, 4> stages{{
-				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pSpecializationInfo = &serSpecialization, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
 				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
 				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, .module = m_closestHitModule, .pName = "main"},
 				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_MISS_BIT_KHR, .module = m_missModule, .pName = "main"},
@@ -380,10 +393,11 @@ bool RtxShadowPipeline::Initialize(
 	}
 
 	SDL_Log(
-		"Render: RtxShadowPipeline: ready (sbtHandleSize=%u sbtBaseAlign=%u sbtHandleAlign=%u)",
+		"Render: RtxShadowPipeline: ready (sbtHandleSize=%u sbtBaseAlign=%u sbtHandleAlign=%u serGate=%d)",
 		config.shaderGroupHandleSize,
 		config.shaderGroupBaseAlignment,
-		config.shaderGroupHandleAlignment);
+		config.shaderGroupHandleAlignment,
+		config.shaderInvocationReorderEnabled ? 1 : 0);
 	return true;
 }
 

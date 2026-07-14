@@ -277,29 +277,64 @@ bool RecordPostFxPass(
 
 	// Composite pass: sceneColor + depth + bloomResult -> postFxOutput.
 	{
-		const VkDescriptorSet descriptorSet = allocateSet();
-		if (descriptorSet == VK_NULL_HANDLE) {
-			return false;
-		}
 		push.params0[3] = aerialEnabled ? 1.0f : 0.0f;
-
-		updateSet(
-			descriptorSet,
-			render.postFxLinearSampler,
-			render.sceneColorImageView,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			render.depthImageView,
-			VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
-			render.postFxOutputImageView,
-			VK_IMAGE_LAYOUT_GENERAL,
-			bloomEnabled ? render.bloomResultImageView : render.sceneColorImageView,
-			bloomEnabled ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			true,
-			bloomEnabled);
-
 		const uint32_t groupsX = (extent.width + 15) / 16;
 		const uint32_t groupsY = (extent.height + 15) / 16;
-		DispatchPostFx(commandBuffer, render.bloomCompositePipeline, render.postFxPipelineLayout, descriptorSet, push, groupsX, groupsY);
+
+		if (render.postFxBindlessEnabled &&
+			frameIndex < render.postFxBindlessDescriptorSets.size() &&
+			render.postFxBindlessCompositePipeline != VK_NULL_HANDLE) {
+			const VkDescriptorSet descriptorSet = render.postFxBindlessDescriptorSets[frameIndex];
+			const VkImageView bloomView = bloomEnabled ? render.bloomResultImageView : render.sceneColorImageView;
+			const VkImageLayout bloomLayout =
+				bloomEnabled ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			std::array<VkDescriptorImageInfo, 3> samplerInfos{};
+			samplerInfos[0] = {render.postFxLinearSampler, render.sceneColorImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+			samplerInfos[1] = {render.postFxLinearSampler, render.depthImageView, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL};
+			samplerInfos[2] = {render.postFxLinearSampler, bloomView, bloomLayout};
+			const VkDescriptorImageInfo storageInfo{VK_NULL_HANDLE, render.postFxOutputImageView, VK_IMAGE_LAYOUT_GENERAL};
+			std::array<VkWriteDescriptorSet, 2> writes{};
+			writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writes[0].dstSet = descriptorSet;
+			writes[0].dstBinding = 0;
+			writes[0].descriptorCount = 1u;
+			writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+			writes[0].pImageInfo = &storageInfo;
+			writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writes[1].dstSet = descriptorSet;
+			writes[1].dstBinding = 1;
+			writes[1].descriptorCount = 3u;
+			writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			writes[1].pImageInfo = samplerInfos.data();
+			vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+			DispatchPostFx(
+				commandBuffer,
+				render.postFxBindlessCompositePipeline,
+				render.postFxBindlessPipelineLayout,
+				descriptorSet,
+				push,
+				groupsX,
+				groupsY);
+		} else {
+			const VkDescriptorSet descriptorSet = allocateSet();
+			if (descriptorSet == VK_NULL_HANDLE) {
+				return false;
+			}
+			updateSet(
+				descriptorSet,
+				render.postFxLinearSampler,
+				render.sceneColorImageView,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				render.depthImageView,
+				VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
+				render.postFxOutputImageView,
+				VK_IMAGE_LAYOUT_GENERAL,
+				bloomEnabled ? render.bloomResultImageView : render.sceneColorImageView,
+				bloomEnabled ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				true,
+				bloomEnabled);
+			DispatchPostFx(commandBuffer, render.bloomCompositePipeline, render.postFxPipelineLayout, descriptorSet, push, groupsX, groupsY);
+		}
 	}
 
 	// Transition postFxOutput to TRANSFER_SRC for blit.

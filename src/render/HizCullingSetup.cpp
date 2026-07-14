@@ -8,6 +8,7 @@
 #include <limits>
 #include <vector>
 
+#include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
@@ -123,6 +124,17 @@ bool IsHzbSmartBlendWidthEnabled()
 	return false;
 }
 
+bool IsHzbMinMipEnabled()
+{
+	if (const char *value = core::GetEnvVar("PROJECTV_HZB_MIN_MIP")) {
+		if (value[0] == '0' || (value[0] == 'O' && value[1] == 'F')) {
+			return false;
+		}
+		return value[0] != '\0';
+	}
+	return true; // default ON once minify pipeline is available
+}
+
 uint32_t ComputeBlendWidthForChunkMip(
 	const uint32_t projectedExtentXTexels,
 	const uint32_t projectedExtentYTexels,
@@ -177,7 +189,8 @@ bool CreateHizBuffer(
 	imageInfo.arrayLayers = 1u;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+					  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
@@ -254,6 +267,33 @@ bool CreateHizBuffer(
 	outBuffer.baseWidth = baseWidth;
 	outBuffer.baseHeight = baseHeight;
 	outBuffer.mipLevelCount = mipLevels;
+	outBuffer.mipStorageViewCount = 0u;
+	outBuffer.mipStorageViews = {};
+	const uint32_t viewCount = std::min(mipLevels, static_cast<uint32_t>(outBuffer.mipStorageViews.size()));
+	for (uint32_t mip = 0u; mip < viewCount; ++mip) {
+		VkImageViewCreateInfo mipViewInfo{};
+		mipViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		mipViewInfo.image = outBuffer.image;
+		mipViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		mipViewInfo.format = VK_FORMAT_R32_SFLOAT;
+		mipViewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, mip, 1u, 0u, 1u};
+		if (vkCreateImageView(context->device, &mipViewInfo, nullptr, &outBuffer.mipStorageViews[mip]) != VK_SUCCESS) {
+			for (uint32_t destroyMip = 0u; destroyMip < mip; ++destroyMip) {
+				vkDestroyImageView(context->device, outBuffer.mipStorageViews[destroyMip], nullptr);
+				outBuffer.mipStorageViews[destroyMip] = VK_NULL_HANDLE;
+			}
+			vkDestroySampler(context->device, outBuffer.sampler, nullptr);
+			vkDestroyImageView(context->device, outBuffer.imageView, nullptr);
+			vmaDestroyImage(context->allocator, outBuffer.image, outBuffer.allocation);
+			outBuffer = {};
+			runtime::LogRuntimeFailure(
+				"Render",
+				"CreateHizBuffer.mipStorageView",
+				"failed to create Hi-Z per-mip storage view");
+			return false;
+		}
+		outBuffer.mipStorageViewCount = mip + 1u;
+	}
 
 	SetVulkanObjectName(
 		*context,
@@ -278,6 +318,15 @@ void DestroyHizBuffer(VulkanContextState *context, HizBuffer &buffer)
 	if (!context || !context->allocator) {
 		return;
 	}
+	if (context->device != VK_NULL_HANDLE) {
+		for (uint32_t mip = 0u; mip < buffer.mipStorageViewCount; ++mip) {
+			if (buffer.mipStorageViews[mip] != VK_NULL_HANDLE) {
+				vkDestroyImageView(context->device, buffer.mipStorageViews[mip], nullptr);
+				buffer.mipStorageViews[mip] = VK_NULL_HANDLE;
+			}
+		}
+	}
+	buffer.mipStorageViewCount = 0u;
 	if (buffer.sampler != VK_NULL_HANDLE && context->device != VK_NULL_HANDLE) {
 		vkDestroySampler(context->device, buffer.sampler, nullptr);
 	}
@@ -467,6 +516,113 @@ bool CreateHizCullingPipeline(
 	}
 
 	render->hizCullingEnabled = true;
+
+	// HZB min-reduction compute (Task 4.0). Optional; blit LINEAR path remains if this fails.
+	render->hizMinifyEnabled = false;
+	render->hizMinifyUsesPushDescriptors = false;
+	if (IsHzbMinMipEnabled()) {
+		const std::vector<char> minifyCode = ReadShaderFile("hiz_minify.comp.spv");
+		if (!minifyCode.empty()) {
+			const bool usePushDescriptors = context->features14.pushDescriptor == VK_TRUE;
+			std::array minifyBindings = {
+				VkDescriptorSetLayoutBinding{
+					.binding = 0,
+					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					.descriptorCount = 1u,
+					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+					.pImmutableSamplers = nullptr},
+				VkDescriptorSetLayoutBinding{
+					.binding = 1,
+					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					.descriptorCount = 1u,
+					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+					.pImmutableSamplers = nullptr}};
+			VkDescriptorSetLayoutCreateInfo minifyLayoutInfo{};
+			minifyLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			minifyLayoutInfo.flags =
+				usePushDescriptors ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR : 0u;
+			minifyLayoutInfo.bindingCount = static_cast<uint32_t>(minifyBindings.size());
+			minifyLayoutInfo.pBindings = minifyBindings.data();
+			if (vkCreateDescriptorSetLayout(
+					context->device,
+					&minifyLayoutInfo,
+					nullptr,
+					&render->hizMinifyDescriptorSetLayout) == VK_SUCCESS) {
+				VkPipelineLayoutCreateInfo minifyPipeLayoutInfo{};
+				minifyPipeLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+				minifyPipeLayoutInfo.setLayoutCount = 1u;
+				minifyPipeLayoutInfo.pSetLayouts = &render->hizMinifyDescriptorSetLayout;
+				if (vkCreatePipelineLayout(
+						context->device,
+						&minifyPipeLayoutInfo,
+						nullptr,
+						&render->hizMinifyPipelineLayout) == VK_SUCCESS) {
+					VkShaderModuleCreateInfo minifyModuleInfo{};
+					minifyModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+					minifyModuleInfo.codeSize = minifyCode.size();
+					minifyModuleInfo.pCode = reinterpret_cast<const uint32_t *>(minifyCode.data());
+					if (vkCreateShaderModule(
+							context->device,
+							&minifyModuleInfo,
+							nullptr,
+							&render->hizMinifyShaderModule) == VK_SUCCESS) {
+						VkComputePipelineCreateInfo minifyPipelineInfo{};
+						minifyPipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+						minifyPipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+						minifyPipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+						minifyPipelineInfo.stage.module = render->hizMinifyShaderModule;
+						minifyPipelineInfo.stage.pName = "main";
+						minifyPipelineInfo.layout = render->hizMinifyPipelineLayout;
+						if (vkCreateComputePipelines(
+								context->device,
+								context->pipelineCache,
+								1u,
+								&minifyPipelineInfo,
+								nullptr,
+								&render->hizMinifyPipeline) == VK_SUCCESS) {
+							bool descriptorsReady = usePushDescriptors;
+							if (!usePushDescriptors) {
+								VkDescriptorPoolSize minifyPoolSize{
+									.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+									.descriptorCount = 2u};
+								VkDescriptorPoolCreateInfo minifyPoolInfo{};
+								minifyPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+								minifyPoolInfo.maxSets = 1u;
+								minifyPoolInfo.poolSizeCount = 1u;
+								minifyPoolInfo.pPoolSizes = &minifyPoolSize;
+								if (vkCreateDescriptorPool(
+										context->device,
+										&minifyPoolInfo,
+										nullptr,
+										&render->hizMinifyDescriptorPool) == VK_SUCCESS) {
+									VkDescriptorSetAllocateInfo minifyAlloc{};
+									minifyAlloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+									minifyAlloc.descriptorPool = render->hizMinifyDescriptorPool;
+									minifyAlloc.descriptorSetCount = 1u;
+									minifyAlloc.pSetLayouts = &render->hizMinifyDescriptorSetLayout;
+									descriptorsReady = vkAllocateDescriptorSets(
+														   context->device,
+														   &minifyAlloc,
+														   &render->hizMinifyDescriptorSet) == VK_SUCCESS;
+								}
+							}
+							if (descriptorsReady) {
+								render->hizMinifyUsesPushDescriptors = usePushDescriptors;
+								render->hizMinifyEnabled = true;
+								SDL_Log(
+									"Render: HZB min-reduction mip pipeline ready (pushDescriptors=%d)",
+									usePushDescriptors ? 1 : 0);
+							}
+						}
+					}
+				}
+			}
+		}
+		if (!render->hizMinifyEnabled) {
+			SDL_Log("Render: HZB min-reduction pipeline unavailable; using LINEAR blit mips");
+		}
+	}
+
 	return true;
 }
 
@@ -503,8 +659,31 @@ void DestroyHizCullingPipeline(
 			vkDestroyDescriptorPool(context->device, render->hizCullingDescriptorPool, nullptr);
 			render->hizCullingDescriptorPool = VK_NULL_HANDLE;
 		}
+		if (render->hizMinifyPipeline != VK_NULL_HANDLE) {
+			vkDestroyPipeline(context->device, render->hizMinifyPipeline, nullptr);
+			render->hizMinifyPipeline = VK_NULL_HANDLE;
+		}
+		if (render->hizMinifyPipelineLayout != VK_NULL_HANDLE) {
+			vkDestroyPipelineLayout(context->device, render->hizMinifyPipelineLayout, nullptr);
+			render->hizMinifyPipelineLayout = VK_NULL_HANDLE;
+		}
+		if (render->hizMinifyDescriptorPool != VK_NULL_HANDLE) {
+			vkDestroyDescriptorPool(context->device, render->hizMinifyDescriptorPool, nullptr);
+			render->hizMinifyDescriptorPool = VK_NULL_HANDLE;
+		}
+		render->hizMinifyDescriptorSet = VK_NULL_HANDLE;
+		if (render->hizMinifyDescriptorSetLayout != VK_NULL_HANDLE) {
+			vkDestroyDescriptorSetLayout(context->device, render->hizMinifyDescriptorSetLayout, nullptr);
+			render->hizMinifyDescriptorSetLayout = VK_NULL_HANDLE;
+		}
+		if (render->hizMinifyShaderModule != VK_NULL_HANDLE) {
+			vkDestroyShaderModule(context->device, render->hizMinifyShaderModule, nullptr);
+			render->hizMinifyShaderModule = VK_NULL_HANDLE;
+		}
 	}
 
 	render->hizCullingEnabled = false;
+	render->hizMinifyEnabled = false;
+	render->hizMinifyUsesPushDescriptors = false;
 }
 } // namespace projectv::render

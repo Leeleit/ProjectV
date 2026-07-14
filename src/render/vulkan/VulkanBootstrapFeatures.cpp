@@ -29,6 +29,21 @@ constexpr char kRayQueryExtension[] = "VK_KHR_ray_query";
 constexpr char kRayTracingPipelineExtension[] = "VK_KHR_ray_tracing_pipeline";
 constexpr char kPipelineLibraryExtension[] = "VK_KHR_pipeline_library";
 constexpr char kDeferredHostOperationsExtension[] = "VK_KHR_deferred_host_operations";
+constexpr char kShaderInvocationReorderExtension[] = VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME;
+constexpr char kPresentIdExtension[] = VK_KHR_PRESENT_ID_EXTENSION_NAME;
+constexpr char kPresentWaitExtension[] = VK_KHR_PRESENT_WAIT_EXTENSION_NAME;
+
+bool IsEnvEnabled(const char *const name)
+{
+	const char *const value = projectv::core::GetEnvVar(name);
+	return value != nullptr && (std::strcmp(value, "ON") == 0 || std::strcmp(value, "1") == 0);
+}
+
+bool IsEnvSetToOn(const char *const name)
+{
+	const char *const value = projectv::core::GetEnvVar(name);
+	return value != nullptr && std::strcmp(value, "ON") == 0;
+}
 
 bool CheckDeviceExtensionSupport(const VkPhysicalDevice physicalDevice)
 {
@@ -102,6 +117,37 @@ bool HasDeviceExtension(
 	}
 
 	return false;
+}
+
+void ProbePresentFeatures(
+	const VkPhysicalDevice physicalDevice,
+	const bool hasPresentIdExtension,
+	const bool hasPresentWaitExtension,
+	VkPhysicalDevicePresentIdFeaturesKHR *const outPresentIdFeatures,
+	VkPhysicalDevicePresentWaitFeaturesKHR *const outPresentWaitFeatures)
+{
+	if (!hasPresentIdExtension && !hasPresentWaitExtension) {
+		return;
+	}
+
+	VkPhysicalDevicePresentIdFeaturesKHR presentIdFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR, nullptr};
+	VkPhysicalDevicePresentWaitFeaturesKHR presentWaitFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, nullptr};
+	if (hasPresentIdExtension) {
+		presentIdFeatures.pNext = hasPresentWaitExtension ? &presentWaitFeatures : nullptr;
+	}
+	VkPhysicalDeviceFeatures2 features2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+	features2.pNext = hasPresentIdExtension
+		? static_cast<void *>(&presentIdFeatures)
+		: static_cast<void *>(&presentWaitFeatures);
+	vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
+	if (hasPresentIdExtension) {
+		*outPresentIdFeatures = presentIdFeatures;
+	}
+	if (hasPresentWaitExtension) {
+		*outPresentWaitFeatures = presentWaitFeatures;
+	}
 }
 
 bool FindGraphicsPresentQueueFamily(
@@ -364,6 +410,17 @@ VkPhysicalDeviceVulkan12Features BuildEnabledFeatures12(const PhysicalDeviceCand
 	if (selected.supportsAccelerationStructure && selected.supportsRayQuery && selected.rayTracingSupport.bufferDeviceAddress) {
 		enabled.bufferDeviceAddress = VK_TRUE;
 	}
+	if (IsEnvEnabled("PROJECTV_BINDLESS")) {
+		enabled.descriptorIndexing = selected.features12.descriptorIndexing ? VK_TRUE : VK_FALSE;
+		enabled.runtimeDescriptorArray = selected.features12.runtimeDescriptorArray ? VK_TRUE : VK_FALSE;
+		enabled.descriptorBindingPartiallyBound = selected.features12.descriptorBindingPartiallyBound ? VK_TRUE : VK_FALSE;
+		enabled.descriptorBindingVariableDescriptorCount =
+			selected.features12.descriptorBindingVariableDescriptorCount ? VK_TRUE : VK_FALSE;
+		enabled.descriptorBindingSampledImageUpdateAfterBind =
+			selected.features12.descriptorBindingSampledImageUpdateAfterBind ? VK_TRUE : VK_FALSE;
+		enabled.shaderSampledImageArrayNonUniformIndexing =
+			selected.features12.shaderSampledImageArrayNonUniformIndexing ? VK_TRUE : VK_FALSE;
+	}
 	return enabled;
 }
 
@@ -384,6 +441,15 @@ VkPhysicalDeviceVulkan14Features BuildEnabledFeatures14(const PhysicalDeviceCand
 	enabled.maintenance5 = selected.features14.maintenance5 ? VK_TRUE : VK_FALSE;
 	enabled.maintenance6 = selected.features14.maintenance6 ? VK_TRUE : VK_FALSE;
 	enabled.pushDescriptor = selected.features14.pushDescriptor ? VK_TRUE : VK_FALSE;
+	enabled.indexTypeUint8 = selected.features14.indexTypeUint8 ? VK_TRUE : VK_FALSE;
+	enabled.dynamicRenderingLocalRead =
+		selected.features14.dynamicRenderingLocalRead && IsEnvSetToOn("PROJECTV_DYNAMIC_RENDERING_LOCAL_READ")
+			? VK_TRUE
+			: VK_FALSE;
+	enabled.shaderFloatControls2 = selected.features14.shaderFloatControls2 ? VK_TRUE : VK_FALSE;
+	if (IsEnvEnabled("PROJECTV_HOST_IMAGE_COPY")) {
+		enabled.hostImageCopy = selected.features14.hostImageCopy ? VK_TRUE : VK_FALSE;
+	}
 	return enabled;
 }
 
@@ -397,6 +463,12 @@ std::vector<const char *> BuildDeviceExtensionList(const PhysicalDeviceCandidate
 	}
 	if (selected.supportsDynamicRenderingUnusedAttachments) {
 		deviceExtensions.push_back(kOptionalDynamicRenderingUnusedAttachmentsExtension);
+	}
+	if (selected.supportsPresentId) {
+		deviceExtensions.push_back(kPresentIdExtension);
+	}
+	if (selected.supportsPresentWait) {
+		deviceExtensions.push_back(kPresentWaitExtension);
 	}
 	const bool meshShaderRequested = projectv::core::GetEnvVar("PROJECTV_MESH_SHADER_PIPELINE") != nullptr;
 	if (meshShaderRequested && selected.supportsMeshShader) {
@@ -414,6 +486,10 @@ std::vector<const char *> BuildDeviceExtensionList(const PhysicalDeviceCandidate
 		}
 		if (selected.rayTracingSupport.deferredHostOperations) {
 			deviceExtensions.push_back(kDeferredHostOperationsExtension);
+		}
+		const char *serEnv = projectv::core::GetEnvVar("PROJECTV_RTX_SER");
+		if (serEnv != nullptr && serEnv[0] != '\0' && serEnv[0] != '0' && selected.rayTracingSupport.shaderInvocationReorder) {
+			deviceExtensions.push_back(kShaderInvocationReorderExtension);
 		}
 	}
 
@@ -463,6 +539,16 @@ bool TryPickPhysicalDevice(
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT supportedDynamicRenderingUnusedAttachmentsFeatures{};
 	const bool deviceHasMeshShader = HasDeviceExtension(physicalDevice, kMeshShaderExtension);
 	VkPhysicalDeviceMeshShaderFeaturesEXT supportedMeshShaderFeatures{};
+	const bool deviceHasPresentId = HasDeviceExtension(physicalDevice, kPresentIdExtension);
+	const bool deviceHasPresentWait = HasDeviceExtension(physicalDevice, kPresentWaitExtension);
+	VkPhysicalDevicePresentIdFeaturesKHR supportedPresentIdFeatures{};
+	VkPhysicalDevicePresentWaitFeaturesKHR supportedPresentWaitFeatures{};
+	ProbePresentFeatures(
+		physicalDevice,
+		deviceHasPresentId,
+		deviceHasPresentWait,
+		&supportedPresentIdFeatures,
+		&supportedPresentWaitFeatures);
 	HardwareRayTracingSupport rtxSupport{};
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR supportedAccelerationStructureFeatures{};
 	VkPhysicalDeviceRayQueryFeaturesKHR supportedRayQueryFeatures{};
@@ -499,6 +585,8 @@ bool TryPickPhysicalDevice(
 	outCandidate->meshShaderFeatures = supportedMeshShaderFeatures;
 	outCandidate->supportsMeshShader = deviceHasMeshShader;
 	outCandidate->dynamicRenderingUnusedAttachmentsFeatures = supportedDynamicRenderingUnusedAttachmentsFeatures;
+	outCandidate->presentIdFeatures = supportedPresentIdFeatures;
+	outCandidate->presentWaitFeatures = supportedPresentWaitFeatures;
 	outCandidate->accelerationStructureFeatures = supportedAccelerationStructureFeatures;
 	outCandidate->rayQueryFeatures = supportedRayQueryFeatures;
 	outCandidate->rayTracingPipelineFeatures = supportedRayTracingPipelineFeatures;
@@ -510,6 +598,9 @@ bool TryPickPhysicalDevice(
 	outCandidate->supportsTracyCalibratedTimestamps =
 		HasDeviceExtension(physicalDevice, kOptionalTracyCalibratedTimestampsExtension);
 	outCandidate->supportsDynamicRenderingUnusedAttachments = deviceHasDynamicRenderingUnusedAttachments;
+	outCandidate->supportsPresentId = deviceHasPresentId && supportedPresentIdFeatures.presentId == VK_TRUE;
+	outCandidate->supportsPresentWait =
+		outCandidate->supportsPresentId && deviceHasPresentWait && supportedPresentWaitFeatures.presentWait == VK_TRUE;
 	return true;
 }
 

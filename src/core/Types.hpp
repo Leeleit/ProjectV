@@ -413,6 +413,7 @@ struct ModelInstanceData {
 	projectv::math::Vec3 sourceAabbMin{};
 	VkBuffer vertexBuffer = VK_NULL_HANDLE;
 	VkBuffer indexBuffer = VK_NULL_HANDLE;
+	VkIndexType indexType = VK_INDEX_TYPE_UINT32;
 	uint32_t indexCount = 0;
 };
 
@@ -515,8 +516,16 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkShaderModule hizCullingShaderModule = VK_NULL_HANDLE;
 	VkDescriptorSetLayout hizCullingDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool hizCullingDescriptorPool = VK_NULL_HANDLE;
+	VkPipelineLayout hizMinifyPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline hizMinifyPipeline = VK_NULL_HANDLE;
+	VkShaderModule hizMinifyShaderModule = VK_NULL_HANDLE;
+	VkDescriptorSetLayout hizMinifyDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool hizMinifyDescriptorPool = VK_NULL_HANDLE;
+	VkDescriptorSet hizMinifyDescriptorSet = VK_NULL_HANDLE;
 	bool hizBufferNeedsInit = false;
 	bool hizCullingEnabled = false;
+	bool hizMinifyEnabled = false;
+	bool hizMinifyUsesPushDescriptors = false;
 
 	VkImageLayout depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkPipeline skyAtmospherePipeline = VK_NULL_HANDLE;
@@ -565,6 +574,7 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkImageView cloudscapeNoiseView = VK_NULL_HANDLE;
 	VmaAllocation cloudscapeNoiseAllocation = nullptr;
 	VkSampler cloudscapeLinearSampler = VK_NULL_HANDLE;
+	bool cloudscapeNoiseHostCopied = false;
 	bool cloudscapePipelineEnabled = false;
 
 	VkExtent2D postFxExtent{};
@@ -591,6 +601,14 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkDescriptorPool postFxDescriptorPool = VK_NULL_HANDLE;
 	std::vector<VkDescriptorSet> postFxDescriptorSets;
 	VkSampler postFxLinearSampler = VK_NULL_HANDLE;
+	// Bindless composite path (PROJECTV_BINDLESS): sampled-image array + storage out.
+	VkDescriptorSetLayout postFxBindlessDescriptorSetLayout = VK_NULL_HANDLE;
+	VkPipelineLayout postFxBindlessPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline postFxBindlessCompositePipeline = VK_NULL_HANDLE;
+	VkShaderModule postFxBindlessCompositeShaderModule = VK_NULL_HANDLE;
+	VkDescriptorPool postFxBindlessDescriptorPool = VK_NULL_HANDLE;
+	std::vector<VkDescriptorSet> postFxBindlessDescriptorSets;
+	bool postFxBindlessEnabled = false;
 	bool bloomPipelineEnabled = false;
 	bool aerialPerspectivePipelineEnabled = false;
 
@@ -735,9 +753,15 @@ struct VulkanContextState {
 	VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
 	bool supportsDynamicRenderingUnusedAttachments = false;
+	bool supportsPresentId = false;
+	bool supportsPresentWait = false;
 	VkPhysicalDeviceVulkan14Features features14{};
 	bool maintenance5 = false;
 	bool maintenance6 = false;
+	bool hostImageCopy = false;
+	bool indexTypeUint8 = false;
+	bool bindless = false;
+	bool rayTracingInvocationReorderEnabled = false;
 	projectv::render::HardwareRayTracingSupport rayTracing{};
 };
 
@@ -757,6 +781,8 @@ struct SwapchainState {
 	std::vector<VkImageView> imageViews;
 
 	std::vector<VkSemaphore> submitSemaphores;
+	uint64_t nextPresentId = 1u;
+	bool presentWaitLogged = false;
 };
 
 struct AppStateImpl {

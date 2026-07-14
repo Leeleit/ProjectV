@@ -13,6 +13,7 @@ struct MeshGpuResources {
 	VmaAllocation vertexAllocation = VK_NULL_HANDLE;
 	VkBuffer indexBuffer = VK_NULL_HANDLE;
 	VmaAllocation indexAllocation = VK_NULL_HANDLE;
+	VkIndexType indexType = VK_INDEX_TYPE_UINT32;
 	uint32_t vertexCount = 0;
 	uint32_t indexCount = 0;
 	VkDeviceSize vertexBytes = 0;
@@ -24,6 +25,7 @@ bool UploadBakedPrimitiveToGpu(
 	VmaAllocator allocator,
 	VkCommandPool commandPool,
 	VkQueue queue,
+	bool indexTypeUint8Enabled,
 	const BakedPrimitive &baked,
 	MeshGpuResources &outResources,
 	std::string *outError = nullptr);

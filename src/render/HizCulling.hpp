@@ -22,6 +22,8 @@ struct HizBuffer {
 	uint32_t baseWidth = 0u;
 	uint32_t baseHeight = 0u;
 	uint32_t mipLevelCount = 0u;
+	std::array<VkImageView, 16> mipStorageViews{}; // per-mip storage views for min-reduction
+	uint32_t mipStorageViewCount = 0u;
 };
 
 bool IsHzbCullingEnabled();
@@ -31,6 +33,8 @@ bool IsMeshShaderPipelineEnabled();
 bool IsHzbSmartMipEnabled();
 
 bool IsHzbSmartBlendWidthEnabled();
+
+bool IsHzbMinMipEnabled();
 
 uint32_t ComputeHzbMipLevelCount(uint32_t baseWidth, uint32_t baseHeight);
 
@@ -52,7 +56,9 @@ void BuildHizMipChain(
 	VkCommandBuffer commandBuffer,
 	VkImage depthImage,
 	VkImageLayout depthImageLayout,
-	const HizBuffer &hizBuffer);
+	const HizBuffer &hizBuffer,
+	RenderState *render = nullptr,
+	VulkanContextState *context = nullptr);
 
 struct HizCullingPushConstants {
 	std::array<float, 16> inverseViewProjection{};

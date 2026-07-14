@@ -314,6 +314,8 @@ bool CreateOrRecreateSwapchain(
 	swapchain->supportsTransferSrc = supportsTransferSrc;
 	swapchain->images = std::move(newImages);
 	swapchain->imageViews = std::move(newViews);
+	swapchain->nextPresentId = 1u;
+	swapchain->presentWaitLogged = false;
 
 
 	{

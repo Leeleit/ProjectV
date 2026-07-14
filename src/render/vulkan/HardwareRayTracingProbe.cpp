@@ -14,6 +14,8 @@ constexpr const char *kRayQueryExtension = "VK_KHR_ray_query";
 constexpr const char *kRayTracingPipelineExtension = "VK_KHR_ray_tracing_pipeline";
 constexpr const char *kPipelineLibraryExtension = "VK_KHR_pipeline_library";
 constexpr const char *kDeferredHostOperationsExtension = "VK_KHR_deferred_host_operations";
+constexpr const char *kShaderInvocationReorderExtension = VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME;
+constexpr const char *kOpacityMicromapExtension = VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME;
 
 bool HasDeviceExtension(
 	const VkPhysicalDevice physicalDevice,
@@ -52,6 +54,7 @@ bool ProbeHardwareRayTracingSupport(
 	outSupport->rayTracingPipeline = HasDeviceExtension(physicalDevice, kRayTracingPipelineExtension);
 	outSupport->pipelineLibrary = HasDeviceExtension(physicalDevice, kPipelineLibraryExtension);
 	outSupport->deferredHostOperations = HasDeviceExtension(physicalDevice, kDeferredHostOperationsExtension);
+	outSupport->opacityMicromap = HasDeviceExtension(physicalDevice, kOpacityMicromapExtension);
 
 	if (outSupport->rayQuery) {
 		outSupport->maxRecursionDepth = 1u;
@@ -107,6 +110,13 @@ bool ProbeHardwareRayTracingSupport(
 	bdaFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 	bdaFeatures.pNext = &asFeatures;
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtpFeaturesStruct{};
+	VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV shaderInvocationReorderFeatures{};
+	const bool hasShaderInvocationReorderExtension = HasDeviceExtension(physicalDevice, kShaderInvocationReorderExtension);
+	if (hasShaderInvocationReorderExtension) {
+		shaderInvocationReorderFeatures.sType =
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV;
+		rqFeatures.pNext = &shaderInvocationReorderFeatures;
+	}
 	if (outSupport->rayTracingPipeline) {
 		rtpFeaturesStruct.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
 		rtpFeaturesStruct.pNext = &bdaFeatures;
@@ -120,16 +130,20 @@ bool ProbeHardwareRayTracingSupport(
 	outSupport->accelerationStructureHostCommands = asFeatures.accelerationStructureHostCommands == VK_TRUE;
 	outSupport->bufferDeviceAddress =
 		bdaFeatures.bufferDeviceAddress == VK_TRUE || bdaFeatures.bufferDeviceAddressCaptureReplay == VK_TRUE;
+	outSupport->shaderInvocationReorder =
+		hasShaderInvocationReorderExtension && shaderInvocationReorderFeatures.rayTracingInvocationReorder == VK_TRUE;
 
 	SDL_Log(
 		"Render: ProbeHardwareRayTracingSupport: RTX path available (accelerationStructure=%d rayQuery=%d "
-		"rayTracingPipeline=%d pipelineLibrary=%d deferredHostOps=%d hostCommands=%d bufferDeviceAddress=%d "
+		"rayTracingPipeline=%d pipelineLibrary=%d deferredHostOps=%d serAvailable=%d opacityMicromap=%d hostCommands=%d bufferDeviceAddress=%d "
 		"maxPrimitives=%llu minScratchAlign=%u sbtHandle=%u sbtBaseAlign=%u sbtHandleAlign=%u)",
 		1,
 		1,
 		outSupport->rayTracingPipeline ? 1 : 0,
 		outSupport->pipelineLibrary ? 1 : 0,
 		outSupport->deferredHostOperations ? 1 : 0,
+		outSupport->shaderInvocationReorder ? 1 : 0,
+		outSupport->opacityMicromap ? 1 : 0,
 		outSupport->accelerationStructureHostCommands ? 1 : 0,
 		outSupport->bufferDeviceAddress ? 1 : 0,
 		static_cast<unsigned long long>(outSupport->maxPrimitiveCount),

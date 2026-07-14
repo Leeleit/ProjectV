@@ -10,6 +10,8 @@ struct HardwareRayTracingSupport {
 	bool rayTracingPipeline = false;
 	bool pipelineLibrary = false;
 	bool deferredHostOperations = false;
+	bool shaderInvocationReorder = false;
+	bool opacityMicromap = false;
 	bool accelerationStructureHostCommands = false;
 	bool bufferDeviceAddress = false;
 	uint32_t maxRecursionDepth = 0u;

@@ -19,12 +19,16 @@ struct PhysicalDeviceCandidate {
 	VkPhysicalDeviceVulkan14Features features14{};
 	VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT dynamicRenderingUnusedAttachmentsFeatures{};
+	VkPhysicalDevicePresentIdFeaturesKHR presentIdFeatures{};
+	VkPhysicalDevicePresentWaitFeaturesKHR presentWaitFeatures{};
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
 	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
 	HardwareRayTracingSupport rayTracingSupport{};
 	bool supportsTracyCalibratedTimestamps = false;
 	bool supportsDynamicRenderingUnusedAttachments = false;
+	bool supportsPresentId = false;
+	bool supportsPresentWait = false;
 	bool supportsDedicatedComputeQueue = false;
 	bool supportsMeshShader = false;
 	bool supportsAccelerationStructure = false;

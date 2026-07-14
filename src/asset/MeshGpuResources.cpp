@@ -2,6 +2,10 @@
 
 #include "core/RuntimeDiagnostics.hpp"
 
+#include <algorithm>
+#include <cstdint>
+#include <vector>
+
 namespace projectv::asset {
 
 namespace {
@@ -121,6 +125,7 @@ bool UploadBakedPrimitiveToGpu(
 	const VmaAllocator allocator,
 	const VkCommandPool commandPool,
 	const VkQueue queue,
+	const bool indexTypeUint8Enabled,
 	const BakedPrimitive &baked,
 	MeshGpuResources &outResources,
 	std::string *outError)
@@ -142,7 +147,32 @@ bool UploadBakedPrimitiveToGpu(
 	}
 
 	const VkDeviceSize vertexBytes = baked.vertexBuffer.size();
-	const VkDeviceSize indexBytes = baked.indices.size() * sizeof(uint32_t);
+	uint32_t maxIndex = 0u;
+	for (const uint32_t index : baked.indices) {
+		maxIndex = std::max(maxIndex, index);
+	}
+	VkIndexType indexType = VK_INDEX_TYPE_UINT32;
+	std::vector<uint8_t> indices8;
+	std::vector<uint16_t> indices16;
+	const void *indexData = baked.indices.data();
+	VkDeviceSize indexBytes = baked.indices.size() * sizeof(uint32_t);
+	if (indexTypeUint8Enabled && maxIndex <= UINT8_MAX) {
+		indices8.reserve(baked.indices.size());
+		for (const uint32_t index : baked.indices) {
+			indices8.push_back(static_cast<uint8_t>(index));
+		}
+		indexData = indices8.data();
+		indexBytes = indices8.size() * sizeof(uint8_t);
+		indexType = VK_INDEX_TYPE_UINT8;
+	} else if (maxIndex <= UINT16_MAX) {
+		indices16.reserve(baked.indices.size());
+		for (const uint32_t index : baked.indices) {
+			indices16.push_back(static_cast<uint16_t>(index));
+		}
+		indexData = indices16.data();
+		indexBytes = indices16.size() * sizeof(uint16_t);
+		indexType = VK_INDEX_TYPE_UINT16;
+	}
 
 	VkBuffer vertexStaging = VK_NULL_HANDLE;
 	VmaAllocation vertexStagingAllocation = VK_NULL_HANDLE;
@@ -165,7 +195,7 @@ bool UploadBakedPrimitiveToGpu(
 		vmaDestroyBuffer(allocator, vertexStaging, vertexStagingAllocation);
 		return false;
 	}
-	std::memcpy(indexStagingInfo.pMappedData, baked.indices.data(), indexBytes);
+	std::memcpy(indexStagingInfo.pMappedData, indexData, indexBytes);
 
 	MeshGpuResources result;
 	if (!CreateDeviceBuffer(
@@ -220,6 +250,7 @@ bool UploadBakedPrimitiveToGpu(
 
 	result.vertexCount = baked.vertexCount;
 	result.indexCount = baked.indexCount;
+	result.indexType = indexType;
 	result.vertexBytes = vertexBytes;
 	result.indexBytes = indexBytes;
 	outResources = result;
@@ -240,6 +271,7 @@ void DestroyMeshGpuResources(const VmaAllocator allocator, MeshGpuResources &res
 	}
 	resources.vertexCount = 0;
 	resources.indexCount = 0;
+	resources.indexType = VK_INDEX_TYPE_UINT32;
 	resources.vertexBytes = 0;
 	resources.indexBytes = 0;
 }

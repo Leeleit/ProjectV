@@ -368,9 +368,9 @@ void RecordGraphicsCommands(
 				constexpr VkDeviceSize vertexOffset = 0;
 				vkCmdBindVertexBuffers(cmd, 0, 1, &instance.vertexBuffer, &vertexOffset);
 				if (context.maintenance5) {
-					vkCmdBindIndexBuffer2(cmd, instance.indexBuffer, 0, VK_WHOLE_SIZE, VK_INDEX_TYPE_UINT32);
+					vkCmdBindIndexBuffer2(cmd, instance.indexBuffer, 0, VK_WHOLE_SIZE, instance.indexType);
 				} else {
-					vkCmdBindIndexBuffer(cmd, instance.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+					vkCmdBindIndexBuffer(cmd, instance.indexBuffer, 0, instance.indexType);
 				}
 				vkCmdDrawIndexed(cmd, instance.indexCount, 1, 0, 0, 0);
 			}

@@ -104,6 +104,46 @@ std::vector<uint8_t> GenerateCloudscapeNoiseR8()
 	return data;
 }
 
+bool SupportsHostImageCopyFormat(const VulkanContextState &context)
+{
+	VkFormatProperties3 properties3{};
+	properties3.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3;
+	VkFormatProperties2 properties2{};
+	properties2.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2;
+	properties2.pNext = &properties3;
+	vkGetPhysicalDeviceFormatProperties2(context.physicalDevice, VK_FORMAT_R8_UNORM, &properties2);
+	return (properties3.optimalTilingFeatures & VK_FORMAT_FEATURE_2_HOST_IMAGE_TRANSFER_BIT) != 0;
+}
+
+bool CopyCloudscapeNoiseFromHost(
+	const VulkanContextState &context,
+	const VkImage image,
+	const std::vector<uint8_t> &noiseData)
+{
+	VkHostImageLayoutTransitionInfo transition{};
+	transition.sType = VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO;
+	transition.image = image;
+	transition.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	transition.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+	transition.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+	if (vkTransitionImageLayout(context.device, 1u, &transition) != VK_SUCCESS) {
+		return false;
+	}
+
+	VkMemoryToImageCopy copy{};
+	copy.sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY;
+	copy.pHostPointer = noiseData.data();
+	copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+	copy.imageExtent = {projectv::render::kCloudscapeNoiseTextureSize, projectv::render::kCloudscapeNoiseTextureSize, 1u};
+	VkCopyMemoryToImageInfo copyInfo{};
+	copyInfo.sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO;
+	copyInfo.dstImage = image;
+	copyInfo.dstImageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	copyInfo.regionCount = 1u;
+	copyInfo.pRegions = &copy;
+	return vkCopyMemoryToImage(context.device, &copyInfo) == VK_SUCCESS;
+}
+
 bool CreateCloudscapeNoiseImage(
 	VulkanContextState *context,
 	RenderState *render)
@@ -119,6 +159,7 @@ bool CreateCloudscapeNoiseImage(
 	if (noiseData.empty()) {
 		return false;
 	}
+	const bool useHostImageCopy = context->hostImageCopy && SupportsHostImageCopyFormat(*context);
 
 	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -128,14 +169,19 @@ bool CreateCloudscapeNoiseImage(
 	imageInfo.mipLevels = 1u;
 	imageInfo.arrayLayers = 1u;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageInfo.tiling = VK_IMAGE_TILING_LINEAR;
+	imageInfo.tiling = useHostImageCopy ? VK_IMAGE_TILING_OPTIMAL : VK_IMAGE_TILING_LINEAR;
 	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	if (useHostImageCopy) {
+		imageInfo.usage |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT;
+	}
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	VmaAllocationCreateInfo allocationInfo{};
 	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
-	allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+	if (!useHostImageCopy) {
+		allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+	}
 
 	const VkResult createResult = vmaCreateImage(
 		context->allocator,
@@ -149,20 +195,29 @@ bool CreateCloudscapeNoiseImage(
 		return false;
 	}
 
-	VmaAllocationInfo allocInfo{};
-	vmaGetAllocationInfo(context->allocator, render->cloudscapeNoiseAllocation, &allocInfo);
-	void *mapped = nullptr;
-	const VkResult mapResult = vmaMapMemory(context->allocator, render->cloudscapeNoiseAllocation, &mapped);
-	if (mapResult != VK_SUCCESS || mapped == nullptr) {
-		vmaDestroyImage(context->allocator, render->cloudscapeNoiseImage, render->cloudscapeNoiseAllocation);
-		render->cloudscapeNoiseImage = VK_NULL_HANDLE;
-		render->cloudscapeNoiseAllocation = nullptr;
-		runtime::LogVkFailure("CreateCloudscapeNoiseImage.vmaMapMemory", mapResult);
-		return false;
+	if (useHostImageCopy) {
+		if (!CopyCloudscapeNoiseFromHost(*context, render->cloudscapeNoiseImage, noiseData)) {
+			vmaDestroyImage(context->allocator, render->cloudscapeNoiseImage, render->cloudscapeNoiseAllocation);
+			render->cloudscapeNoiseImage = VK_NULL_HANDLE;
+			render->cloudscapeNoiseAllocation = nullptr;
+			runtime::LogRuntimeFailure("Render", "CreateCloudscapeNoiseImage.vkCopyMemoryToImage", "host image copy failed");
+			return false;
+		}
+		render->cloudscapeNoiseHostCopied = true;
+	} else {
+		void *mapped = nullptr;
+		const VkResult mapResult = vmaMapMemory(context->allocator, render->cloudscapeNoiseAllocation, &mapped);
+		if (mapResult != VK_SUCCESS || mapped == nullptr) {
+			vmaDestroyImage(context->allocator, render->cloudscapeNoiseImage, render->cloudscapeNoiseAllocation);
+			render->cloudscapeNoiseImage = VK_NULL_HANDLE;
+			render->cloudscapeNoiseAllocation = nullptr;
+			runtime::LogVkFailure("CreateCloudscapeNoiseImage.vmaMapMemory", mapResult);
+			return false;
+		}
+		std::memcpy(mapped, noiseData.data(), noiseData.size());
+		vmaUnmapMemory(context->allocator, render->cloudscapeNoiseAllocation);
+		vmaInvalidateAllocation(context->allocator, render->cloudscapeNoiseAllocation, 0u, VK_WHOLE_SIZE);
 	}
-	std::memcpy(mapped, noiseData.data(), noiseData.size());
-	vmaUnmapMemory(context->allocator, render->cloudscapeNoiseAllocation);
-	vmaInvalidateAllocation(context->allocator, render->cloudscapeNoiseAllocation, 0u, VK_WHOLE_SIZE);
 
 	VkImageViewCreateInfo viewInfo{};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -259,7 +314,9 @@ bool CreateCloudscapeResources(VulkanContextState *context, RenderState *render)
 				imageBarrier.srcAccessMask = 0;
 				imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 				imageBarrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-				imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+				imageBarrier.oldLayout = render->cloudscapeNoiseHostCopied
+					? VK_IMAGE_LAYOUT_GENERAL
+					: VK_IMAGE_LAYOUT_UNDEFINED;
 				imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 				imageBarrier.image = render->cloudscapeNoiseImage;
 				imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};

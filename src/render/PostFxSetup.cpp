@@ -1,5 +1,6 @@
 #include "render/PostFx.hpp"
 
+#include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
@@ -572,6 +573,114 @@ bool CreatePostFxResources(
 		!CreatePostFxPipeline(context, render, kPostCompositeShaderFilename, &render->bloomCompositeShaderModule, &render->bloomCompositePipeline)) {
 		DestroyPostFxResources(context, render);
 		return false;
+	}
+
+	render->postFxBindlessEnabled = false;
+	if (context->bindless) {
+		constexpr uint32_t kBindlessSamplerArraySize = 8u;
+		constexpr uint32_t kBindlessUsedSamplers = 3u;
+		constexpr uint32_t kBindlessSetCount = MAX_FRAMES_IN_FLIGHT;
+
+		VkDescriptorSetLayoutBinding bindlessBindings[2]{};
+		bindlessBindings[0].binding = 0;
+		bindlessBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		bindlessBindings[0].descriptorCount = 1u;
+		bindlessBindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		bindlessBindings[1].binding = 1;
+		bindlessBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		bindlessBindings[1].descriptorCount = kBindlessSamplerArraySize;
+		bindlessBindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+		const VkDescriptorBindingFlags bindingFlags[2] = {
+			0u,
+			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT,
+		};
+		VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo{};
+		bindingFlagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+		bindingFlagsInfo.bindingCount = 2u;
+		bindingFlagsInfo.pBindingFlags = bindingFlags;
+
+		VkDescriptorSetLayoutCreateInfo bindlessLayoutInfo{};
+		bindlessLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		bindlessLayoutInfo.pNext = &bindingFlagsInfo;
+		bindlessLayoutInfo.bindingCount = 2u;
+		bindlessLayoutInfo.pBindings = bindlessBindings;
+		if (vkCreateDescriptorSetLayout(
+				context->device,
+				&bindlessLayoutInfo,
+				nullptr,
+				&render->postFxBindlessDescriptorSetLayout) == VK_SUCCESS) {
+			VkPushConstantRange pushConstantRange{};
+			pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			pushConstantRange.offset = 0;
+			pushConstantRange.size = sizeof(PostFxPushConstants);
+			VkPipelineLayoutCreateInfo bindlessPipeLayoutInfo{};
+			bindlessPipeLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			bindlessPipeLayoutInfo.setLayoutCount = 1u;
+			bindlessPipeLayoutInfo.pSetLayouts = &render->postFxBindlessDescriptorSetLayout;
+			bindlessPipeLayoutInfo.pushConstantRangeCount = 1u;
+			bindlessPipeLayoutInfo.pPushConstantRanges = &pushConstantRange;
+			if (vkCreatePipelineLayout(
+					context->device,
+					&bindlessPipeLayoutInfo,
+					nullptr,
+					&render->postFxBindlessPipelineLayout) == VK_SUCCESS) {
+				std::array poolSizes = {
+					VkDescriptorPoolSize{
+						.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+						.descriptorCount = kBindlessSetCount * kBindlessSamplerArraySize},
+					VkDescriptorPoolSize{
+						.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+						.descriptorCount = kBindlessSetCount}};
+				VkDescriptorPoolCreateInfo bindlessPoolInfo{};
+				bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+				bindlessPoolInfo.maxSets = kBindlessSetCount;
+				bindlessPoolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+				bindlessPoolInfo.pPoolSizes = poolSizes.data();
+				if (vkCreateDescriptorPool(
+						context->device,
+						&bindlessPoolInfo,
+						nullptr,
+						&render->postFxBindlessDescriptorPool) == VK_SUCCESS) {
+					render->postFxBindlessDescriptorSets.resize(kBindlessSetCount, VK_NULL_HANDLE);
+					std::vector<VkDescriptorSetLayout> setLayouts(
+						kBindlessSetCount,
+						render->postFxBindlessDescriptorSetLayout);
+					std::vector<uint32_t> variableCounts(kBindlessSetCount, kBindlessUsedSamplers);
+					VkDescriptorSetVariableDescriptorCountAllocateInfo variableAlloc{};
+					variableAlloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO;
+					variableAlloc.descriptorSetCount = kBindlessSetCount;
+					variableAlloc.pDescriptorCounts = variableCounts.data();
+					VkDescriptorSetAllocateInfo bindlessAlloc{};
+					bindlessAlloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+					bindlessAlloc.pNext = &variableAlloc;
+					bindlessAlloc.descriptorPool = render->postFxBindlessDescriptorPool;
+					bindlessAlloc.descriptorSetCount = kBindlessSetCount;
+					bindlessAlloc.pSetLayouts = setLayouts.data();
+					if (vkAllocateDescriptorSets(
+							context->device,
+							&bindlessAlloc,
+							render->postFxBindlessDescriptorSets.data()) == VK_SUCCESS) {
+						const VkPipelineLayout savedLayout = render->postFxPipelineLayout;
+						render->postFxPipelineLayout = render->postFxBindlessPipelineLayout;
+						const bool compositeOk = CreatePostFxPipeline(
+							context,
+							render,
+							"post_composite_bindless.comp.spv",
+							&render->postFxBindlessCompositeShaderModule,
+							&render->postFxBindlessCompositePipeline);
+						render->postFxPipelineLayout = savedLayout;
+						if (compositeOk) {
+							render->postFxBindlessEnabled = true;
+							SDL_Log("Render: PostFX bindless composite path enabled");
+						}
+					}
+				}
+			}
+		}
+		if (!render->postFxBindlessEnabled) {
+			SDL_Log("Render: PostFX bindless composite path unavailable; using classic bindings");
+		}
 	}
 
 	render->bloomPipelineEnabled = IsBloomEnabled();

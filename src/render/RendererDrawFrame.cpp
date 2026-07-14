@@ -1,6 +1,7 @@
 #include "render/RendererInternal.hpp"
 #include "render/SceneResources.hpp"
 
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "debug/ProfilingGpu.hpp"
@@ -16,6 +17,28 @@
 #include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
+#include <cstdlib>
+#include <limits>
+
+namespace {
+
+uint32_t GetPresentWaitMaxLatencyFrames()
+{
+	const char *const value = projectv::core::GetEnvVar("PROJECTV_PRESENT_WAIT");
+	if (value == nullptr || value[0] == '\0' || value[0] == '-') {
+		return 0u;
+	}
+	char *end = nullptr;
+	const unsigned long parsed = std::strtoul(value, &end, 10);
+	if (end == value || *end != '\0' || parsed == 0u) {
+		return 0u;
+	}
+	return parsed > std::numeric_limits<uint32_t>::max()
+		? std::numeric_limits<uint32_t>::max()
+		: static_cast<uint32_t>(parsed);
+}
+
+} // namespace
 
 SDL_AppResult DrawFrame(
 	AppState *state,
@@ -144,6 +167,10 @@ SDL_AppResult DrawFrame(
 	}
 
 	if (render->rayTracedShadows != nullptr) {
+		if (render->rayTracedShadows->IsVoxelAwareRtxPending()) {
+			PV_PROFILE_ZONE_N("TryFinishVoxelAwareRtxResources");
+			(void)render->rayTracedShadows->TryFinishVoxelAwareRtxResources(*context);
+		}
 		PV_PROFILE_ZONE_N("CollectAndBuildBlasChunks");
 		if (state->world().voxelWorld != nullptr) {
 			const VoxelWorld &world = *state->world().voxelWorld;
@@ -289,7 +316,9 @@ SDL_AppResult DrawFrame(
 			cmd,
 			render->depthImage,
 			render->depthImageCurrentLayout,
-			render->hizBuffer);
+			render->hizBuffer,
+			render,
+			context);
 		if (render->hizBuffer.imageView != VK_NULL_HANDLE &&
 			render->hizBuffer.sampler != VK_NULL_HANDLE &&
 			frame->renderData.hizCullingDescriptorSet != VK_NULL_HANDLE) {
@@ -474,7 +503,36 @@ SDL_AppResult DrawFrame(
 	presentInfo.pSwapchains = &swapchain->handle;
 	presentInfo.pImageIndices = &imageIndex;
 
-	const VkResult presentRes = vkQueuePresentKHR(context->queue, &presentInfo);
+	const uint32_t presentWaitMaxLatencyFrames = GetPresentWaitMaxLatencyFrames();
+	const bool presentIdActive = context->supportsPresentId;
+	const bool presentWaitActive = context->supportsPresentWait && presentWaitMaxLatencyFrames > 0u;
+	const uint64_t presentId = presentIdActive ? swapchain->nextPresentId++ : 0u;
+	VkPresentIdKHR presentIdInfo{};
+	if (presentIdActive) {
+		presentIdInfo.sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR;
+		presentIdInfo.swapchainCount = 1u;
+		presentIdInfo.pPresentIds = &presentId;
+		presentInfo.pNext = &presentIdInfo;
+	}
+
+	VkResult presentRes = vkQueuePresentKHR(context->queue, &presentInfo);
+	if (presentWaitActive && presentRes == VK_SUCCESS && presentId > presentWaitMaxLatencyFrames) {
+		if (!swapchain->presentWaitLogged) {
+			SDL_Log("Render: present_wait active with max latency %u frame(s)", presentWaitMaxLatencyFrames);
+			swapchain->presentWaitLogged = true;
+		}
+		const VkResult waitPresentResult = vkWaitForPresentKHR(
+			context->device,
+			swapchain->handle,
+			presentId - presentWaitMaxLatencyFrames,
+			UINT64_MAX);
+		if (waitPresentResult == VK_ERROR_OUT_OF_DATE_KHR) {
+			presentRes = waitPresentResult;
+		} else if (waitPresentResult != VK_SUCCESS) {
+			runtime::LogVkFailure("DrawFrame.vkWaitForPresentKHR", waitPresentResult);
+			return SDL_APP_FAILURE;
+		}
+	}
 	if (!SaveRequestedScreenshot(*context, *render, inFlightFence, captureExtent, captureFormat)) {
 		return SDL_APP_FAILURE;
 	}

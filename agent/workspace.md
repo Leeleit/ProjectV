@@ -18,6 +18,30 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-14 Phase 4 exit:** Hardware-gated Vulkan 1.4 features + Phase 3 carry-over landed on `master`. Active plan: `docs/superpowers/plans/2026-07-14-vulkan-1.4-phase-4-hardware-gated.md` (supersedes 2026-07-12 draft).
+
+### Phase 4 exit report
+
+| Task | Status | Notes |
+|---|---|---|
+| 4.0 HZB min-mips + deferred RT init | ✅ | `hiz_minify.comp`, `PROJECTV_HZB_MIN_MIP`; `TryFinishVoxelAwareRtxResources`; stress = MeshingStress/ChunkGrid (§37/§38) |
+| 4.1 Bindless | ✅ gated | PostFX composite `post_composite_bindless.comp` when `PROJECTV_BINDLESS=ON` |
+| 4.2 Host image copy | ✅ gated | cloudnoise upload; `PROJECTV_HOST_IMAGE_COPY=ON` |
+| 4.3 indexTypeUint8 | ✅ | small meshes when capability + max index ≤255 |
+| 4.4 dynamicRenderingLocalRead | ⚠️ probe only | feature+env wired; no graphics local-read consumer (PostFX compute) |
+| 4.5 shaderFloatControls2 | ✅ | enabled + `world_gen.comp` extension (Fluid CA is integer-only) |
+| 4.6 present_id / present_wait | ✅ gated | `PROJECTV_PRESENT_WAIT=N` |
+| 4.7 SER / OMM | ✅ / blocked | SER via `PROJECTV_RTX_SER=ON`; OMM blocked on assets (§14) |
+| Optional 3.2/3.3 re-entry | ⏭ skipped | needs stress ≥10% after min-mips; archives kept |
+
+**Verification:** `ctest` 44/44; ProjectV build green; validation smoke (`PROJECTV_ENABLE_VALIDATION=ON`, 10 frames) PASS — deferred RT init logged then finished (`TryFinishVoxelAwareRtxResources`); mean_ms≈0.6. Pre-existing DDGI irradiance layout VUID warning remains (unrelated to Phase 4).
+
+**Proposed commits (operator):** see chat / §5.1 messages.
+
+---
+
+## Previous: Phase 3
+
 **2026-07-14 Phase 3 next-steps exit:** Tasks 3.2 and 3.3 rolled back (perf gate); 3.4 env var documented; landed 3.1/3.5 remain.
 
 ### Phase 3 exit report

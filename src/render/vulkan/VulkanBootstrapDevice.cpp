@@ -95,6 +95,13 @@ bool InitializeVulkanDevice(
 		enabledMeshShaderFeatures.meshShader = VK_TRUE;
 	}
 
+	VkPhysicalDevicePresentIdFeaturesKHR enabledPresentIdFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR, nullptr};
+	VkPhysicalDevicePresentWaitFeaturesKHR enabledPresentWaitFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR, nullptr};
+	enabledPresentIdFeatures.presentId = selected.supportsPresentId ? VK_TRUE : VK_FALSE;
+	enabledPresentWaitFeatures.presentWait = selected.supportsPresentWait ? VK_TRUE : VK_FALSE;
+
 	VkPhysicalDeviceRayQueryFeaturesKHR enabledRayQueryFeatures{
 		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR, nullptr};
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR enabledAccelerationStructureFeatures{
@@ -102,6 +109,15 @@ bool InitializeVulkanDevice(
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR enabledRayTracingPipelineFeatures{
 		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR, nullptr};
 	const bool rtxEnabled = selected.supportsAccelerationStructure && selected.supportsRayQuery;
+	const char *const serEnv = projectv::core::GetEnvVar("PROJECTV_RTX_SER");
+	const bool serEnabled =
+		rtxEnabled &&
+		selected.rayTracingSupport.shaderInvocationReorder &&
+		serEnv != nullptr &&
+		serEnv[0] != '\0' &&
+		serEnv[0] != '0';
+	VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV enabledShaderInvocationReorderFeatures{
+		VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV, nullptr};
 	if (rtxEnabled) {
 		enabledRayQueryFeatures.rayQuery = VK_TRUE;
 		enabledAccelerationStructureFeatures.accelerationStructure = VK_TRUE;
@@ -112,6 +128,7 @@ bool InitializeVulkanDevice(
 			enabledRayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
 		}
 	}
+	enabledShaderInvocationReorderFeatures.rayTracingInvocationReorder = serEnabled ? VK_TRUE : VK_FALSE;
 
 	enabledFeatures13.pNext = &enabledFeatures14;
 	enabledFeatures14.pNext = &enabledFeatures12;
@@ -124,7 +141,9 @@ bool InitializeVulkanDevice(
 	} else {
 		enabledAccelerationStructureFeatures.pNext = &enabledRayQueryFeatures;
 	}
-	enabledRayQueryFeatures.pNext = nullptr;
+	enabledRayQueryFeatures.pNext = &enabledPresentIdFeatures;
+	enabledPresentIdFeatures.pNext = &enabledPresentWaitFeatures;
+	enabledPresentWaitFeatures.pNext = serEnabled ? &enabledShaderInvocationReorderFeatures : nullptr;
 	VkDeviceCreateInfo deviceCreateInfo{};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.pNext = &enabledFeatures13;
@@ -142,6 +161,24 @@ bool InitializeVulkanDevice(
 	}
 
 	volkLoadDevice(context->device);
+	context->rayTracingInvocationReorderEnabled = serEnabled;
+	if (serEnabled) {
+		SDL_Log("Render: SER available and enabled (PROJECTV_RTX_SER=%s)", serEnv);
+	}
+	if (enabledFeatures14.dynamicRenderingLocalRead == VK_TRUE) {
+		SDL_Log("Init: dynamicRenderingLocalRead enabled; PostFX conversion is deferred because it is compute-based");
+	}
+	context->features14 = enabledFeatures14;
+	context->maintenance5 = enabledFeatures14.maintenance5 == VK_TRUE;
+	context->maintenance6 = enabledFeatures14.maintenance6 == VK_TRUE;
+	context->hostImageCopy = enabledFeatures14.hostImageCopy == VK_TRUE;
+	context->indexTypeUint8 = enabledFeatures14.indexTypeUint8 == VK_TRUE;
+	context->bindless =
+		enabledFeatures12.descriptorIndexing == VK_TRUE &&
+		enabledFeatures12.runtimeDescriptorArray == VK_TRUE &&
+		enabledFeatures12.descriptorBindingPartiallyBound == VK_TRUE &&
+		enabledFeatures12.descriptorBindingVariableDescriptorCount == VK_TRUE &&
+		enabledFeatures12.shaderSampledImageArrayNonUniformIndexing == VK_TRUE;
 
 	CreatePipelineCache(context);
 
@@ -379,6 +416,8 @@ bool InitializeVulkanBase(
 	context->physicalDevice = selected.device;
 	context->queueFamilyIndex = selected.queueFamilyIndex;
 	context->supportsDynamicRenderingUnusedAttachments = selected.supportsDynamicRenderingUnusedAttachments;
+	context->supportsPresentId = selected.supportsPresentId;
+	context->supportsPresentWait = selected.supportsPresentWait;
 	context->hasDedicatedComputeQueue = selected.supportsDedicatedComputeQueue;
 	context->features14 = selected.features14;
 	context->maintenance5 = selected.features14.maintenance5 == VK_TRUE;

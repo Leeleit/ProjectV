@@ -59,10 +59,11 @@ bool RayTracedShadows::Initialize(
 		return false;
 	}
 
-	if (!CreateVoxelAwareRtxResources(context)) {
-		SDL_Log("Render: RayTracedShadows: voxel-aware RT pipeline unavailable; falling back to ray-query AABB shadows");
-	} else if (!InitializeShadowMaskClear(context)) {
-		SDL_Log("Render: RayTracedShadows: shadow mask clear failed; first frame may sample undefined data");
+	// Defer heavy RT pipeline + SBT + mask to TryFinishVoxelAwareRtxResources (polled from draw loop).
+	m_voxelAwareRtxPending = context.rayTracing.rayTracingPipeline;
+	m_voxelAwareRtxFailed = false;
+	if (m_voxelAwareRtxPending) {
+		SDL_Log("Render: RayTracedShadows: voxel-aware RT deferred until first frames (SBT/mask after pipeline ready)");
 	}
 
 	m_config.enabled = true;
@@ -83,6 +84,8 @@ void RayTracedShadows::Shutdown(const VulkanContextState &context)
 	}
 	ReleaseVoxelAwareRtxResources(context);
 	ReleaseBuffers(context);
+	m_voxelAwareRtxPending = false;
+	m_voxelAwareRtxFailed = false;
 	m_initialized.store(false, std::memory_order_release);
 	m_config.enabled = false;
 	m_previousTlasInstanceCount = 0u;

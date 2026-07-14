@@ -452,6 +452,11 @@ rtxLit)` для избежания pitch-black shadows.
 acne, PCF tuning, cascade bleeding). RT cores имеют spare capacity
 (1080p × 120 FPS × 1 ray/pixel = 0.65% от peak).
 
+**Opacity micromaps (Phase 4.7):** `VK_EXT_opacity_micromap` is probed, but its
+use is blocked on real alpha-tested project assets. The current asset path has no
+`AlphaMode::Mask` material handling or alpha-mask texture upload; do not enable or
+build OMM data until such assets are present.
+
 ## 15. RTX GI: DDGI probes (Diffuse Global Illumination)
 
 **Решение:** `projectv::render::RtxGiProbes` (`src/render/RtxGiProbes.hpp`).
@@ -1118,6 +1123,20 @@ shared between `volumetric_fog.comp` and `voxel.frag`.
 **Почему:** 3 subsystems — optional visual upgrades. Default OFF для predictable
 benchmark/regression numbers. ON = full atmospheric look.
 
+## 38. Phase 4 hardware gates (env + capability)
+
+| Gate | Env | Notes |
+|:-----|:----|:------|
+| HZB min-mips | `PROJECTV_HZB_MIN_MIP` (default ON) | compute min-reduction; OFF = LINEAR blit |
+| Bindless PostFX composite | `PROJECTV_BINDLESS=ON` | variable-count sampled array in `post_composite_bindless.comp` |
+| Host image copy | `PROJECTV_HOST_IMAGE_COPY=ON` | cloud noise upload path |
+| Uint8 indices | (capability) | small meshes when `indexTypeUint8` |
+| Local-read | `PROJECTV_DYNAMIC_RENDERING_LOCAL_READ=ON` | feature enabled; **no consumer yet** — PostFX is compute-only |
+| FloatControls2 | (capability) | declared in `world_gen.comp` (`GL_EXT_shader_float_controls2`) |
+| Present wait | `PROJECTV_PRESENT_WAIT=N` | needs present_id + present_wait |
+| SER | `PROJECTV_RTX_SER=ON` | `VK_NV_ray_tracing_invocation_reorder` |
+| OMM | — | blocked on alpha-tested assets (see §14) |
+
 ## 37. RT shadow pipeline path selection
 
 **Decision:** `src/render/RtxShadowPipeline.cpp` supports two paths selected at runtime by
@@ -1136,9 +1155,20 @@ The env var lets us choose correctness/experimentation (library) vs. launch late
 
 **Async note:** Offloading the library-path compile to a worker thread via
 `VkDeferredOperationKHR` deadlocks on this driver when the main thread is submitting frames.
-The attempt is archived at `legacy/docs/archive/2026-07-14-task34-attempt/`. True async init
-requires restructuring the render loop to defer SBT/shadow-mask setup until the pipeline is
-ready; tracked as future work, not Phase 3.
+The attempt is archived at `legacy/docs/archive/2026-07-14-task34-attempt/`.
+
+**Deferred init (Phase 4.0):** `RayTracedShadows::Initialize` no longer blocks on
+`CreateVoxelAwareRtxResources`. It sets `m_voxelAwareRtxPending` and the draw loop polls
+`TryFinishVoxelAwareRtxResources` until SBT/mask are ready (AABB ray-query fallback until then).
+Still no worker-thread deferred ops while submitting.
+
+**HZB min-mips (Phase 4.0):** `hiz_minify.comp` + `PROJECTV_HZB_MIN_MIP` (default ON).
+Mip0 = NEAREST blit from depth; mips 1..N = compute 2×2 min-reduction (push-descriptor when available);
+`PROJECTV_HZB_MIN_MIP=OFF` keeps LINEAR blit fallback.
+
+**Stress bench for 3.2/3.3 re-entry:** use `PROJECTV_SCENE_PRESET=MeshingStress` or `ChunkGrid`
+(not VoxelLab). Require ≥10% Tracy/NSight before re-landing; archives remain under
+`legacy/docs/archive/2026-07-14-task32-attempt/` and `...-task33-attempt/`.
 
 ---
 

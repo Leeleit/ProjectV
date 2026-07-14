@@ -12,6 +12,29 @@ void DestroyPostFxResources(
 		return;
 	}
 
+	if (render->postFxBindlessCompositePipeline != VK_NULL_HANDLE) {
+		vkDestroyPipeline(context->device, render->postFxBindlessCompositePipeline, nullptr);
+		render->postFxBindlessCompositePipeline = VK_NULL_HANDLE;
+	}
+	if (render->postFxBindlessCompositeShaderModule != VK_NULL_HANDLE) {
+		vkDestroyShaderModule(context->device, render->postFxBindlessCompositeShaderModule, nullptr);
+		render->postFxBindlessCompositeShaderModule = VK_NULL_HANDLE;
+	}
+	if (render->postFxBindlessDescriptorPool != VK_NULL_HANDLE) {
+		vkDestroyDescriptorPool(context->device, render->postFxBindlessDescriptorPool, nullptr);
+		render->postFxBindlessDescriptorPool = VK_NULL_HANDLE;
+	}
+	render->postFxBindlessDescriptorSets.clear();
+	if (render->postFxBindlessPipelineLayout != VK_NULL_HANDLE) {
+		vkDestroyPipelineLayout(context->device, render->postFxBindlessPipelineLayout, nullptr);
+		render->postFxBindlessPipelineLayout = VK_NULL_HANDLE;
+	}
+	if (render->postFxBindlessDescriptorSetLayout != VK_NULL_HANDLE) {
+		vkDestroyDescriptorSetLayout(context->device, render->postFxBindlessDescriptorSetLayout, nullptr);
+		render->postFxBindlessDescriptorSetLayout = VK_NULL_HANDLE;
+	}
+	render->postFxBindlessEnabled = false;
+
 	if (render->bloomCompositePipeline != VK_NULL_HANDLE) {
 		vkDestroyPipeline(context->device, render->bloomCompositePipeline, nullptr);
 		render->bloomCompositePipeline = VK_NULL_HANDLE;

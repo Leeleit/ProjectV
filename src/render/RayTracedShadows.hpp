@@ -128,7 +128,11 @@ class RayTracedShadows {
 
 	[[nodiscard]] VkImageView GetShadowMaskImageView() const noexcept { return m_shadowMaskImageView; }
 	[[nodiscard]] bool IsVoxelAwareRtxActive() const noexcept { return m_voxelAwareRtxActive; }
+	[[nodiscard]] bool IsVoxelAwareRtxPending() const noexcept { return m_voxelAwareRtxPending; }
 	[[nodiscard]] VkAccelerationStructureKHR GetTlas() const noexcept { return m_config.tlas; }
+
+	// Poll once per frame until SBT/mask ready. Do not run deferred-ops on a worker while submitting (knowledge §37).
+	bool TryFinishVoxelAwareRtxResources(const VulkanContextState &context);
 
 	static bool CreateShadowMaskFallback(const VulkanContextState &context, RenderState *render)
 	{
@@ -247,6 +251,8 @@ class RayTracedShadows {
 	VkFormat m_shadowMaskFormat = VK_FORMAT_R8_UNORM;
 	std::array<RtxFrameResources, MAX_FRAMES_IN_FLIGHT> m_rtxFrames{};
 	bool m_voxelAwareRtxActive = false;
+	bool m_voxelAwareRtxPending = false; // true after Initialize until Finish succeeds or permanently fails
+	bool m_voxelAwareRtxFailed = false;
 };
 
 struct RayTracedShadowTestAccess {

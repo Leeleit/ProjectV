@@ -33,6 +33,7 @@ set(SHADERS
         ${SHADER_DIR}/voxel_mesh_pre.comp
         ${SHADER_DIR}/voxel_mesh.mesh
         ${SHADER_DIR}/hzb_cull.comp
+        ${SHADER_DIR}/hiz_minify.comp
         ${SHADER_DIR}/fluid_ca.comp
         ${SHADER_DIR}/world_gen.comp
         ${SHADER_DIR}/voxelize.comp
@@ -56,6 +57,7 @@ set(SHADERS
         ${SHADER_DIR}/bloom_downsample.comp
         ${SHADER_DIR}/bloom_upsample.comp
         ${SHADER_DIR}/post_composite.comp
+        ${SHADER_DIR}/post_composite_bindless.comp
 )
 
 foreach (SHADER ${SHADERS})
