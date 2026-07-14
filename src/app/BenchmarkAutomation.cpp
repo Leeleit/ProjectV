@@ -157,8 +157,11 @@ bool UpdateBenchmarkAutomation(
 	const DebugStats &debugStats,
 	const Uint64 frameCounter)
 {
-	if (!state || !state->active || state->completed) {
+	if (!state || !state->active) {
 		return false;
+	}
+	if (state->completed) {
+		return state->quitWhenDone;
 	}
 
 	if (state->warmupFramesRemaining > 0u) {

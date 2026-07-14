@@ -47,7 +47,8 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 		return false;
 	}
 	const auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, descriptorSet] = m_rtxFrames[frameIndex];
-	if (cameraUboMappedData == nullptr || descriptorSet == VK_NULL_HANDLE) {
+	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
+	if (cameraUboMappedData == nullptr || (!usePushDescriptors && descriptorSet == VK_NULL_HANDLE)) {
 		return false;
 	}
 	if (inverseViewProjection == nullptr || cameraPosition == nullptr || cameraForward == nullptr) {
@@ -126,7 +127,6 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	writes[5].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	writes[5].pBufferInfo = &cameraUboInfo;
 
-	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
 	if (usePushDescriptors) {
 		vkCmdPushDescriptorSet(
 			commandBuffer,
