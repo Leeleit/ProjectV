@@ -256,8 +256,6 @@ struct PhysicsState {
 	bool walkJumpBallisticHorizontalVelocityActive = false;
 	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
 	bool walkAutoJumpEnabled = false;
-	uint32_t walkAutoJumpDelayFramesRemaining = 0;
-	bool walkAutoJumpDelayEnabled = true;
 	WalkSupportContactKey walkPassiveSlideContact{};
 	bool walkSneakActive = false;
 	WalkSneakSupportRegion walkCachedSneakSupportRegion{};

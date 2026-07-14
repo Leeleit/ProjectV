@@ -263,8 +263,6 @@ void PlotWalkProfilingState(
 	profiling::PlotValue("Walk Velocity Y", velocity.GetY());
 	profiling::PlotValue("Walk Air Control Mode", ToWalkAirControlProfilingValue(physics.walkAirControlMode));
 	profiling::PlotValue("Walk Auto Jump", physics.walkAutoJumpEnabled ? int64_t{1} : int64_t{0});
-	profiling::PlotValue("Walk Auto Jump Delay", physics.walkAutoJumpDelayEnabled ? int64_t{1} : int64_t{0});
-	profiling::PlotValue("Walk Auto Jump Delay Frames", static_cast<int64_t>(physics.walkAutoJumpDelayFramesRemaining));
 	profiling::PlotValue("Walk Sneak Active", physics.walkSneakActive ? int64_t{1} : int64_t{0});
 	profiling::PlotValue("Walk Jump Lock", physics.walkJumpLockedSupport.valid ? int64_t{1} : int64_t{0});
 	profiling::PlotValue(
@@ -2188,7 +2186,6 @@ void ApplyWalkCharacterState(
 	physics.walkPreviousSupportFeetPosition = {};
 	physics.walkPreviousSupportFeetPositionValid = false;
 	physics.walkHadHorizontalMotionLastStep = false;
-	physics.walkAutoJumpDelayFramesRemaining = 0;
 	ClearWalkJumpBallisticHorizontalVelocity(physics);
 	ClearWalkSneakSupportCache(physics);
 	ClearWalkJumpLockedSupport(physics);

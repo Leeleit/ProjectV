@@ -433,6 +433,26 @@ void RecordGraphicsCommands(
 				sizeof(VkDrawIndirectCommand));
 		}
 
+		// Selection/placement wireframe boxes draw here (still inside the MSAA color attachment)
+		// instead of the post-blit UI pass, so they resolve through the same AA stack as voxels.
+		if (frameRenderData.debugUiVisible &&
+			render.debugOverlayPipeline != VK_NULL_HANDLE &&
+			!frameRenderData.debugOverlayBoxes.empty()) {
+			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Debug Overlay Boxes");
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.debugOverlayPipeline);
+			for (const DebugOverlayBox &box : frameRenderData.debugOverlayBoxes) {
+				const DebugOverlayPushConstants pushConstants = BuildBoxOverlayPushConstants(frameRenderData, box);
+				vkCmdPushConstants(
+					cmd,
+					render.debugOverlayPipelineLayout,
+					VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+					0,
+					sizeof(pushConstants),
+					&pushConstants);
+				vkCmdDraw(cmd, 24, 1, 0, 0);
+			}
+		}
+
 		vkCmdEndRendering(cmd);
 
 		const bool cloudscapePassActive = projectv::render::IsCloudscapeEnabled() &&

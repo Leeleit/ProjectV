@@ -26,7 +26,6 @@ struct PhysicsWalkDebugInfo {
 	uint32_t groundTakeoffGraceFramesRemaining = 0;
 	uint32_t sneakSupportGraceFramesRemaining = 0;
 	uint32_t ledgeReleaseGraceFramesRemaining = 0;
-	uint32_t autoJumpDelayFramesRemaining = 0;
 	bool groundTakeoffCached = false;
 	bool cachedSneakSupportValid = false;
 	bool feetInsideCachedSneakSupport = false;
@@ -34,7 +33,6 @@ struct PhysicsWalkDebugInfo {
 	bool jumpLockActive = false;
 	bool suppressPassiveSlide = false;
 	bool autoJumpEnabled = false;
-	bool autoJumpDelayEnabled = true;
 	float cachedSneakSupportReferenceFeetY = 0.0f;
 };
 
@@ -106,8 +104,6 @@ void SetPhysicsWalkAirControlMode(PhysicsState *physics, WalkAirControlMode mode
 WalkAirControlMode GetPhysicsWalkAirControlMode(const PhysicsState *physics);
 void SetPhysicsWalkAutoJumpEnabled(PhysicsState *physics, bool enabled);
 bool IsPhysicsWalkAutoJumpEnabled(const PhysicsState *physics);
-void SetPhysicsWalkAutoJumpDelayEnabled(PhysicsState *physics, bool enabled);
-bool IsPhysicsWalkAutoJumpDelayEnabled(const PhysicsState *physics);
 PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics);
 
 

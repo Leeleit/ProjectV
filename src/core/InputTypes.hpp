@@ -39,7 +39,7 @@ enum class InputAction : uint8_t {
 	ToggleDirtyChunkOverlay,
 	ToggleWalkAirControlMode,
 	ToggleWalkAutoJump,
-	ToggleWalkAutoJumpDelay,
+	ToggleWalkAutoJumpDelay, // reserved: bit-index stable; delay removed (always 0)
 	DecreaseLightingExposure,
 	IncreaseLightingExposure,
 	CycleToneMapOperator,
@@ -175,7 +175,7 @@ struct InputReplayCapture {
 	InteractionState initialInteraction{};
 	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
 	bool walkAutoJumpEnabled = false;
-	bool walkAutoJumpDelayEnabled = true;
+	bool walkAutoJumpDelayEnabled = false; // file-format field; always false (delay removed)
 	std::vector<InputReplayFrame> frames;
 };
 

@@ -31,7 +31,7 @@ const char *ControlModeLabel(const CameraState::ControlMode mode)
 	case CameraState::ControlMode::Spectator:
 		return "Spectator";
 	case CameraState::ControlMode::Walk:
-		return "Walk";
+		return "Survival";
 	}
 	return "Creative";
 }
@@ -104,7 +104,7 @@ void DrawStatusStrip(const HudFrameContext &ctx)
 	ImGui::SameLine();
 	ImGui::TextDisabled("|");
 	ImGui::SameLine();
-	ImGui::TextDisabled("` Settings · F1 Hide · Tab Mouse");
+	ImGui::TextDisabled("` Settings · F1 Hide · Tab Mouse · F5 Rec · F6 Replay");
 	ImGui::End();
 }
 
@@ -180,17 +180,13 @@ void DrawSettings(HudFrameContext &ctx)
 	}
 	ImGui::Text("Exposure bias: %.2f", ctx.render->lightingDebugControls.exposureBiasStops);
 
-	ImGui::SeparatorText("Walk");
+	ImGui::SeparatorText("Survival");
 	if (ImGui::Button("Cycle air control")) {
 		QueueAction(*ctx.input, InputAction::ToggleWalkAirControlMode);
 	}
 	bool autoJump = IsPhysicsWalkAutoJumpEnabled(ctx.physics);
 	if (ImGui::Checkbox("Auto-jump", &autoJump)) {
 		SetPhysicsWalkAutoJumpEnabled(ctx.physics, autoJump);
-	}
-	bool autoJumpDelay = IsPhysicsWalkAutoJumpDelayEnabled(ctx.physics);
-	if (ImGui::Checkbox("Auto-jump delay", &autoJumpDelay)) {
-		SetPhysicsWalkAutoJumpDelayEnabled(ctx.physics, autoJumpDelay);
 	}
 
 	ImGui::SeparatorText("World");
@@ -221,7 +217,7 @@ void DrawSettings(HudFrameContext &ctx)
 		QueueAction(*ctx.input, InputAction::ToggleControlMode);
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Creative / Walk")) {
+	if (ImGui::Button("Creative / Survival")) {
 		QueueAction(*ctx.input, InputAction::ToggleWalkCreativeMode);
 	}
 
@@ -272,15 +268,6 @@ void DrawSettings(HudFrameContext &ctx)
 		ImGui::Text("Volume %.2f", ctx.audio->volume());
 	} else {
 		ImGui::TextDisabled("Audio unavailable");
-	}
-
-	ImGui::SeparatorText("Replay");
-	if (ImGui::Button(ctx.input->replay.recording ? "Stop recording" : "Record replay")) {
-		QueueAction(*ctx.input, InputAction::ToggleInputReplayRecording);
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("Play last replay")) {
-		QueueAction(*ctx.input, InputAction::PlayLastInputReplay);
 	}
 
 	ImGui::SeparatorText("Dev");

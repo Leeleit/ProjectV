@@ -19,7 +19,6 @@ constexpr float kWalkJumpRealisticAirBrakeDeceleration = 14.0f;
 constexpr float kWalkJumpRealisticAirReacceleration = 10.0f;
 constexpr float kWalkJumpMinecraftAirBrakeDeceleration = 14.0f;
 constexpr float kWalkJumpMinecraftAirControlAcceleration = 12.0f;
-constexpr uint32_t kWalkAutoJumpDelayFrames = 12;
 constexpr float kWalkStickToFloorDistance = 0.25f;
 constexpr float kWalkStairsStepUpHeight = 0.4f;
 constexpr float kWalkAutoJumpMinRise = kWalkStairsStepUpHeight + 0.05f;

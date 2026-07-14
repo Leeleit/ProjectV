@@ -1372,7 +1372,6 @@ int RunReplayAnalysisFromEnvironment()
 	}
 	SetPhysicsWalkAirControlMode(physics.get(), capture.walkAirControlMode);
 	SetPhysicsWalkAutoJumpEnabled(physics.get(), capture.walkAutoJumpEnabled);
-	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), capture.walkAutoJumpDelayEnabled);
 	if (camera.controlMode == CameraState::ControlMode::Walk) {
 		if (!SnapWalkCharacterToCamera(physics.get(), worldState.voxelWorld.get(), &camera)) {
 			std::fprintf(stderr, "[ReplayAnalysis] SnapWalkCharacterToCamera failed\n");
@@ -1977,39 +1976,6 @@ void TestUpdateAppTogglesWalkAutoJump(TestContext &context)
 	EXPECT_TRUE(context, debug.stats.walkAutoJumpEnabled == initialAutoJumpEnabled);
 }
 
-void TestUpdateAppTogglesWalkAutoJumpDelay(TestContext &context)
-{
-	PlatformState platform{};
-	SimulationState simulation{};
-	CameraState camera = MakeTestCamera({2.5f, 2.65f, 4.5f});
-	camera.controlMode = CameraState::ControlMode::Walk;
-	InputState input{};
-	InitializeInputState(input);
-	InteractionState interaction{};
-	WorldState world{};
-	world.voxelWorld = std::make_unique<VoxelWorld>(MakeWalkTestWorld());
-	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
-	RenderState render{};
-	DebugState debug{};
-
-	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), world.voxelWorld.get()));
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), world.voxelWorld.get(), &camera));
-	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpDelayEnabled(physics.get()));
-
-	PressInputAction(input, InputAction::ToggleWalkAutoJumpDelay);
-	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
-	EXPECT_TRUE(context, !IsPhysicsWalkAutoJumpDelayEnabled(physics.get()));
-	EXPECT_TRUE(context, !debug.stats.walkAutoJumpDelayEnabled);
-
-	InputState secondInput{};
-	InitializeInputState(secondInput);
-	PressInputAction(secondInput, InputAction::ToggleWalkAutoJumpDelay);
-	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &secondInput, &interaction, &world, physics.get(), &render, &debug));
-	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpDelayEnabled(physics.get()));
-	EXPECT_TRUE(context, debug.stats.walkAutoJumpDelayEnabled);
-}
-
 void TestInputReplayCaptureRoundTripsFile(TestContext &context)
 {
 	InputReplayCapture capture{};
@@ -2062,7 +2028,7 @@ void TestInputReplayCaptureRoundTripsFile(TestContext &context)
 	EXPECT_EQ(context, capture.initialInteraction.editorTool, loaded.initialInteraction.editorTool);
 	EXPECT_EQ(context, capture.walkAirControlMode, loaded.walkAirControlMode);
 	EXPECT_TRUE(context, capture.walkAutoJumpEnabled == loaded.walkAutoJumpEnabled);
-	EXPECT_TRUE(context, capture.walkAutoJumpDelayEnabled == loaded.walkAutoJumpDelayEnabled);
+	EXPECT_TRUE(context, !loaded.walkAutoJumpDelayEnabled);
 	EXPECT_EQ(context, capture.frames.size(), loaded.frames.size());
 	EXPECT_NEAR(context, capture.frames[0].deltaSeconds, loaded.frames[0].deltaSeconds);
 	EXPECT_EQ(context, capture.frames[0].actionDownMask, loaded.frames[0].actionDownMask);
@@ -2089,7 +2055,7 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 	capture.initialCamera.controlMode = CameraState::ControlMode::Walk;
 	capture.walkAirControlMode = WalkAirControlMode::MinecraftLike;
 	capture.walkAutoJumpEnabled = true;
-	capture.walkAutoJumpDelayEnabled = true;
+	capture.walkAutoJumpDelayEnabled = false;
 	for (int frameIndex = 0; frameIndex < 30; ++frameIndex) {
 		InputReplayFrame frame{};
 		frame.deltaSeconds = 1.0f / 60.0f;
@@ -2129,7 +2095,6 @@ void TestInputReplayCanDriveWalkSequence(TestContext &context)
 	EXPECT_TRUE(context, SyncPhysicsWorld(state.app.physics().get(), state.app.world().voxelWorld.get()));
 	SetPhysicsWalkAirControlMode(state.app.physics().get(), loaded.walkAirControlMode);
 	SetPhysicsWalkAutoJumpEnabled(state.app.physics().get(), loaded.walkAutoJumpEnabled);
-	SetPhysicsWalkAutoJumpDelayEnabled(state.app.physics().get(), loaded.walkAutoJumpDelayEnabled);
 	EXPECT_TRUE(context, SnapWalkCharacterToCamera(state.app.physics().get(), state.app.world().voxelWorld.get(), &camera));
 
 	float maxCameraY = camera.position[1];
@@ -4038,108 +4003,6 @@ void TestWalkCharacterHeldJumpDoesNotAcquireForeignWallTopNearTwoBlockWall(TestC
 	}
 }
 
-struct AutoJumpTestResult {
-	int delayArmedFrame = -1;
-	int jumpStartFrame = -1;
-	int topTouchFrame = -1;
-	uint32_t maxDelayFramesRemaining = 0;
-	float maxY = 0.0f;
-	float finalY = 0.0f;
-	float finalZ = 0.0f;
-};
-
-AutoJumpTestResult RunAutoJumpDelayCase(TestContext &context, const bool delayEnabled)
-{
-	constexpr float kPi = 3.1415926535f;
-	const int kSimulationFrames = SimulationFrameCount(120);
-	const VoxelWorld world = MakeWalkPositiveSingleBlockTestWorld();
-
-	const std::unique_ptr<PhysicsState, void (*)(PhysicsState *)> physics(CreatePhysicsState(), DestroyPhysicsState);
-	EXPECT_TRUE(context, physics != nullptr);
-	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
-	SetPhysicsWalkAutoJumpEnabled(physics.get(), true);
-	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), delayEnabled);
-
-	CameraState camera = MakeTestCamera({5.5f, 2.65f, 4.45f});
-	camera.controlMode = CameraState::ControlMode::Walk;
-	camera.yawRadians = kPi;
-	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), &world, &camera));
-
-	const float startY = camera.position[1];
-	InputState input{};
-	InitializeInputState(input);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_W);
-
-	AutoJumpTestResult result{};
-	result.maxY = camera.position[1];
-	for (int step = 0; step < kSimulationFrames; ++step) {
-		EXPECT_TRUE(context, TickWalkCharacter(physics.get(), &world, &camera, &input, 1.0f / 60.0f));
-		const PhysicsWalkDebugInfo info = GetPhysicsWalkDebugInfo(physics.get());
-		result.maxDelayFramesRemaining = std::max(result.maxDelayFramesRemaining, info.autoJumpDelayFramesRemaining);
-		if (result.delayArmedFrame < 0 && info.autoJumpDelayFramesRemaining > 0) {
-			result.delayArmedFrame = step;
-		}
-		result.maxY = std::max(result.maxY, camera.position[1]);
-		if (result.jumpStartFrame < 0 && camera.position[1] > startY + 0.03f) {
-			result.jumpStartFrame = step;
-		}
-		if (result.topTouchFrame < 0 &&
-			camera.position[1] > 3.3f &&
-			camera.position[2] > 5.75f &&
-			camera.position[2] < 7.1f &&
-			camera.position[0] > 5.05f &&
-			camera.position[0] < 5.95f) {
-			result.topTouchFrame = step;
-		}
-	}
-
-	result.finalY = camera.position[1];
-	result.finalZ = camera.position[2];
-	return result;
-}
-
-void TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(TestContext &context)
-{
-	constexpr int kMinimumDelayFrameGap = 4;
-	constexpr int kMinimumArmedFrameGap = 4;
-
-	const auto [delayedDelayArmedFrame, delayedJumpStartFrame, delayedTopTouchFrame, delayedMaxDelayFramesRemaining, delayedMaxY, delayedFinalY, delayedFinalZ] = RunAutoJumpDelayCase(context, true);
-	const auto [instantDelayArmedFrame, instantJumpStartFrame, instantTopTouchFrame, instantMaxDelayFramesRemaining, instantMaxY, instantFinalY, instantFinalZ] = RunAutoJumpDelayCase(context, false);
-	if (!(delayedDelayArmedFrame >= 0 &&
-		  delayedMaxDelayFramesRemaining >= static_cast<uint32_t>(kMinimumArmedFrameGap) &&
-		  delayedJumpStartFrame >= 0 &&
-		  delayedJumpStartFrame - delayedDelayArmedFrame >= kMinimumArmedFrameGap &&
-		  instantMaxDelayFramesRemaining == 0 &&
-		  instantJumpStartFrame >= 0 &&
-		  delayedJumpStartFrame - instantJumpStartFrame >= kMinimumDelayFrameGap &&
-		  instantTopTouchFrame >= 0 &&
-		  delayedTopTouchFrame >= 0 &&
-		  delayedTopTouchFrame >= instantTopTouchFrame &&
-		  delayedMaxY > 3.8f &&
-		  instantMaxY > 3.8f)) {
-		char buffer[256]{};
-		std::snprintf(
-			buffer,
-			sizeof(buffer),
-			"auto-jump delay toggle regressed (delayedArm=%d delayedJump=%d instantArm=%d instantJump=%d delayedTop=%d instantTop=%d delayedDelay=%u instantDelay=%u delayedMaxY=%.3f instantMaxY=%.3f delayedFinal=(%.3f, %.3f) instantFinal=(%.3f, %.3f))",
-			delayedDelayArmedFrame,
-			delayedJumpStartFrame,
-			instantDelayArmedFrame,
-			instantJumpStartFrame,
-			delayedTopTouchFrame,
-			instantTopTouchFrame,
-			delayedMaxDelayFramesRemaining,
-			instantMaxDelayFramesRemaining,
-			delayedMaxY,
-			instantMaxY,
-			delayedFinalY,
-			delayedFinalZ,
-			instantFinalY,
-			instantFinalZ);
-		context.Fail(__LINE__, buffer);
-	}
-}
-
 struct TraversalTestResult {
 	float maxY = 0.0f;
 	float finalY = 0.0f;
@@ -4157,7 +4020,6 @@ TraversalTestResult RunAutoJumpToggleCase(TestContext &context, const bool autoJ
 	EXPECT_TRUE(context, physics != nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), &world));
 	SetPhysicsWalkAutoJumpEnabled(physics.get(), autoJumpEnabled);
-	SetPhysicsWalkAutoJumpDelayEnabled(physics.get(), false);
 
 	CameraState camera = MakeTestCamera({5.5f, 2.65f, 4.45f});
 	camera.controlMode = CameraState::ControlMode::Walk;
@@ -6837,7 +6699,6 @@ int main() // NOLINT(*-exception-escape)
 	TestUpdateAppUsesVisibleSceneDistanceForSunShadowCascadeSplits(context);
 	TestUpdateAppTogglesWalkAirControlMode(context);
 	TestUpdateAppTogglesWalkAutoJump(context);
-	TestUpdateAppTogglesWalkAutoJumpDelay(context);
 	TestInputReplayCaptureRoundTripsFile(context);
 	TestInputReplayCanDriveWalkSequence(context);
 	TestPlacementMaterialCycleCoversAllDebugMaterials(context);
@@ -6910,7 +6771,6 @@ int main() // NOLINT(*-exception-escape)
 	TestWalkCharacterCannotDoubleJumpWhileAirborneNearWall(context);
 	TestWalkCharacterHeldJumpDoesNotAcquireForeignWallTopNearTwoBlockWall(context);
 	TestWalkCharacterFallsAfterEditedSupportIsRemoved(context);
-	TestWalkCharacterAutoJumpDelayToggleChangesOneBlockTakeoffTiming(context);
 	TestWalkCharacterAutoJumpToggleControlsOneBlockTraversal(context);
 	TestWalkCharacterCanJumpOntoCornerSideFromPerpendicularApproach(context);
 	TestWalkCharacterSneakCanMoveAlongNegativeSingleBlockEdge(context);

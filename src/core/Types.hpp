@@ -204,7 +204,6 @@ struct DebugStats {
 	WalkAirControlMode walkAirControlMode = WalkAirControlMode::MinecraftLike;
 	bool detailedHudVisible = false;
 	bool walkAutoJumpEnabled = false;
-	bool walkAutoJumpDelayEnabled = true;
 	bool simulationPaused = false;
 	float simulationTimeScale = 1.0f;
 	bool simulationFrameStepPending = false;
@@ -236,7 +235,6 @@ struct DebugStats {
 	uint32_t walkGroundTakeoffGraceFramesRemaining = 0;
 	uint32_t walkSneakSupportGraceFramesRemaining = 0;
 	uint32_t walkLedgeReleaseGraceFramesRemaining = 0;
-	uint32_t walkAutoJumpDelayFramesRemaining = 0;
 	bool walkGroundTakeoffCached = false;
 	bool walkSneakActive = false;
 	bool walkJumpLockActive = false;

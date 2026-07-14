@@ -652,9 +652,8 @@ carrier для collision/contact infrastructure.
 `F11` cycle.
 
 **Auto-jump contract:**
-- `J` toggle `IsPhysicsWalkAutoJumpEnabled` (default OFF).
-- `F12` toggle `IsPhysicsWalkAutoJumpDelayEnabled`.
-- Manual held jump (`Space`) обнуляет pending auto-jump delay countdown.
+- Settings checkbox toggles `IsPhysicsWalkAutoJumpEnabled` (default OFF).
+- Auto-jump is always immediate (0 delay); delay toggle/countdown removed.
 - One-block auto-jump = optional traversal path, не always-on baseline.
 
 **Jump / edge support:**
@@ -680,9 +679,9 @@ simulation = reproducible walk bugs, не synthetic-case false signals.
 - `Spectator=1` — observe-only noclip без world edits. **НЕ** подчиняется `pause`
   для movement/look. Paused в simulation, но camera can still rotate (separate
   `TickCamera` call в `AppUpdateHelpers.cpp:104-106`).
-- `Walk=2` — grounded physics mode (см. §20). `DoubleTap Space` ↔ Creative.
+- `Walk=2` — grounded physics mode (см. §20). UI label **Survival**. `DoubleTap Space` ↔ Creative.
 
-**Cycle:** `F4` hotkey: `Creative → Spectator → Walk → Creative`.
+**Cycle:** Settings / `ToggleControlMode`: `Creative → Spectator → Walk → Creative`.
 
 **Per-mode reset:** `ApplyControlModeTransition` calls `ResetWalkCharacter` чтобы
 clear cached support ownership при смене mode.

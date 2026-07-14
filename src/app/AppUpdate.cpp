@@ -365,7 +365,6 @@ void MirrorWalkStatsToDebugStats(
 	stats.walkGroundTakeoffGraceFramesRemaining = walkDebugInfo.groundTakeoffGraceFramesRemaining;
 	stats.walkSneakSupportGraceFramesRemaining = walkDebugInfo.sneakSupportGraceFramesRemaining;
 	stats.walkLedgeReleaseGraceFramesRemaining = walkDebugInfo.ledgeReleaseGraceFramesRemaining;
-	stats.walkAutoJumpDelayFramesRemaining = walkDebugInfo.autoJumpDelayFramesRemaining;
 	stats.walkGroundTakeoffCached = walkDebugInfo.groundTakeoffCached;
 	stats.walkSneakActive = walkDebugInfo.sneakActive;
 	stats.walkJumpLockActive = walkDebugInfo.jumpLockActive;
@@ -499,9 +498,6 @@ bool ProcessInputActions(
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAutoJump)) {
 		SetPhysicsWalkAutoJumpEnabled(physics, !IsPhysicsWalkAutoJumpEnabled(physics));
 	}
-	if (ConsumeInputActionPressed(*input, InputAction::ToggleWalkAutoJumpDelay)) {
-		SetPhysicsWalkAutoJumpDelayEnabled(physics, !IsPhysicsWalkAutoJumpDelayEnabled(physics));
-	}
 	if (ConsumeInputActionPressed(*input, InputAction::DecreaseTimeScale)) {
 		constexpr float kTimeScaleDownStep = 0.5f;
 		constexpr float kTimeScaleSnapToZeroThreshold = 0.01f;
@@ -600,8 +596,7 @@ bool ProcessInputActions(
 					*camera,
 					*interaction,
 					GetPhysicsWalkAirControlMode(physics),
-					IsPhysicsWalkAutoJumpEnabled(physics),
-					IsPhysicsWalkAutoJumpDelayEnabled(physics))) {
+					IsPhysicsWalkAutoJumpEnabled(physics))) {
 				return false;
 			}
 		}
@@ -697,7 +692,6 @@ void MirrorAllFrameStats(
 	debug->stats.walkAirControlMode = GetPhysicsWalkAirControlMode(physics);
 	debug->stats.detailedHudVisible = debug->detailedHudVisible;
 	debug->stats.walkAutoJumpEnabled = IsPhysicsWalkAutoJumpEnabled(physics);
-	debug->stats.walkAutoJumpDelayEnabled = IsPhysicsWalkAutoJumpDelayEnabled(physics);
 	debug->stats.simulationPaused = simulation.paused;
 	debug->stats.simulationTimeScale = simulation.timeScale;
 	debug->stats.simulationFrameStepPending = simulation.frameStepRequested;

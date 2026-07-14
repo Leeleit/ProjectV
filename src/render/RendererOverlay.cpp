@@ -55,23 +55,8 @@ void RecordDebugOverlayCommands(
 		return;
 	}
 
-	if (render.debugOverlayPipeline != VK_NULL_HANDLE &&
-		!frameRenderData.debugOverlayBoxes.empty()) {
-		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Debug Overlay");
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.debugOverlayPipeline);
-		for (const DebugOverlayBox &box : frameRenderData.debugOverlayBoxes) {
-			const DebugOverlayPushConstants pushConstants = BuildBoxOverlayPushConstants(frameRenderData, box);
-			vkCmdPushConstants(
-				cmd,
-				render.debugOverlayPipelineLayout,
-				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				0,
-				sizeof(pushConstants),
-				&pushConstants);
-			vkCmdDraw(cmd, 24, 1, 0, 0);
-		}
-	}
-
+	// Selection/placement wireframe boxes are drawn earlier, inside RecordGraphicsCommands'
+	// main color pass, so they get MSAA/SMAA/progressive/SSAA like the rest of the scene.
 	if (render.debugCrosshairPipeline != VK_NULL_HANDLE &&
 		swapchain.extent.width > 0 &&
 		swapchain.extent.height > 0) {

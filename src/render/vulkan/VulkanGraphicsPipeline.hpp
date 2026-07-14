@@ -32,4 +32,7 @@ bool RefreshGraphicsResourceBindings(
 void DestroyGraphicsPipeline(
 	VulkanContextState *context,
 	RenderState *render);
+bool RecreateDebugSelectionPipeline(
+	VulkanContextState &context,
+	RenderState &render);
 

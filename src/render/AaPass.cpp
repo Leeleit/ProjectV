@@ -67,17 +67,19 @@ bool CreateImage2D(
 	const char *const imageName,
 	const char *const viewName)
 {
-	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.format = format;
-	imageInfo.extent = {extent.width, extent.height, 1u};
-	imageInfo.mipLevels = 1u;
-	imageInfo.arrayLayers = 1u;
-	imageInfo.samples = samples;
-	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	imageInfo.usage = usage;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkImageCreateInfo imageInfo{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = format,
+		.extent = {extent.width, extent.height, 1u},
+		.mipLevels = 1u,
+		.arrayLayers = 1u,
+		.samples = samples,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = usage,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
 	VmaAllocationCreateInfo allocationInfo{};
 	allocationInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 	const VkResult imageResult = vmaCreateImage(
@@ -126,12 +128,17 @@ bool CreateComputePipeline(
 		return false;
 	}
 
-	VkComputePipelineCreateInfo pipelineInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-	pipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	pipelineInfo.stage.module = shaderModule;
-	pipelineInfo.stage.pName = "main";
-	pipelineInfo.layout = layout;
+	VkComputePipelineCreateInfo pipelineInfo{
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.stage =
+			{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+				.module = shaderModule,
+				.pName = "main",
+			},
+		.layout = layout,
+	};
 	const VkResult pipelineResult = vkCreateComputePipelines(
 		context.device, context.pipelineCache, 1u, &pipelineInfo, nullptr, &pipeline);
 	if (pipelineResult != VK_SUCCESS) {
@@ -645,6 +652,11 @@ bool RecreateAaDependentPipelines(
 			"RecreateAaDependentPipelines.RefreshGraphicsResourceBindings",
 			"graphics descriptor sets missing after AA pipeline recreate");
 		return false;
+	}
+	// Selection-box wireframe pipeline samples the same scene color/depth attachments as the
+	// voxel pipeline above, so its sample count must be recreated in lockstep with MSAA changes.
+	if (!RecreateDebugSelectionPipeline(*context, *render)) {
+		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "AA recreate: debug selection overlay pipeline failed");
 	}
 	render->pipelinesMsaaSampleCount = render->msaaSampleCount;
 	render->aaPipelinesNeedRecreate = false;

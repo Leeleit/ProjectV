@@ -102,7 +102,7 @@ bool WriteReplayCapture(std::ostream &stream, const InputReplayCapture &capture)
 	stream << "walk "
 		   << static_cast<int>(capture.walkAirControlMode) << ' '
 		   << static_cast<int>(capture.walkAutoJumpEnabled) << ' '
-		   << static_cast<int>(capture.walkAutoJumpDelayEnabled) << '\n';
+		   << 0 << '\n'; // walkAutoJumpDelayEnabled always 0
 	stream << "frame_count " << capture.frames.size() << '\n';
 	for (const auto &[deltaSeconds, mouseDeltaX, mouseDeltaY, actionDownMask, actionPressedMask, removePressed, placePressed] : capture.frames) {
 		stream << "frame "
@@ -166,16 +166,15 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 				std::istringstream walkStream(walkLine);
 				int walkAirControlMode = 0;
 				int autoJumpEnabled = version == 1 ? 1 : 0;
-				int autoJumpDelayEnabled = 0;
+				[[maybe_unused]] int autoJumpDelayEnabled = 0;
 				walkStream >> walkAirControlMode;
-				if (version == 1) {
-					walkStream >> autoJumpDelayEnabled;
-				} else {
-					walkStream >> autoJumpEnabled >> autoJumpDelayEnabled;
+				if (version != 1) {
+					walkStream >> autoJumpEnabled;
 				}
+				walkStream >> autoJumpDelayEnabled; // v1: after airControl; v2+: after autoJump
 				capture.walkAirControlMode = static_cast<WalkAirControlMode>(walkAirControlMode);
 				capture.walkAutoJumpEnabled = autoJumpEnabled != 0;
-				capture.walkAutoJumpDelayEnabled = autoJumpDelayEnabled != 0;
+				capture.walkAutoJumpDelayEnabled = false; // delay removed; ignore file value
 			} else if (key == "frame_count") {
 				stream >> expectedFrameCount;
 				capture.frames.reserve(expectedFrameCount);
@@ -268,8 +267,7 @@ bool StartInputReplayRecording(
 	const CameraState &camera,
 	const InteractionState &interaction,
 	const WalkAirControlMode walkAirControlMode,
-	const bool walkAutoJumpEnabled,
-	const bool walkAutoJumpDelayEnabled)
+	const bool walkAutoJumpEnabled)
 {
 	if (!input) {
 		runtime::LogRuntimeFailure("InputReplay", "StartInputReplayRecording.Input", "input is null");
@@ -282,7 +280,7 @@ bool StartInputReplayRecording(
 	capture.initialInteraction = interaction;
 	capture.walkAirControlMode = walkAirControlMode;
 	capture.walkAutoJumpEnabled = walkAutoJumpEnabled;
-	capture.walkAutoJumpDelayEnabled = walkAutoJumpDelayEnabled;
+	capture.walkAutoJumpDelayEnabled = false;
 	capture.frames.reserve(512);
 
 	const auto saveResult = SaveVoxelWorldSnapshot(world, capture.snapshotPath.string());

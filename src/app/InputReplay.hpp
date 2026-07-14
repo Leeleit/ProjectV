@@ -14,8 +14,7 @@ bool StartInputReplayRecording(
 	const CameraState &camera,
 	const InteractionState &interaction,
 	WalkAirControlMode walkAirControlMode,
-	bool walkAutoJumpEnabled,
-	bool walkAutoJumpDelayEnabled);
+	bool walkAutoJumpEnabled);
 bool StopInputReplayRecording(InputState *input);
 void RecordInputReplayFrame(
 	InputState *input,

@@ -316,7 +316,6 @@ bool StartLastInputReplayPlayback(AppState *state)
 	ApplyInputActionSnapshot(state->input(), 0ull, 0ull);
 	SetPhysicsWalkAirControlMode(state->physics().get(), state->input().replay.capture.walkAirControlMode);
 	SetPhysicsWalkAutoJumpEnabled(state->physics().get(), state->input().replay.capture.walkAutoJumpEnabled);
-	SetPhysicsWalkAutoJumpDelayEnabled(state->physics().get(), state->input().replay.capture.walkAutoJumpDelayEnabled);
 	if (camera->controlMode == CameraState::ControlMode::Walk) {
 		ConsumeInputActionPressed(state->input(), InputAction::MoveUp);
 		if (!SnapWalkCharacterToCamera(state->physics().get(), world->voxelWorld.get(), camera)) {
@@ -466,7 +465,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		return SDL_APP_CONTINUE;
 	}
 
-	(void)projectv::ui::ImGuiProcessEvent(event);
+	projectv::ui::ImGuiProcessEvent(event);
 
 	if (ShouldRequestSwapchainRefreshForWindowEvent(event->type)) {
 		state->platform().windowResized = true;

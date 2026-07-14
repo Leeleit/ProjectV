@@ -124,6 +124,8 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::ToggleHud, SDL_SCANCODE_F1);
 	BindAction(input, InputAction::ToggleRelativeMouseMode, SDL_SCANCODE_TAB);
 	BindAction(input, InputAction::OpenHudSettings, SDL_SCANCODE_GRAVE);
+	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_F5);
+	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_F6);
 }
 
 void HandleInputActionEvent(

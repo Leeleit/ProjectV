@@ -28,7 +28,6 @@ void ResetWalkCharacter(PhysicsState *physics)
 	physics->walkPreviousSupportFeetPosition = {};
 	physics->walkPreviousSupportFeetPositionValid = false;
 	physics->walkHadHorizontalMotionLastStep = false;
-	physics->walkAutoJumpDelayFramesRemaining = 0;
 	physics->walkPassiveSlideContact = {};
 	physics->walkSneakActive = false;
 	ClearWalkSneakSupportCache(*physics);
@@ -53,7 +52,6 @@ void InvalidateWalkSupportStateForWorldEdit(PhysicsState &physics)
 	physics.walkPreviousSupportFeetPosition = {};
 	physics.walkPreviousSupportFeetPositionValid = false;
 	physics.walkHadHorizontalMotionLastStep = false;
-	physics.walkAutoJumpDelayFramesRemaining = 0;
 	physics.walkPassiveSlideContact = {};
 	ClearWalkSneakSupportCache(physics);
 	ClearWalkJumpLockedSupport(physics);
@@ -327,9 +325,8 @@ bool TickWalkCharacter(
 			}
 		}
 	}
-	bool autoJumpPressed = false;
 	const float autoJumpRise = autoJumpTopSupport.valid ? autoJumpTopSupport.feetPosition[1] - feetPosition[1] : 0.0f;
-	const bool hasAutoJumpReadyCandidate =
+	const bool autoJumpPressed =
 		physics->walkAutoJumpEnabled &&
 		!jumpPressed &&
 		hasMovementInput &&
@@ -339,18 +336,6 @@ bool TickWalkCharacter(
 		velocity.GetY() <= kWalkSneakStickPositiveVelocityEpsilon &&
 		autoJumpTopSupport.valid &&
 		IsWalkAutoJumpRiseInRange(autoJumpRise);
-	if (jumpPressed || jumpHeld || !hasAutoJumpReadyCandidate) {
-		physics->walkAutoJumpDelayFramesRemaining = 0;
-	} else {
-		if (!physics->walkAutoJumpDelayEnabled) {
-			autoJumpPressed = hasAutoJumpReadyCandidate;
-		} else if (physics->walkAutoJumpDelayFramesRemaining == 0) {
-			physics->walkAutoJumpDelayFramesRemaining = kWalkAutoJumpDelayFrames;
-		} else {
-			--physics->walkAutoJumpDelayFramesRemaining;
-			autoJumpPressed = physics->walkAutoJumpDelayFramesRemaining == 0;
-		}
-	}
 	const bool wantsJump = (jumpPressed || jumpHeld || autoJumpPressed) && (isGroundedLike || hasJumpTakeoffFeetPosition);
 	if (physics->walkSneakActive && hasMovementInput) {
 		const WalkSneakSupportRegion *constraintRegion = nullptr;
@@ -689,27 +674,11 @@ void SetPhysicsWalkAutoJumpEnabled(PhysicsState *physics, const bool enabled)
 	}
 
 	physics->walkAutoJumpEnabled = enabled;
-	physics->walkAutoJumpDelayFramesRemaining = 0;
 }
 
 bool IsPhysicsWalkAutoJumpEnabled(const PhysicsState *physics)
 {
 	return physics != nullptr ? physics->walkAutoJumpEnabled : false;
-}
-
-void SetPhysicsWalkAutoJumpDelayEnabled(PhysicsState *physics, const bool enabled)
-{
-	if (physics == nullptr) {
-		return;
-	}
-
-	physics->walkAutoJumpDelayEnabled = enabled;
-	physics->walkAutoJumpDelayFramesRemaining = 0;
-}
-
-bool IsPhysicsWalkAutoJumpDelayEnabled(const PhysicsState *physics)
-{
-	return physics != nullptr ? physics->walkAutoJumpDelayEnabled : true;
 }
 
 PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics)
@@ -730,7 +699,6 @@ PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics)
 	info.groundTakeoffGraceFramesRemaining = physics->walkGroundTakeoffGraceFramesRemaining;
 	info.sneakSupportGraceFramesRemaining = physics->walkSneakSupportGraceFramesRemaining;
 	info.ledgeReleaseGraceFramesRemaining = physics->walkLedgeReleaseGraceFramesRemaining;
-	info.autoJumpDelayFramesRemaining = physics->walkAutoJumpDelayFramesRemaining;
 	info.groundTakeoffCached = physics->walkCachedGroundTakeoffValid;
 	info.cachedSneakSupportValid = physics->walkCachedSneakSupportRegion.valid;
 	info.feetInsideCachedSneakSupport =
@@ -740,7 +708,6 @@ PhysicsWalkDebugInfo GetPhysicsWalkDebugInfo(const PhysicsState *physics)
 	info.jumpLockActive = physics->walkJumpLockedSupport.valid;
 	info.suppressPassiveSlide = physics->walkSuppressPassiveSlide;
 	info.autoJumpEnabled = physics->walkAutoJumpEnabled;
-	info.autoJumpDelayEnabled = physics->walkAutoJumpDelayEnabled;
 	info.cachedSneakSupportReferenceFeetY =
 		physics->walkCachedSneakSupportRegion.valid ? physics->walkCachedSneakSupportRegion.referenceFeetPosition[1] : 0.0f;
 

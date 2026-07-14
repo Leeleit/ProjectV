@@ -18,9 +18,41 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-15 Selection box AA (moved into scene pass):** operator reported the
+yellow block-selection wireframe had no antialiasing while the rest of the
+scene did. Root cause: the debug-overlay box pipeline (`debug_overlay.vert`/
+`.frag`, `LINE_LIST`) drew directly onto the swapchain in the post-blit UI
+pass (alongside ImGui), entirely bypassing the voxel AA stack (MSAA/SMAA/
+Progressive/SSAA), which only runs on `sceneColorImageView` before the blit.
+Fix: split `CreateDebugOverlayPipeline` (`VulkanGraphicsPipelineOverlay.cpp`)
+into `CreateDebugSelectionPipeline` (box lines — now targets
+`VK_FORMAT_B10G11R11_UFLOAT_PACK32` scene color + `ChooseDepthFormat` depth +
+`render.msaaSampleCount` samples, same as the voxel pipeline) and
+`CreateDebugCrosshairPipeline` (unchanged, swapchain format, single sample,
+still post-blit — crosshair is screen-space UI, not world geometry, so it
+doesn't need scene AA). Box draw call moved from `RecordDebugOverlayCommands`
+(`RendererOverlay.cpp`) into `RecordGraphicsCommands`'s main color pass
+(`RendererRecordCommands.cpp`), right before `vkCmdEndRendering`, so it
+participates in the same MSAA multisample-resolve, SMAA edge-AA, progressive
+accumulation, and render-scale/SSAA as voxel geometry. Added
+`RecreateDebugSelectionPipeline` (declared in `VulkanGraphicsPipeline.hpp`),
+called from `RecreateAaDependentPipelines` (`AaPass.cpp`) so the box pipeline
+sample count stays in lockstep when MSAA mode is cycled (`T`) at runtime.
+`debug_overlay.vert`/`.frag` shaders unchanged — pure MSAA relocation, no
+manual analytic AA needed. Build green, 44/44 ctest pass, validation smoke
+(`PROJECTV_ENABLE_VALIDATION=ON`) clean; visually confirmed via lookdev
+capture that the box wireframe edges are now soft/anti-aliased instead of a
+hard binary staircase. Noted in passing (not touched, out of scope):
+`src/render/RenderHelpers.hpp/.cpp` and `src/render/vulkan/DebugPipelines.hpp`
+are dead files — not referenced by `src/CMakeLists.txt`, contain stale
+duplicate declarations in a different namespace than the code that's
+actually built.
+
+**2026-07-15 HUD polish:** removed auto-jump delay (always instant);
+Record/Play → `F5`/`F6`; UI label Walk → Survival.
+Keys: movement + Tab + Esc + F1 hide + \` Settings + F5/F6 replay; rare toggles via UI.
+
 **2026-07-15 ImGui HUD:** bitmap DebugHud retired; Dear ImGui status strip + Settings/Stats.
-Keys: movement + Tab + Esc + F1 hide + \` Settings; rare toggles via UI.
-Files: `src/ui/ImGuiLayer.cpp`, `HudPanels.cpp`, `HudStyle.cpp`.
 Dead DebugHud types/pipelines/buffers removed; mouse recapture on Settings close; ImGui always-on via `projectv_imgui`.
 
 **2026-07-15 Render scale DEVICE_LOST:** `CreateDepthResources` used stale

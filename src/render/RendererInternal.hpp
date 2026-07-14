@@ -44,6 +44,12 @@ void RecordDebugOverlayCommands(
 	const FrameRenderData &frameRenderData,
 	VkCommandBuffer cmd);
 
+// Selection/placement wireframe boxes are drawn inside the main voxel color pass (see
+// RecordGraphicsCommands) so they pick up the same MSAA/SMAA/progressive/SSAA as voxel geometry.
+DebugOverlayPushConstants BuildBoxOverlayPushConstants(
+	const FrameRenderData &frameRenderData,
+	const DebugOverlayBox &box);
+
 void TransitionImage(
 	VkCommandBuffer cmd,
 	VkImage image,
