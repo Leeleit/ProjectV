@@ -765,18 +765,18 @@ void TestInitFailureStageParsing(TestContext &context)
 void TestVoxelMaterialVisuals(TestContext &context)
 {
 	const VoxelMaterialVisual air = GetVoxelMaterialVisual(VoxelMaterial::Air);
-	const auto [glassBaseColor, glassSurface, glassMedium, glassShading] =
-		GetVoxelMaterialVisual(VoxelMaterial::Glass);
+	const VoxelMaterialVisual glass = GetVoxelMaterialVisual(VoxelMaterial::Glass);
 	const VoxelMaterialVisual fluid = GetVoxelMaterialVisual(VoxelMaterial::Fluid);
 
 	EXPECT_TRUE(context, air.baseColor[3] == 0.0f);
-	EXPECT_TRUE(context, glassBaseColor[3] < 1.0f);
-	EXPECT_TRUE(context, glassSurface[1] < 0.2f);
-	EXPECT_TRUE(context, glassMedium[3] > 0.0f);
+	EXPECT_TRUE(context, glass.baseColor[3] < 1.0f);
+	EXPECT_TRUE(context, glass.surface[1] < 0.2f);
+	EXPECT_TRUE(context, glass.medium[3] > 0.0f);
 	EXPECT_TRUE(context, fluid.shading[1] > 0.0f);
-	EXPECT_TRUE(context, glassShading[2] > 0.0f);
+	EXPECT_TRUE(context, glass.shading[2] > 0.0f);
 	EXPECT_TRUE(context, fluid.shading[3] > 0.0f);
 	EXPECT_TRUE(context, fluid.surface[2] == 0.0f);
+	EXPECT_TRUE(context, glass.bindlessIndices[0] == 0xffffffffu);
 }
 
 void TestVoxelSceneLightingPresetsProvideDistinctLooks(TestContext &context)

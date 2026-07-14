@@ -83,6 +83,12 @@ bool RecordPostFxPass(
 	const bool bloomEnabled = IsBloomEnabled();
 	const bool aerialEnabled = IsAerialPerspectiveEnabled();
 
+	const bool useDepthResolve =
+		render.msaaSampleCount > 1u && render.depthResolveImage != VK_NULL_HANDLE && render.depthResolveImageView != VK_NULL_HANDLE;
+	VkImage depthSampleImage = useDepthResolve ? render.depthResolveImage : render.depthImage;
+	VkImageView depthSampleView = useDepthResolve ? render.depthResolveImageView : render.depthImageView;
+	VkImageLayout &depthSampleLayout = useDepthResolve ? render.depthResolveCurrentLayout : render.depthImageCurrentLayout;
+
 	// Transition sceneColor from COLOR_ATTACHMENT_OPTIMAL to SHADER_READ_ONLY_OPTIMAL.
 	::TransitionImage(
 		commandBuffer,
@@ -96,18 +102,18 @@ bool RecordPostFxPass(
 		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 	render.sceneColorCurrentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-	// Transition depth to DEPTH_READ_ONLY_OPTIMAL for composite sampler.
+	// Transition depth (1x resolve when MSAA) to DEPTH_READ_ONLY_OPTIMAL for composite sampler.
 	::TransitionImage(
 		commandBuffer,
-		render.depthImage,
+		depthSampleImage,
 		VK_IMAGE_ASPECT_DEPTH_BIT,
-		render.depthImageCurrentLayout,
+		depthSampleLayout,
 		VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
 		VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
 		VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-	render.depthImageCurrentLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+	depthSampleLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
 
 	// Transition postFxOutput to GENERAL for compute writes.
 	::TransitionImage(
@@ -278,6 +284,7 @@ bool RecordPostFxPass(
 	// Composite pass: sceneColor + depth + bloomResult -> postFxOutput.
 	{
 		push.params0[3] = aerialEnabled ? 1.0f : 0.0f;
+		push.textureIndices = {0u, 1u, 2u, 0u};
 		const uint32_t groupsX = (extent.width + 15) / 16;
 		const uint32_t groupsY = (extent.height + 15) / 16;
 
@@ -290,7 +297,7 @@ bool RecordPostFxPass(
 				bloomEnabled ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			std::array<VkDescriptorImageInfo, 3> samplerInfos{};
 			samplerInfos[0] = {render.postFxLinearSampler, render.sceneColorImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-			samplerInfos[1] = {render.postFxLinearSampler, render.depthImageView, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL};
+			samplerInfos[1] = {render.postFxLinearSampler, depthSampleView, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL};
 			samplerInfos[2] = {render.postFxLinearSampler, bloomView, bloomLayout};
 			const VkDescriptorImageInfo storageInfo{VK_NULL_HANDLE, render.postFxOutputImageView, VK_IMAGE_LAYOUT_GENERAL};
 			std::array<VkWriteDescriptorSet, 2> writes{};
@@ -325,7 +332,7 @@ bool RecordPostFxPass(
 				render.postFxLinearSampler,
 				render.sceneColorImageView,
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				render.depthImageView,
+				depthSampleView,
 				VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL,
 				render.postFxOutputImageView,
 				VK_IMAGE_LAYOUT_GENERAL,

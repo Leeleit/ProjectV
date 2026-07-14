@@ -1,70 +1,37 @@
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
+#include "render/AntialiasingSettings.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include <array>
 #include <vector>
 
 #include "SDL3/SDL_log.h"
-#include "core/EnvUtils.hpp"
 
 namespace {
-constexpr uint32_t kMeshShaderDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+constexpr uint32_t kMeshMaxOutputVertices = 256u;
+constexpr uint32_t kMeshMaxOutputPrimitives = 256u;
+constexpr uint32_t kMeshPushConstantSize = 128u;
+constexpr char kMeshClusterizeShaderFilename[] = "voxel_face_cluster.comp.spv";
 constexpr char kMeshCullShaderFilename[] = "voxel_mesh_pre.comp.spv";
 constexpr char kMeshShaderFilename[] = "voxel_mesh.mesh.spv";
-constexpr char kVoxelFragmentShaderFilename[] = "voxel.frag.rtx.spv"; // RTX-enabled fragment shader so ray queries run in both mesh and graphics pipelines.
+constexpr char kVoxelFragmentShaderFilename[] = "voxel.frag.rtx.spv";
 
-constexpr uint32_t kMeshMaxOutputVertices = 256u; // 256 = Vulkan mesh-shader spec minimum; clamped for cross-vendor safety.
-constexpr uint32_t kMeshMaxOutputPrimitives = 256u;
-constexpr uint32_t kMeshPushConstantSize = 128u; // 128 = Vulkan spec minimum; fits VoxelMeshingPushConstants(64) + viewProjection(64).
-
-constexpr std::array kMeshShaderDescriptorBindings{
-	VkDescriptorSetLayoutBinding{
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = nullptr,
-	},
-	VkDescriptorSetLayoutBinding{
-		.binding = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = nullptr,
-	},
-	VkDescriptorSetLayoutBinding{
-		.binding = 2,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = nullptr,
-	},
-	VkDescriptorSetLayoutBinding{
-		.binding = 3,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		.pImmutableSamplers = nullptr,
-	},
+constexpr std::array kMeshVisibilityBindings{
+	VkDescriptorSetLayoutBinding{.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT, .pImmutableSamplers = nullptr},
+	VkDescriptorSetLayoutBinding{.binding = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT, .pImmutableSamplers = nullptr},
+	VkDescriptorSetLayoutBinding{.binding = 2, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT, .pImmutableSamplers = nullptr},
+	VkDescriptorSetLayoutBinding{.binding = 3, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT, .pImmutableSamplers = nullptr},
 };
 
-constexpr VkDescriptorSetLayoutCreateInfo kMeshShaderDescriptorSetLayoutInfo{
-	.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-	.pNext = nullptr,
-	.flags = 0,
-	.bindingCount = static_cast<uint32_t>(kMeshShaderDescriptorBindings.size()),
-	.pBindings = kMeshShaderDescriptorBindings.data(),
-};
-
-constexpr std::array kMeshShaderDescriptorPoolSizes{
-	VkDescriptorPoolSize{
-		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = kMeshShaderDescriptorSetCount * 4u,
-	},
+constexpr std::array kMeshClusterizeBindings{
+	VkDescriptorSetLayoutBinding{.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .pImmutableSamplers = nullptr},
+	VkDescriptorSetLayoutBinding{.binding = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .pImmutableSamplers = nullptr},
+	VkDescriptorSetLayoutBinding{.binding = 2, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .pImmutableSamplers = nullptr},
 };
 
 VkShaderModule CreateMeshShaderModule(const VkDevice device, const std::vector<char> &code)
@@ -73,7 +40,6 @@ VkShaderModule CreateMeshShaderModule(const VkDevice device, const std::vector<c
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	createInfo.codeSize = code.size();
 	createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
-
 	VkShaderModule shaderModule = VK_NULL_HANDLE;
 	const VkResult result = vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule);
 	if (result != VK_SUCCESS) {
@@ -81,6 +47,33 @@ VkShaderModule CreateMeshShaderModule(const VkDevice device, const std::vector<c
 		return VK_NULL_HANDLE;
 	}
 	return shaderModule;
+}
+
+bool CreateComputePipeline(
+	VulkanContextState &context,
+	VkShaderModule module,
+	VkPipelineLayout layout,
+	VkPipeline *outPipeline,
+	const char *name)
+{
+	const VkPipelineShaderStageCreateInfo stage{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.flags = 0,
+		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		.module = module,
+		.pName = "main",
+		.pSpecializationInfo = nullptr,
+	};
+	VkComputePipelineCreateInfo info{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .stage = stage};
+	info.layout = layout;
+	const VkResult result = vkCreateComputePipelines(context.device, VK_NULL_HANDLE, 1u, &info, nullptr, outPipeline);
+	if (result != VK_SUCCESS) {
+		runtime::LogVkFailure(name, result);
+		return false;
+	}
+	SetVulkanObjectName(context, reinterpret_cast<uint64_t>(*outPipeline), VK_OBJECT_TYPE_PIPELINE, name);
+	return true;
 }
 } // namespace
 
@@ -93,6 +86,7 @@ bool IsMeshShaderPipelineRequested()
 	}
 	return value[0] != '\0' && value[0] != '0';
 }
+
 bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 {
 	PV_PROFILE_ZONE_N("CreateMeshShaderPipelines");
@@ -105,316 +99,173 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 	bool ok = true;
 	bool creationAttempted = false;
 	if (!IsMeshShaderPipelineRequested()) {
+		return false;
+	}
+
+	VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
+	meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+	VkPhysicalDeviceFeatures2 deviceFeatures2{};
+	deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	deviceFeatures2.pNext = &meshShaderFeatures;
+	vkGetPhysicalDeviceFeatures2(context->physicalDevice, &deviceFeatures2);
+	if (meshShaderFeatures.meshShader != VK_TRUE) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PROJECTV_MESH_SHADER_PIPELINE=ON but device lacks meshShader; disabled");
+		return false;
+	}
+	if (render->graphicsDescriptorSetLayout == VK_NULL_HANDLE) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "mesh shader path needs graphicsDescriptorSetLayout first; disabled");
+		return false;
+	}
+
+	VkPhysicalDeviceMeshShaderPropertiesEXT meshProperties{};
+	meshProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
+	VkPhysicalDeviceProperties2 deviceProperties2{};
+	deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+	deviceProperties2.pNext = &meshProperties;
+	vkGetPhysicalDeviceProperties2(context->physicalDevice, &deviceProperties2);
+	if (meshProperties.maxMeshOutputVertices < 256u || meshProperties.maxMeshOutputPrimitives < 256u) {
+		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "mesh shader output limits too low; disabled");
+		return false;
+	}
+	render->meshShaderMaxOutputVertices = std::min(meshProperties.maxMeshOutputVertices, kMeshMaxOutputVertices);
+	render->meshShaderMaxOutputPrimitives = std::min(meshProperties.maxMeshOutputPrimitives, kMeshMaxOutputPrimitives);
+
+	DestroyMeshShaderPipelines(context, render);
+	creationAttempted = true;
+	render->meshShaderIndirectEnabled = IsMeshShaderIndirectRequested();
+
+	const std::vector<char> clusterizeCode = ReadShaderFile(kMeshClusterizeShaderFilename);
+	const std::vector<char> cullCode = ReadShaderFile(kMeshCullShaderFilename);
+	const std::vector<char> meshCode = ReadShaderFile(kMeshShaderFilename);
+	const std::vector<char> fragmentCode = ReadShaderFile(kVoxelFragmentShaderFilename);
+	if (clusterizeCode.empty() || cullCode.empty() || meshCode.empty() || fragmentCode.empty()) {
+		runtime::LogRuntimeFailure("Render", "CreateMeshShaderPipelines.ReadShaderFile", "missing mesh SPIR-V");
 		ok = false;
-	} else {
-		VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
-		meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
-		VkPhysicalDeviceFeatures2 deviceFeatures2{};
-		deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-		deviceFeatures2.pNext = &meshShaderFeatures;
-		vkGetPhysicalDeviceFeatures2(context->physicalDevice, &deviceFeatures2);
-		if (meshShaderFeatures.meshShader != VK_TRUE) {
-			SDL_LogWarn(
-				SDL_LOG_CATEGORY_APPLICATION,
-				"PROJECTV_MESH_SHADER_PIPELINE=ON but device lacks meshShader feature; mesh shader path disabled");
-			ok = false;
-		}
+	}
 
+	if (ok) {
+		render->meshClusterizeShaderModule = CreateMeshShaderModule(context->device, clusterizeCode);
+		render->meshCullShaderModule = CreateMeshShaderModule(context->device, cullCode);
+		render->meshShaderModule = CreateMeshShaderModule(context->device, meshCode);
+		ok = render->meshClusterizeShaderModule && render->meshCullShaderModule && render->meshShaderModule;
+	}
+
+	if (ok) {
+		const VkDescriptorSetLayoutCreateInfo visibilityLayoutInfo{
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.bindingCount = static_cast<uint32_t>(kMeshVisibilityBindings.size()),
+			.pBindings = kMeshVisibilityBindings.data(),
+		};
+		ok = vkCreateDescriptorSetLayout(context->device, &visibilityLayoutInfo, nullptr, &render->meshShaderDescriptorSetLayout) == VK_SUCCESS;
+		const VkDescriptorSetLayoutCreateInfo clusterizeLayoutInfo{
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.bindingCount = static_cast<uint32_t>(kMeshClusterizeBindings.size()),
+			.pBindings = kMeshClusterizeBindings.data(),
+		};
+		ok = ok && vkCreateDescriptorSetLayout(context->device, &clusterizeLayoutInfo, nullptr, &render->meshClusterizeDescriptorSetLayout) == VK_SUCCESS;
+	}
+
+	VkPushConstantRange meshPush{};
+	meshPush.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+	meshPush.offset = 0;
+	meshPush.size = kMeshPushConstantSize;
+
+	VkPushConstantRange clusterizePush{};
+	clusterizePush.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	clusterizePush.offset = 0;
+	clusterizePush.size = sizeof(MeshClusterizePushConstants);
+
+	if (ok) {
+		const VkDescriptorSetLayout meshSets[2]{
+			render->graphicsDescriptorSetLayout,
+			render->meshShaderDescriptorSetLayout,
+		};
+		VkPipelineLayoutCreateInfo meshLayoutInfo{};
+		meshLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		meshLayoutInfo.setLayoutCount = 2u;
+		meshLayoutInfo.pSetLayouts = meshSets;
+		meshLayoutInfo.pushConstantRangeCount = 1u;
+		meshLayoutInfo.pPushConstantRanges = &meshPush;
+		ok = vkCreatePipelineLayout(context->device, &meshLayoutInfo, nullptr, &render->meshShaderPipelineLayout) == VK_SUCCESS;
+
+		VkPipelineLayoutCreateInfo cullLayoutInfo{};
+		cullLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		cullLayoutInfo.setLayoutCount = 1u;
+		cullLayoutInfo.pSetLayouts = &render->meshShaderDescriptorSetLayout;
+		cullLayoutInfo.pushConstantRangeCount = 1u;
+		cullLayoutInfo.pPushConstantRanges = &meshPush;
+		ok = ok && vkCreatePipelineLayout(context->device, &cullLayoutInfo, nullptr, &render->meshCullPipelineLayout) == VK_SUCCESS;
+
+		VkPipelineLayoutCreateInfo clusterizeLayoutInfo{};
+		clusterizeLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		clusterizeLayoutInfo.setLayoutCount = 1u;
+		clusterizeLayoutInfo.pSetLayouts = &render->meshClusterizeDescriptorSetLayout;
+		clusterizeLayoutInfo.pushConstantRangeCount = 1u;
+		clusterizeLayoutInfo.pPushConstantRanges = &clusterizePush;
+		ok = ok && vkCreatePipelineLayout(context->device, &clusterizeLayoutInfo, nullptr, &render->meshClusterizePipelineLayout) == VK_SUCCESS;
+	}
+
+	if (ok) {
+		ok = CreateComputePipeline(*context, render->meshClusterizeShaderModule, render->meshClusterizePipelineLayout, &render->meshClusterizePipeline, "MeshClusterizePipeline");
+		ok = ok && CreateComputePipeline(*context, render->meshCullShaderModule, render->meshCullPipelineLayout, &render->meshCullPipeline, "MeshCullPipeline");
+	}
+
+	VkShaderModule fragmentModule = VK_NULL_HANDLE;
+	if (ok) {
+		fragmentModule = CreateMeshShaderModule(context->device, fragmentCode);
+		ok = fragmentModule != VK_NULL_HANDLE;
+	}
+
+	if (ok) {
+		const VkPipelineShaderStageCreateInfo meshStages[]{
+			{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_MESH_BIT_EXT, .module = render->meshShaderModule, .pName = "main"},
+			{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .module = fragmentModule, .pName = "main"},
+		};
+
+		VkPipelineVertexInputStateCreateInfo vertexInput{.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+		VkPipelineInputAssemblyStateCreateInfo inputAssembly{.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST};
+		VkPipelineViewportStateCreateInfo viewportState{.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, .viewportCount = 1u, .scissorCount = 1u};
+		VkPipelineRasterizationStateCreateInfo rasterization{.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, .polygonMode = VK_POLYGON_MODE_FILL, .cullMode = VK_CULL_MODE_NONE, .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE, .lineWidth = 1.0f};
+		VkPipelineMultisampleStateCreateInfo multisample{.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, .rasterizationSamples = projectv::render::ToVkSampleCount(render->msaaSampleCount)};
+		VkPipelineDepthStencilStateCreateInfo depthStencil{.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO, .depthTestEnable = VK_TRUE, .depthWriteEnable = VK_TRUE, .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL};
+		VkPipelineColorBlendAttachmentState colorBlendAttachment{.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT};
+		VkPipelineColorBlendStateCreateInfo colorBlend{.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO, .attachmentCount = 1u, .pAttachments = &colorBlendAttachment};
+		const VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+		VkPipelineDynamicStateCreateInfo dynamicState{.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, .dynamicStateCount = 2u, .pDynamicStates = dynamicStates};
+		static constexpr VkFormat colorFormats[1]{VK_FORMAT_B10G11R11_UFLOAT_PACK32};
+		VkPipelineRenderingCreateInfo renderingCreateInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO, .colorAttachmentCount = 1u, .pColorAttachmentFormats = colorFormats, .depthAttachmentFormat = VK_FORMAT_D32_SFLOAT};
+		VkGraphicsPipelineCreateInfo meshPipelineInfo{};
+		meshPipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		meshPipelineInfo.pNext = &renderingCreateInfo;
+		meshPipelineInfo.stageCount = 2u;
+		meshPipelineInfo.pStages = meshStages;
+		meshPipelineInfo.pVertexInputState = &vertexInput;
+		meshPipelineInfo.pInputAssemblyState = &inputAssembly;
+		meshPipelineInfo.pViewportState = &viewportState;
+		meshPipelineInfo.pRasterizationState = &rasterization;
+		meshPipelineInfo.pMultisampleState = &multisample;
+		meshPipelineInfo.pDepthStencilState = &depthStencil;
+		meshPipelineInfo.pColorBlendState = &colorBlend;
+		meshPipelineInfo.pDynamicState = &dynamicState;
+		meshPipelineInfo.layout = render->meshShaderPipelineLayout;
+		ok = vkCreateGraphicsPipelines(context->device, VK_NULL_HANDLE, 1u, &meshPipelineInfo, nullptr, &render->meshShaderPipeline) == VK_SUCCESS;
 		if (ok) {
-			VkPhysicalDeviceMeshShaderPropertiesEXT meshProperties{};
-			meshProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
-			VkPhysicalDeviceProperties2 deviceProperties2{};
-			deviceProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-			deviceProperties2.pNext = &meshProperties;
-			vkGetPhysicalDeviceProperties2(context->physicalDevice, &deviceProperties2);
-
-			if (meshProperties.maxMeshOutputVertices < 256u || meshProperties.maxMeshOutputPrimitives < 256u) {
-				SDL_LogWarn(
-					SDL_LOG_CATEGORY_APPLICATION,
-					"PROJECTV_MESH_SHADER_PIPELINE=ON but device maxMeshOutputVertices=%u/maxMeshOutputPrimitives=%u (need >=256/256); mesh shader path disabled",
-					meshProperties.maxMeshOutputVertices,
-					meshProperties.maxMeshOutputPrimitives);
-				ok = false;
-			} else {
-				render->meshShaderMaxOutputVertices = std::min(meshProperties.maxMeshOutputVertices, kMeshMaxOutputVertices);
-				render->meshShaderMaxOutputPrimitives = std::min(meshProperties.maxMeshOutputPrimitives, kMeshMaxOutputPrimitives);
-			}
-		}
-
-		VkPushConstantRange pushConstantRange{};
-
-		if (ok) {
-			DestroyMeshShaderPipelines(context, render);
-			creationAttempted = true;
-
-			const std::vector<char> cullShaderCode = ReadShaderFile(kMeshCullShaderFilename);
-			if (cullShaderCode.empty()) {
-				runtime::LogRuntimeFailure(
-					"Render",
-					"CreateMeshShaderPipelines.ReadShaderFile",
-					"failed to read mesh shader pipeline SPIR-V");
-				ok = false;
-			}
-
-			const std::vector<char> meshShaderCode = ReadShaderFile(kMeshShaderFilename);
-			if (ok && meshShaderCode.empty()) {
-				runtime::LogRuntimeFailure(
-					"Render",
-					"CreateMeshShaderPipelines.ReadShaderFile",
-					"failed to read mesh shader pipeline SPIR-V");
-				ok = false;
-			}
-
-			if (ok) {
-				render->meshCullShaderModule = CreateMeshShaderModule(context->device, cullShaderCode);
-				render->meshShaderModule = CreateMeshShaderModule(context->device, meshShaderCode);
-				if (render->meshCullShaderModule == VK_NULL_HANDLE || render->meshShaderModule == VK_NULL_HANDLE) {
-					ok = false;
-				} else {
-					SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->meshCullShaderModule), VK_OBJECT_TYPE_SHADER_MODULE, "MeshCullShaderModule");
-					SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->meshShaderModule), VK_OBJECT_TYPE_SHADER_MODULE, "MeshShaderModule");
-				}
-			}
-
-			if (ok) {
-				const VkResult layoutResult = vkCreateDescriptorSetLayout(
-					context->device,
-					&kMeshShaderDescriptorSetLayoutInfo,
-					nullptr,
-					&render->meshShaderDescriptorSetLayout);
-				if (layoutResult != VK_SUCCESS) {
-					runtime::LogVkFailure("CreateMeshShaderPipelines.vkCreateDescriptorSetLayout", layoutResult);
-					ok = false;
-				} else {
-					SetVulkanObjectName(
-						*context,
-						reinterpret_cast<uint64_t>(render->meshShaderDescriptorSetLayout),
-						VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
-						"MeshShaderDescriptorSetLayout");
-				}
-			}
-
-			if (ok) {
-				pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT;
-				pushConstantRange.offset = 0;
-				pushConstantRange.size = kMeshPushConstantSize;
-
-				VkPipelineLayoutCreateInfo cullLayoutInfo{};
-				cullLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-				cullLayoutInfo.setLayoutCount = 1;
-				cullLayoutInfo.pSetLayouts = &render->meshShaderDescriptorSetLayout;
-				cullLayoutInfo.pushConstantRangeCount = 1;
-				cullLayoutInfo.pPushConstantRanges = &pushConstantRange;
-				const VkResult cullLayoutResult = vkCreatePipelineLayout(
-					context->device,
-					&cullLayoutInfo,
-					nullptr,
-					&render->meshCullPipelineLayout);
-				if (cullLayoutResult != VK_SUCCESS) {
-					runtime::LogVkFailure("CreateMeshShaderPipelines.cull.vkCreatePipelineLayout", cullLayoutResult);
-					ok = false;
-				} else {
-					SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->meshCullPipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "MeshCullPipelineLayout");
-				}
-			}
-
-			if (ok) {
-				VkPipelineLayoutCreateInfo meshLayoutInfo{};
-				meshLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-				meshLayoutInfo.setLayoutCount = 1;
-				meshLayoutInfo.pSetLayouts = &render->meshShaderDescriptorSetLayout;
-				meshLayoutInfo.pushConstantRangeCount = 1;
-				meshLayoutInfo.pPushConstantRanges = &pushConstantRange;
-				const VkResult meshLayoutResult = vkCreatePipelineLayout(
-					context->device,
-					&meshLayoutInfo,
-					nullptr,
-					&render->meshShaderPipelineLayout);
-				if (meshLayoutResult != VK_SUCCESS) {
-					runtime::LogVkFailure("CreateMeshShaderPipelines.mesh.vkCreatePipelineLayout", meshLayoutResult);
-					ok = false;
-				} else {
-					SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->meshShaderPipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "MeshShaderPipelineLayout");
-				}
-			}
-
-			if (ok) {
-				const VkPipelineShaderStageCreateInfo cullStage{
-					.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-					.pNext = nullptr,
-					.flags = 0,
-					.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-					.module = render->meshCullShaderModule,
-					.pName = "main",
-					.pSpecializationInfo = nullptr,
-				};
-				VkComputePipelineCreateInfo cullPipelineInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .stage = cullStage};
-				cullPipelineInfo.layout = render->meshCullPipelineLayout;
-				cullPipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-				cullPipelineInfo.basePipelineIndex = 0;
-				const VkResult cullPipelineResult = vkCreateComputePipelines(
-					context->device,
-					VK_NULL_HANDLE,
-					1u,
-					&cullPipelineInfo,
-					nullptr,
-					&render->meshCullPipeline);
-				if (cullPipelineResult != VK_SUCCESS) {
-					runtime::LogVkFailure("CreateMeshShaderPipelines.vkCreateComputePipelines", cullPipelineResult);
-					ok = false;
-				} else {
-					SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->meshCullPipeline), VK_OBJECT_TYPE_PIPELINE, "MeshCullPipeline");
-				}
-			}
-
-			if (ok) {
-				const std::vector<char> fragmentCode = ReadShaderFile(kVoxelFragmentShaderFilename);
-				if (fragmentCode.empty()) {
-					runtime::LogRuntimeFailure(
-						"Render",
-						"CreateMeshShaderPipelines.ReadFragmentShader",
-						"failed to read voxel.frag.spv");
-					ok = false;
-				}
-
-				VkShaderModule fragmentModule = VK_NULL_HANDLE;
-				if (ok) {
-					fragmentModule = CreateMeshShaderModule(context->device, fragmentCode);
-					if (fragmentModule == VK_NULL_HANDLE) {
-						ok = false;
-					}
-				}
-
-				if (ok) {
-					const VkPipelineShaderStageCreateInfo meshStages[]{
-						VkPipelineShaderStageCreateInfo{
-							.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-							.pNext = nullptr,
-							.flags = 0,
-							.stage = VK_SHADER_STAGE_MESH_BIT_EXT,
-							.module = render->meshShaderModule,
-							.pName = "main",
-							.pSpecializationInfo = nullptr,
-						},
-						VkPipelineShaderStageCreateInfo{
-							.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-							.pNext = nullptr,
-							.flags = 0,
-							.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-							.module = fragmentModule,
-							.pName = "main",
-							.pSpecializationInfo = nullptr,
-						},
-					};
-
-					VkPipelineVertexInputStateCreateInfo vertexInput{};
-					vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-					vertexInput.vertexBindingDescriptionCount = 0u;
-					vertexInput.pVertexBindingDescriptions = nullptr;
-					vertexInput.vertexAttributeDescriptionCount = 0u;
-					vertexInput.pVertexAttributeDescriptions = nullptr;
-
-					VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-					inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-					inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-					inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-					VkPipelineViewportStateCreateInfo viewportState{};
-					viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-					viewportState.viewportCount = 1u;
-					viewportState.scissorCount = 1u;
-
-					VkPipelineRasterizationStateCreateInfo rasterization{};
-					rasterization.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-					rasterization.polygonMode = VK_POLYGON_MODE_FILL;
-					rasterization.cullMode = VK_CULL_MODE_NONE;
-					rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-					rasterization.lineWidth = 1.0f;
-
-					VkPipelineMultisampleStateCreateInfo multisample{.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT};
-					multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-					multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-					VkPipelineDepthStencilStateCreateInfo depthStencil{};
-					depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-					depthStencil.depthTestEnable = VK_TRUE;
-					depthStencil.depthWriteEnable = VK_TRUE;
-					depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-					depthStencil.depthBoundsTestEnable = VK_FALSE;
-					depthStencil.stencilTestEnable = VK_FALSE;
-
-					VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-					colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-														  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-					colorBlendAttachment.blendEnable = VK_FALSE;
-
-					VkPipelineColorBlendStateCreateInfo colorBlend{};
-					colorBlend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-					colorBlend.attachmentCount = 1u;
-					colorBlend.pAttachments = &colorBlendAttachment;
-
-					VkDynamicState dynamicStates[]{
-						VK_DYNAMIC_STATE_VIEWPORT,
-						VK_DYNAMIC_STATE_SCISSOR,
-					};
-					VkPipelineDynamicStateCreateInfo dynamicState{};
-					dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-					dynamicState.dynamicStateCount = 2u;
-					dynamicState.pDynamicStates = dynamicStates;
-
-					static constexpr VkFormat colorFormats[1]{VK_FORMAT_B10G11R11_UFLOAT_PACK32};
-					VkPipelineRenderingCreateInfo renderingCreateInfo{};
-					renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-					renderingCreateInfo.colorAttachmentCount = 1u;
-					renderingCreateInfo.pColorAttachmentFormats = colorFormats;
-					renderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
-
-					VkGraphicsPipelineCreateInfo meshPipelineInfo{};
-					meshPipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-					meshPipelineInfo.pNext = &renderingCreateInfo;
-					meshPipelineInfo.stageCount = 2u;
-					meshPipelineInfo.pStages = meshStages;
-					meshPipelineInfo.pVertexInputState = &vertexInput;
-					meshPipelineInfo.pInputAssemblyState = &inputAssembly;
-					meshPipelineInfo.pViewportState = &viewportState;
-					meshPipelineInfo.pRasterizationState = &rasterization;
-					meshPipelineInfo.pMultisampleState = &multisample;
-					meshPipelineInfo.pDepthStencilState = &depthStencil;
-					meshPipelineInfo.pColorBlendState = &colorBlend;
-					meshPipelineInfo.pDynamicState = &dynamicState;
-					meshPipelineInfo.layout = render->meshShaderPipelineLayout;
-					meshPipelineInfo.renderPass = VK_NULL_HANDLE;
-					meshPipelineInfo.subpass = 0;
-
-					const VkResult meshPipelineResult = vkCreateGraphicsPipelines(
-						context->device,
-						VK_NULL_HANDLE,
-						1u,
-						&meshPipelineInfo,
-						nullptr,
-						&render->meshShaderPipeline);
-					if (meshPipelineResult != VK_SUCCESS) {
-						runtime::LogVkFailure("CreateMeshShaderPipelines.vkCreateGraphicsPipelines", meshPipelineResult);
-						ok = false;
-					} else {
-						SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->meshShaderPipeline), VK_OBJECT_TYPE_PIPELINE, "MeshShaderPipeline");
-					}
-				}
-
-				if (fragmentModule != VK_NULL_HANDLE) {
-					vkDestroyShaderModule(context->device, fragmentModule, nullptr);
-				}
-			}
-
-			if (ok) {
-				render->meshShaderEnabled = true;
-				if (!RefreshMeshShaderResourceBindings(context, render)) {
-					ok = false;
-				}
-			}
+			SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->meshShaderPipeline), VK_OBJECT_TYPE_PIPELINE, "MeshShaderPipeline");
 		}
 	}
 
+	if (fragmentModule != VK_NULL_HANDLE) {
+		vkDestroyShaderModule(context->device, fragmentModule, nullptr);
+	}
+
+	if (ok) {
+		render->meshShaderEnabled = true;
+		ok = RefreshMeshShaderResourceBindings(context, render);
+	}
 	if (!ok && creationAttempted) {
 		DestroyMeshShaderPipelines(context, render);
 	}

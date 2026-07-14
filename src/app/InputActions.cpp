@@ -131,7 +131,7 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::CycleScenePreset, SDL_SCANCODE_F5);
 	BindAction(input, InputAction::SaveWorldSnapshot, SDL_SCANCODE_F6);
 	BindAction(input, InputAction::LoadWorldSnapshot, SDL_SCANCODE_F7);
-	BindAction(input, InputAction::CycleEditorTool, SDL_SCANCODE_F8);
+	BindAction(input, InputAction::CycleEditorTool, SDL_SCANCODE_U); // was F8; F8 reserved for PlayLastInputReplay
 	BindAction(input, InputAction::ToggleChunkBounds, SDL_SCANCODE_F9);
 	BindAction(input, InputAction::ToggleDirtyChunkOverlay, SDL_SCANCODE_F10);
 	BindAction(input, InputAction::ToggleWalkAirControlMode, SDL_SCANCODE_F11);
@@ -144,7 +144,7 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::CycleLightingDebugView, SDL_SCANCODE_B);
 	BindAction(input, InputAction::ResetLightingDebugControls, SDL_SCANCODE_V);
 	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_R);
-	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_Y);
+	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_F8);
 	BindAction(input, InputAction::ToggleMutationAnchor, SDL_SCANCODE_X);
 	BindAction(input, InputAction::PickTargetMaterial, SDL_SCANCODE_M);
 
@@ -161,6 +161,9 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::MusicVolumeUp, SDL_SCANCODE_8);
 	BindAction(input, InputAction::NextMusicTrack, SDL_SCANCODE_9);
 	BindAction(input, InputAction::PreviousMusicTrack, SDL_SCANCODE_0);
+	BindAction(input, InputAction::CycleMsaaMode, SDL_SCANCODE_T);
+	BindAction(input, InputAction::ToggleSmaa, SDL_SCANCODE_Y);
+	BindAction(input, InputAction::CycleRenderScale, SDL_SCANCODE_COMMA, SDL_SCANCODE_PERIOD);
 }
 
 void HandleInputActionEvent(

@@ -29,7 +29,8 @@ float GetCameraVisibleSceneMaxDistance(
 	const CameraState &camera);
 GraphicsPushConstants BuildGraphicsPushConstants(
 	const CameraState &camera,
-	VkExtent2D extent);
+	VkExtent2D extent,
+	const RenderState *render = nullptr);
 ChunkCullingParameters BuildChunkCullingParameters(
 	const CameraState &camera,
 	VkExtent2D extent,

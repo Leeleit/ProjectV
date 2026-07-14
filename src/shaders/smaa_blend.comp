@@ -1,0 +1,50 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D edges;
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D blendWeights;
+
+const int kMaxSearchDistance = 8;
+
+float LoadEdge(const ivec2 coord, const ivec2 imageSize, const int component)
+{
+    return texelFetch(edges, clamp(coord, ivec2(0), imageSize - ivec2(1)), 0)[component];
+}
+
+float SearchEdge(const ivec2 coord, const ivec2 direction, const ivec2 imageSize, const int component)
+{
+    float strength = 0.0;
+    for (int distance = 1; distance <= kMaxSearchDistance; ++distance) {
+        const float edge = LoadEdge(coord + direction * distance, imageSize, component);
+        if (edge <= 0.0) {
+            break;
+        }
+        strength += edge;
+    }
+    return strength;
+}
+
+void main()
+{
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 dstSize = imageSize(blendWeights);
+    if (any(greaterThanEqual(coord, dstSize))) {
+        return;
+    }
+
+    const float horizontalEdge = LoadEdge(coord, dstSize, 0);
+    const float verticalEdge = LoadEdge(coord, dstSize, 1);
+    const float verticalBefore = SearchEdge(coord, ivec2(0, -1), dstSize, 0);
+    const float verticalAfter = SearchEdge(coord, ivec2(0, 1), dstSize, 0);
+    const float horizontalBefore = SearchEdge(coord, ivec2(-1, 0), dstSize, 1);
+    const float horizontalAfter = SearchEdge(coord, ivec2(1, 0), dstSize, 1);
+
+    const float horizontalSpan = verticalBefore + verticalAfter + 2.0;
+    const float verticalSpan = horizontalBefore + horizontalAfter + 2.0;
+    const float leftWeight = horizontalEdge * (verticalBefore + 1.0) / horizontalSpan;
+    const float rightWeight = horizontalEdge * (verticalAfter + 1.0) / horizontalSpan;
+    const float topWeight = verticalEdge * (horizontalBefore + 1.0) / verticalSpan;
+    const float bottomWeight = verticalEdge * (horizontalAfter + 1.0) / verticalSpan;
+    imageStore(blendWeights, coord, clamp(vec4(leftWeight, rightWeight, topWeight, bottomWeight), 0.0, 1.0));
+}

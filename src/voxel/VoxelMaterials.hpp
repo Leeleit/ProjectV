@@ -54,14 +54,16 @@ struct VoxelMaterialVisual {
 	std::array<float, 4> surface{};
 	std::array<float, 4> medium{};
 	std::array<float, 4> shading{};
+	std::array<uint32_t, 4> bindlessIndices{0xffffffffu, 0xffffffffu, 0xffffffffu, 0xffffffffu}; // x=albedoTextureIndex
 };
 static_assert(std::is_standard_layout_v<VoxelMaterialVisual>);
 static_assert(std::is_trivially_copyable_v<VoxelMaterialVisual>);
-static_assert(sizeof(VoxelMaterialVisual) == 64);
+static_assert(sizeof(VoxelMaterialVisual) == 80);
 static_assert(offsetof(VoxelMaterialVisual, baseColor) == 0);
 static_assert(offsetof(VoxelMaterialVisual, surface) == 16);
 static_assert(offsetof(VoxelMaterialVisual, medium) == 32);
 static_assert(offsetof(VoxelMaterialVisual, shading) == 48);
+static_assert(offsetof(VoxelMaterialVisual, bindlessIndices) == 64);
 
 struct VoxelSceneLighting {
 	std::array<float, 4> skyColorAndFogDensity{};

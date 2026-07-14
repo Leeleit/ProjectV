@@ -52,9 +52,10 @@ void main() {
 
     const float aspectRatio = max(pc.viewParams.y, 0.0001);
     const float tanHalfFovY = max(pc.viewParams.z, 0.0001);
+    const vec2 ndc = inNdcXY + vec2(pc.viewParams.w, pc.cloudLayerParams.w);
     const vec3 rayDir = normalize(vec3(
-        inNdcXY.x * aspectRatio * tanHalfFovY,
-        inNdcXY.y * tanHalfFovY,
+        ndc.x * aspectRatio * tanHalfFovY,
+        ndc.y * tanHalfFovY,
         -1.0));
 
     const vec3 cameraPos = vec3(

@@ -1,0 +1,36 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D srcLdr;
+layout(set = 0, binding = 1) uniform sampler2D blendWeights;
+layout(set = 0, binding = 2, rgba8) uniform writeonly image2D dst;
+
+vec3 LoadColor(const ivec2 coord, const ivec2 imageSize)
+{
+    return texelFetch(srcLdr, clamp(coord, ivec2(0), imageSize - ivec2(1)), 0).rgb;
+}
+
+void main()
+{
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 dstSize = imageSize(dst);
+    if (any(greaterThanEqual(coord, dstSize))) {
+        return;
+    }
+
+    const vec3 center = LoadColor(coord, dstSize);
+    const vec4 weights = texelFetch(blendWeights, coord, 0);
+    const float weightSum = weights.x + weights.y + weights.z + weights.w;
+    if (weightSum <= 0.0) {
+        imageStore(dst, coord, vec4(center, 1.0));
+        return;
+    }
+
+    vec3 filtered = center;
+    filtered += LoadColor(coord + ivec2(-1, 0), dstSize) * weights.x;
+    filtered += LoadColor(coord + ivec2(1, 0), dstSize) * weights.y;
+    filtered += LoadColor(coord + ivec2(0, -1), dstSize) * weights.z;
+    filtered += LoadColor(coord + ivec2(0, 1), dstSize) * weights.w;
+    imageStore(dst, coord, vec4(filtered / (1.0 + weightSum), 1.0));
+}

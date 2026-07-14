@@ -102,9 +102,6 @@ bool RayTracedShadows::TryFinishVoxelAwareRtxResources(const VulkanContextState 
 		SDL_Log("Render: RayTracedShadows: voxel-aware RT pipeline unavailable; falling back to ray-query AABB shadows");
 		return false;
 	}
-	if (!InitializeShadowMaskClear(context)) {
-		SDL_Log("Render: RayTracedShadows: shadow mask clear failed; first frame may sample undefined data");
-	}
 	m_voxelAwareRtxPending = false;
 	return true;
 }
@@ -142,47 +139,8 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 		return false;
 	}
 
-	m_shadowMaskWidth = 1920u;
-	m_shadowMaskHeight = 1080u;
-
-	VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
-	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.format = m_shadowMaskFormat;
-	imageInfo.extent = {m_shadowMaskWidth, m_shadowMaskHeight, 1u};
-	imageInfo.mipLevels = 1u;
-	imageInfo.arrayLayers = 1u;
-	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	imageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	VmaAllocationCreateInfo imageAllocInfo{};
-	imageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-	const VkResult createImageResult = vmaCreateImage(
-		context.allocator,
-		&imageInfo,
-		&imageAllocInfo,
-		&m_shadowMaskImage,
-		&m_shadowMaskAllocation,
-		nullptr);
-	if (createImageResult != VK_SUCCESS) {
-		runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vmaCreateImage", createImageResult);
-		ReleaseVoxelAwareRtxResources(context);
-		return false;
-	}
-
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = m_shadowMaskImage;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = m_shadowMaskFormat;
-	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-	if (vkCreateImageView(device, &viewInfo, nullptr, &m_shadowMaskImageView) != VK_SUCCESS) {
-		runtime::LogVkFailure("RayTracedShadows.CreateVoxelAwareRtxResources.vkCreateImageView", VK_ERROR_INITIALIZATION_FAILED);
-		ReleaseVoxelAwareRtxResources(context);
-		return false;
-	}
+	// Shadow mask sized later via RecreateShadowMaskForExtent (swapchain/internal). Hardcoding
+	// 1920x1080 misaligned UV vs default 1280x720 window until first MSAA/resize recreate.
 
 	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
 	if (!usePushDescriptors) {
@@ -244,7 +202,7 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	}
 
 	m_voxelAwareRtxActive = true;
-	SDL_Log("Render: VoxelAwareRtxShadows: ready (image=%ux%u, frames=%u)", m_shadowMaskWidth, m_shadowMaskHeight, MAX_FRAMES_IN_FLIGHT);
+	SDL_Log("Render: VoxelAwareRtxShadows: ready (shadow mask pending resize, frames=%u)", MAX_FRAMES_IN_FLIGHT);
 	return true;
 }
 
@@ -338,7 +296,7 @@ bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &conte
 	toGeneral.dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
 	toGeneral.dstAccessMask = VK_ACCESS_2_NONE;
 	toGeneral.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-	toGeneral.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+	toGeneral.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // graphics samples binding 18 as SHADER_READ_ONLY; RT pass will transition to GENERAL when writing
 	toGeneral.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toGeneral.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	toGeneral.image = m_shadowMaskImage;

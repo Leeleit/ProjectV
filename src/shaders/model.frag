@@ -79,21 +79,6 @@ void main() {
         diffuseWrap);
     vec3 color = ambient + directSun;
 
-    color *= max(sceneLighting.postProcess.x, 0.0);
-
-    // Color space consistency: apply tonemap + grading before writing to either
-    // TAA-on (outSceneColor) or TAA-off (outColor) output. Previously the TAA-on
-    // path wrote linear HDR, and the resolve applied tonemap+grading on a mix of
-    // HDR current + LDR history — undefined.
-    const uint toneMapOperator = uint(sceneLighting.postProcess.z + 0.5);
-    color = ProjectV_ApplyToneMap(color, toneMapOperator);
-    color = ProjectV_ApplyColorGrading(
-        color,
-        clamp(sceneLighting.colorGrading.x, 0.25, 4.0),
-        clamp(sceneLighting.colorGrading.y, 0.0, 2.0),
-        clamp(sceneLighting.colorGrading.z, 0.0, 2.0),
-        clamp(sceneLighting.colorGrading.w, -0.25, 0.25));
-
     outColor = vec4(color, 1.0);
 }
 

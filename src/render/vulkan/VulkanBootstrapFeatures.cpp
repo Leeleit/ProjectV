@@ -139,8 +139,8 @@ void ProbePresentFeatures(
 	}
 	VkPhysicalDeviceFeatures2 features2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
 	features2.pNext = hasPresentIdExtension
-		? static_cast<void *>(&presentIdFeatures)
-		: static_cast<void *>(&presentWaitFeatures);
+						  ? static_cast<void *>(&presentIdFeatures)
+						  : static_cast<void *>(&presentWaitFeatures);
 	vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
 	if (hasPresentIdExtension) {
 		*outPresentIdFeatures = presentIdFeatures;

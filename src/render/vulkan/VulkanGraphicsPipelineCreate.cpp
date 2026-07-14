@@ -3,6 +3,7 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
+#include "render/AntialiasingSettings.hpp"
 #include "render/RayTracedShadows.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
@@ -15,14 +16,14 @@ constexpr std::array kGraphicsDescriptorBindings{
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_MESH_BIT_EXT,
 		.pImmutableSamplers = nullptr,
 	},
 	VkDescriptorSetLayoutBinding{
 		.binding = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_MESH_BIT_EXT,
 		.pImmutableSamplers = nullptr,
 	},
 	VkDescriptorSetLayoutBinding{
@@ -249,7 +250,7 @@ bool CreateGraphicsPipeline(
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.pNext = nullptr;
 	multisampling.flags = 0;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.rasterizationSamples = projectv::render::ToVkSampleCount(render->msaaSampleCount);
 	multisampling.sampleShadingEnable = VK_FALSE;
 	multisampling.minSampleShading = 0.0f;
 	multisampling.pSampleMask = nullptr;

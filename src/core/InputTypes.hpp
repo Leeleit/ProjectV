@@ -62,6 +62,9 @@ enum class InputAction : uint8_t {
 	MusicVolumeUp,
 	NextMusicTrack,
 	PreviousMusicTrack,
+	CycleMsaaMode,
+	ToggleSmaa,
+	CycleRenderScale,
 	Count,
 };
 

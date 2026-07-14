@@ -1,0 +1,69 @@
+#version 460
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct ChunkDescriptor {
+    ivec4 chunkOrigin;
+    uvec4 chunkExtentAndNonAir;
+    uvec4 voxelDataInfo;
+    uvec4 drawRanges;
+};
+
+struct FaceCluster {
+    uint faceOffset;
+    uint faceCount;
+    uint chunkIndex;
+    uint flags;
+    vec4 aabbCenterHalfExtent;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer PackedChunkDescriptors {
+    ChunkDescriptor chunkDescriptors[];
+};
+
+layout(set = 0, binding = 1, std430) writeonly buffer FaceClusterBuffer {
+    FaceCluster faceClusters[];
+};
+
+layout(set = 0, binding = 2, std430) buffer FaceClusterCount {
+    uint clusterCount;
+};
+
+layout(push_constant) uniform PushConstants {
+    uvec4 params; // x=chunkCount, y=maxClusters, z=facesPerCluster(64), w=unused
+} pushConstants;
+
+void main()
+{
+    const uint chunkIndex = gl_GlobalInvocationID.x;
+    if (chunkIndex >= pushConstants.params.x) {
+        return;
+    }
+
+    const ChunkDescriptor chunk = chunkDescriptors[chunkIndex];
+    const uint faceOffset = chunk.drawRanges.x;
+    const uint faceCount = chunk.drawRanges.y;
+    if (faceCount == 0u) {
+        return;
+    }
+
+    const uint facesPerCluster = max(pushConstants.params.z, 1u);
+    const uint clusterSpan = (faceCount + facesPerCluster - 1u) / facesPerCluster;
+    const vec3 extent = vec3(chunk.chunkExtentAndNonAir.xyz);
+    const vec3 center = vec3(chunk.chunkOrigin.xyz) + extent * 0.5;
+    const float halfExtent = 0.5 * max(max(extent.x, extent.y), extent.z);
+
+    for (uint i = 0u; i < clusterSpan; ++i) {
+        const uint slot = atomicAdd(clusterCount, 1u);
+        if (slot >= pushConstants.params.y) {
+            return;
+        }
+        const uint localOffset = i * facesPerCluster;
+        const uint count = min(facesPerCluster, faceCount - localOffset);
+        faceClusters[slot].faceOffset = faceOffset + localOffset;
+        faceClusters[slot].faceCount = count;
+        faceClusters[slot].chunkIndex = chunkIndex;
+        faceClusters[slot].flags = 0u;
+        faceClusters[slot].aabbCenterHalfExtent = vec4(center, halfExtent);
+    }
+}

@@ -18,9 +18,55 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
-**2026-07-14:** Default branch renamed `master` → `main` (AGENTS.md §5.4, CI, active plans/docs). Legacy archives left as historical.
+**2026-07-15 Render scale DEVICE_LOST:** `CreateDepthResources` used stale
+`internalRenderExtent` before scale update → depth≠color size; HiZ was swapchain-
+sized. Fix: set internal extent first; HiZ from internal; MSAA HiZ reads depthResolve.
 
-**2026-07-14 Phase 4 exit:** Hardware-gated Vulkan 1.4 features + Phase 3 carry-over landed on `main`. Active plan: `docs/superpowers/plans/2026-07-14-vulkan-1.4-phase-4-hardware-gated.md` (supersedes 2026-07-12 draft).
+**2026-07-15 RTX shadow mask extent:** hardcoded 1920×1080 vs window 1280×720
+shifted shadows until `T` recreate. Fix: size mask to `internalRenderExtent` on
+deferred RTX ready + swapchain recreate.
+
+**2026-07-15 Progressive AA:** after max **freeze** history (centered `/N` adapt
+washed Halton mean → aliasing over time). Invalidate on sun/exposure/env/camera/dirty;
+Halton NDC shared to voxel VP + sky/cloudscape.
+
+**2026-07-15 Progressive AA freeze-after-cap:** after `kProgressiveAccumMaxFrames`,
+history was still updated with fixed `/N` + fixed Halton → drifted to last sample
+(aliasing «со временем»). Fix: freeze history, no Halton/`UpdateThisFrame` after max.
+
+**2026-07-15 DEVICE_LOST after black screen:** validation showed stale
+`graphicsDescriptorSet` (recreate after PrepareFrame still drew with destroyed sets)
++ mesh barrier bit without feature + shadow mask layout GENERAL vs READ_ONLY.
+Fixes: recreate swapchain **before** PrepareFrame; never draw after mid-frame
+recreate; Refresh+resync sets when deferred RTX finishes; gate MESH_SHADER barrier;
+shadow binding layout GENERAL.
+
+**2026-07-14 Voxel AA stack (MSAA/SMAA/Progressive/SSAA):** implemented without TAA/DLSS.
+
+| Item | Default | Hotkey |
+|---|---|---|
+| MSAA | 4x | `T` cycle Off/2x/4x |
+| SMAA | On | `Y` |
+| Progressive accum | auto still-frame (≤16) | — |
+| Render scale | Native | `,` / `.` → 1.25 / 1.5 |
+
+Path: MS resolve HDR → PostFX → accum → tonemap → SMAA → blit. See `agent/knowledge.md` §AA.
+
+**Also this day — Voxel AA gap-fix:** progressive invalidation via camera pose
+(not jittered VP) + dirty chunks + debug-view; AA persisted in `runtime/scene.json`;
+exposure only in `tonemap_resolve` (no double-apply in frags). Build + 44/44 ctest green.
+
+| Item | Status |
+|---|---|
+| Spec | `docs/superpowers/specs/2026-07-14-gpu-driven-hybrid-design.md` |
+| Plan | `docs/superpowers/plans/2026-07-14-gpu-driven-hybrid.md` |
+| Phase G | FaceCluster + pull-mesh + indirect; dual greedy removed from `.mesh` |
+| Phase B | `BindlessHeap`, PostFX `UPDATE_AFTER_BIND`+`nonuniformEXT`, `bindlessIndices` on materials |
+| Primary path | Raster face-clusters; RT-first analytics/lighting; tensor = future slot |
+
+Env: `PROJECTV_MESH_SHADER_PIPELINE`, `PROJECTV_MESH_SHADER_INDIRECT` (default ON), `PROJECTV_BINDLESS`.
+
+**Previous — 2026-07-14:** Default branch renamed `master` → `main`. Phase 4 hardware-gated exit — see below.
 
 ### Phase 4 exit report
 
@@ -434,8 +480,8 @@ views and exited cleanly. Only pre-existing Vulkan validation warnings remain (D
 ## 2. Active tasks
 
 Per TODO.md active section:
-- ❌ 7.2 TAA — полностью удалён из активного кода, перенесён в `legacy/aa/`.
-  Рендеринг: прямой `outColor` → `sceneColorTarget` → blit → swapchain.
+- ❌ 7.2 TAA — replaced by Voxel AA stack (MSAA+SMAA+progressive+SSAA), 2026-07-14.
+  See TODO.md §7.2 closed.
 - ✅ 7.1 VCT cone density upgrade — closed 2026-07-12.
 - ✅ 7.3 Lighting exposure + tone mapping — closed 2026-07-12.
 - ✅ 7.4 Post-processing chain polish (bloom + aerial perspective) — closed 2026-07-12.

@@ -2,6 +2,8 @@
 #include "render/vulkan/VulkanGraphicsPipelineInternal.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
+#include "render/AaPass.hpp"
+#include "render/AntialiasingSettings.hpp"
 #include "render/RayTracedShadows.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
@@ -80,25 +82,25 @@ bool CreateDepthResources(
 			"no supported depth format found");
 		return false;
 	}
+	render->depthFormat = depthFormat;
+	projectv::render::ResolveMsaaSampleCount(context, render);
+	const VkExtent2D depthExtent = render->internalRenderExtent.width != 0u
+									   ? render->internalRenderExtent
+									   : projectv::render::ComputeInternalRenderExtent(swapchain->extent, render->renderScaleMode);
+	render->internalRenderExtent = depthExtent;
 
-	const VkImageCreateInfo imageInfo{
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.pNext = nullptr,
-		.flags = 0,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = depthFormat,
-		.extent = {swapchain->extent.width, swapchain->extent.height, 1},
-		.mipLevels = 1,
-		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-				 VK_IMAGE_USAGE_SAMPLED_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.queueFamilyIndexCount = 0,
-		.pQueueFamilyIndices = nullptr,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	};
+	VkImageCreateInfo imageInfo{};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.format = depthFormat;
+	imageInfo.extent = {depthExtent.width, depthExtent.height, 1};
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.samples = projectv::render::ToVkSampleCount(render->msaaSampleCount);
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
 	VmaAllocationCreateInfo allocationInfo{};
 	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;

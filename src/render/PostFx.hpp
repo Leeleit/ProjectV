@@ -26,13 +26,14 @@ inline bool IsPostFxEnabled()
 }
 
 struct PostFxPushConstants {
-	std::array<float, 4> params0{}; // x=threshold, y=softKnee, z=bloomIntensity, w=mipLevel/aerialEnabled
-	std::array<float, 4> params1{}; // x=fogDensity, y=fogMax, z=exposure, w=time
-	std::array<float, 4> params2{}; // xyz=sunDirection
-	std::array<float, 4> params3{}; // xyz=cameraPosition
-	std::array<float, 4> params4{}; // xyz=fogColor, w=reserved
+	std::array<float, 4> params0{};							// x=threshold, y=softKnee, z=bloomIntensity, w=mipLevel/aerialEnabled
+	std::array<float, 4> params1{};							// x=fogDensity, y=fogMax, z=exposure, w=time
+	std::array<float, 4> params2{};							// xyz=sunDirection
+	std::array<float, 4> params3{};							// xyz=cameraPosition
+	std::array<float, 4> params4{};							// xyz=fogColor, w=reserved
+	std::array<uint32_t, 4> textureIndices{0u, 1u, 2u, 0u}; // bindless sampler slots: scene/depth/bloom
 };
-static_assert(sizeof(PostFxPushConstants) == 80);
+static_assert(sizeof(PostFxPushConstants) == 96);
 
 constexpr uint32_t kBloomMipCount = 5u;
 constexpr uint32_t kPostFxDescriptorSetCount = 16u;

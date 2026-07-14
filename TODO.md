@@ -103,13 +103,26 @@ Reference: WickedEngine 16-32 cone, Snowdrop 12-24 cone.
 **Если когда-нибудь появится non-RTX target** (Steam Deck без RT, mobile port, web port) —
 можно reopen, но в текущем scope не преследуется. RTX-only = RTX-only.
 
-#### ❌ Задача 7.2. TAA jitter + neighborhood quality — REMOVED 2026-07-12
+#### ✅ Задача 7.2. Voxel AA (MSAA + SMAA + Progressive + SSAA) — Closed 2026-07-14
 
-**Причина удаления:** TAA pipeline полностью перенесён в `legacy/aa/` (operator decision,
-см. `agent/workspace.md`). Рендер в mainline идёт напрямую: `outColor` → `sceneColorTarget`
-→ blit → swapchain. Возвращение TAA не планируется в текущем scope; будущий antialiasing
-будет решаться через DLSS/DLAA/Streamline (Phase 4 «Ideal AA pipeline»), а не через
-собственный temporal resolve.
+**Причина закрытия TAA-пункта:** TAA/DLSS/DLAA отвергнуты для вокселей (operator).
+Вместо них внедрён пространственный стек без temporal weaseling в динамике:
+
+- **MSAA** `Off/2x/4x` (default **4x**) — geometry resolve
+- **SMAA-lite** On/Off (default **On**) — post-LDR morphological cleanup
+- **Progressive still-frame** Halton + RGBA16F accum (auto when camera/world still, max 16)
+- **Render-scale SSAA** Native/1.25/1.5 (default Native) — internal extent then blit downsample
+
+**Пайплайн:** MS color+depth → resolve 1x HDR → PostFX → progressive → tonemap → SMAA → blit.
+Tonemap вынесен из `voxel.frag`/`model.frag` в `tonemap_resolve.comp`.
+
+**Hotkeys:** `T` MSAA, `Y` SMAA, `,`/`.` render scale. HUD: `AA … SMAA … SCALE … ACCUM n/16`.
+
+**Ключевые файлы:** `src/render/AntialiasingSettings.hpp`, `src/render/AaPass.*`,
+`RendererRecordCommands.cpp`, `VulkanSwapchain.cpp`, шейдеры `tonemap_resolve` /
+`progressive_accum` / `smaa_*`.
+
+**DoD:** green build; 44/44 ctest; no TAA/DLSS in mainline.
 
 #### ✅ Задача 7.3. Lighting exposure + tone mapping pass — Closed 2026-07-12
 

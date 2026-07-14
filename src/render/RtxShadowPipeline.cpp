@@ -195,8 +195,8 @@ bool RtxShadowPipeline::Initialize(
 			libraryInterface.maxPipelineRayHitAttributeSize = 0u;
 
 			auto buildLibraryCreateInfo = [&](const VkPipelineShaderStageCreateInfo *stages, const uint32_t stageCount,
-											const VkRayTracingShaderGroupCreateInfoKHR *groups, const uint32_t groupCount,
-											const uint32_t recursionDepth) -> VkRayTracingPipelineCreateInfoKHR {
+											  const VkRayTracingShaderGroupCreateInfoKHR *groups, const uint32_t groupCount,
+											  const uint32_t recursionDepth) -> VkRayTracingPipelineCreateInfoKHR {
 				VkRayTracingPipelineCreateInfoKHR info{};
 				info.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
 				info.flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR;

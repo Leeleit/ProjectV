@@ -2,6 +2,9 @@
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
+#include "render/AaPass.hpp"
+#include "render/AntialiasingSettings.hpp"
+#include "render/PostFx.hpp"
 #include "render/RayTracedShadows.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
@@ -429,17 +432,19 @@ bool RecreateSwapchain(
 		PV_PROFILE_ZONE_N("RecreateSwapchain.DestroySwapchainResources");
 		DestroyDepthResources(context, render);
 		DestroyScreenshotReadbackResources(context, render);
+		projectv::render::DestroyAaPassResources(context, render);
+		projectv::render::DestroyAaSceneTargets(context, render);
+		projectv::render::DestroyPostFxResources(context, render);
 		projectv::render::DestroyHizBuffer(context, render->hizBuffer);
 		projectv::render::DestroyHizCullingPipeline(context, render);
-		if (render->sceneColorImage != VK_NULL_HANDLE) {
-			vkDestroyImageView(context->device, render->sceneColorImageView, nullptr);
-			render->sceneColorImageView = VK_NULL_HANDLE;
-			vmaDestroyImage(context->allocator, render->sceneColorImage, render->sceneColorAllocation);
-			render->sceneColorImage = VK_NULL_HANDLE;
-			render->sceneColorAllocation = nullptr;
-		}
-		render->sceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	}
+
+	// Must set before CreateDepthResources — it otherwise keeps the previous internal
+	// extent and depth/color diverge on render-scale change (DEVICE_LOST).
+	const VkExtent2D internalExtent =
+		projectv::render::ComputeInternalRenderExtent(swapchain->extent, render->renderScaleMode);
+	render->internalRenderExtent = internalExtent;
+	projectv::render::ResolveMsaaSampleCount(context, render);
 
 	if (!CreateDepthResources(context, swapchain, render)) {
 		runtime::LogRuntimeFailure(
@@ -452,8 +457,8 @@ bool RecreateSwapchain(
 	if (projectv::render::IsHzbCullingEnabled() &&
 		!projectv::render::CreateHizBuffer(
 			context,
-			swapchain->extent.width,
-			swapchain->extent.height,
+			internalExtent.width,
+			internalExtent.height,
 			render->hizBuffer)) {
 		runtime::LogRuntimeFailure(
 			"Swapchain",
@@ -478,53 +483,20 @@ bool RecreateSwapchain(
 		return false;
 	}
 
-	// Scene color target: offscreen color attachment for voxel/model/transparent passes.
-	constexpr VkFormat kSceneColorFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-	const VkExtent3D imageExtent{swapchain->extent.width, swapchain->extent.height, 1u};
-	VkImageCreateInfo sceneImageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .samples = VK_SAMPLE_COUNT_1_BIT};
-	sceneImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	sceneImageInfo.imageType = VK_IMAGE_TYPE_2D;
-	sceneImageInfo.format = kSceneColorFormat;
-	sceneImageInfo.extent = imageExtent;
-	sceneImageInfo.mipLevels = 1u;
-	sceneImageInfo.arrayLayers = 1u;
-	sceneImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	sceneImageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	sceneImageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-	sceneImageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	sceneImageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	VmaAllocationCreateInfo allocInfo{};
-	allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-	if (render->sceneColorImageView != VK_NULL_HANDLE) {
-		vkDestroyImageView(context->device, render->sceneColorImageView, nullptr);
-		render->sceneColorImageView = VK_NULL_HANDLE;
-	}
-	if (render->sceneColorImage != VK_NULL_HANDLE) {
-		vmaDestroyImage(context->allocator, render->sceneColorImage, render->sceneColorAllocation);
-		render->sceneColorImage = VK_NULL_HANDLE;
-		render->sceneColorAllocation = nullptr;
-	}
-	VmaAllocation sceneAlloc = nullptr;
-	if (vmaCreateImage(context->allocator, &sceneImageInfo, &allocInfo, &render->sceneColorImage, &sceneAlloc, nullptr) != VK_SUCCESS) {
-		runtime::LogRuntimeFailure("Swapchain", "RecreateSwapchain.CreateSceneColor", "vmaCreateImage failed for scene color");
+	if (!projectv::render::CreateAaSceneTargets(context, render, internalExtent) ||
+		!projectv::render::CreateAaPassResources(context, render, internalExtent)) {
 		return false;
 	}
-	render->sceneColorAllocation = sceneAlloc;
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->sceneColorImage), VK_OBJECT_TYPE_IMAGE, "SceneColorImage");
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = render->sceneColorImage;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = kSceneColorFormat;
-	viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-	if (vkCreateImageView(context->device, &viewInfo, nullptr, &render->sceneColorImageView) != VK_SUCCESS) {
-		runtime::LogRuntimeFailure("Swapchain", "RecreateSwapchain.CreateSceneColorView", "vkCreateImageView failed for scene color");
+	if (projectv::render::IsPostFxEnabled() &&
+		!projectv::render::CreatePostFxResources(context, render, internalExtent)) {
 		return false;
 	}
-	SetVulkanObjectName(*context, reinterpret_cast<uint64_t>(render->sceneColorImageView), VK_OBJECT_TYPE_IMAGE_VIEW, "SceneColorImageView");
-	render->sceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	render->sceneColorNeedsInit = false;
 	render->depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	if (render->aaPipelinesNeedRecreate &&
+		!projectv::render::RecreateAaDependentPipelines(context, swapchain, render)) {
+		return false;
+	}
 
 	if (render->graphicsPipeline != VK_NULL_HANDLE) {
 PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
@@ -539,18 +511,20 @@ PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
 				&& render->rayTracedShadows->IsVoxelAwareRtxActive()) {
 			if (!render->rayTracedShadows->RecreateShadowMaskForExtent(
 					*context,
-					swapchain->extent.width,
-					swapchain->extent.height)) {
+					internalExtent.width,
+					internalExtent.height)) {
 				runtime::LogRuntimeFailure(
 					"Graphics",
 					"RecreateSwapchain.RecreateShadowMaskForExtent",
 					"RecreateShadowMaskForExtent returned false after swapchain recreation");
+				return false;
 			}
 			if (!RefreshGraphicsResourceBindings(context, render)) {
 				runtime::LogRuntimeFailure(
 					"Graphics",
 					"RecreateSwapchain.RefreshGraphicsResourceBindingsAfterShadowMaskResize",
 					"RefreshGraphicsResourceBindings returned false after shadow mask resize");
+				return false;
 			}
 		}
 	}

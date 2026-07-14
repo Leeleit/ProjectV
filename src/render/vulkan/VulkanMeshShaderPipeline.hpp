@@ -8,26 +8,26 @@
 
 namespace projectv::render {
 
+constexpr uint32_t kFacesPerCluster = 64u;
+
 struct MeshCullPushConstants {
 	std::array<uint32_t, 4> dispatchParams{};
 	std::array<std::array<float, 4>, 6> frustumPlanes{};
 };
 static_assert(sizeof(MeshCullPushConstants) == 112);
 
-struct MeshDrawPushConstants {
-	std::array<float, 16> viewProjection{};
-	std::array<int32_t, 4> worldMinAndChunkSize{};
-	std::array<int32_t, 4> worldMaxExclusiveAndChunkCount{};
-	std::array<uint32_t, 4> chunkGridAndTransparentFaceBase{};
-	std::array<uint32_t, 4> faceCapacities{};
+struct MeshClusterizePushConstants {
+	std::array<uint32_t, 4> params{}; // x=chunkCount, y=maxClusters, z=facesPerCluster, w=unused
 };
-static_assert(sizeof(MeshDrawPushConstants) == 128);
+static_assert(sizeof(MeshClusterizePushConstants) == 16);
 
 bool IsMeshShaderPipelineRequested();
 
+bool IsMeshShaderIndirectRequested();
+
 MeshCullPushConstants BuildMeshCullPushConstants(
 	const ChunkCullingParameters &parameters,
-	uint32_t chunkDescriptorCount);
+	uint32_t dispatchCapacity);
 
 bool RefreshMeshShaderResourceBindings(
 	VulkanContextState *context,
@@ -36,6 +36,13 @@ bool RefreshMeshShaderResourceBindings(
 void DestroyMeshShaderPipelines(VulkanContextState *context, RenderState *render);
 
 bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render);
+
+bool RecordMeshShaderClusterize(
+	VkCommandBuffer commandBuffer,
+	VulkanContextState *context,
+	RenderState &render,
+	SceneFrameResources &frameResources,
+	uint32_t chunkCount);
 
 bool RecordMeshShaderPreCull(
 	VkCommandBuffer commandBuffer,
@@ -48,7 +55,7 @@ bool RecordMeshShaderDraw(
 	VkCommandBuffer commandBuffer,
 	RenderState &render,
 	SceneFrameResources &frameResources,
-	const MeshDrawPushConstants &drawPushConstants,
-	uint32_t chunkCount);
+	const GraphicsPushConstants &drawPushConstants,
+	uint32_t fallbackTaskCount);
 
 } // namespace projectv::render

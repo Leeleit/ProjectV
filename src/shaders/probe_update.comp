@@ -10,6 +10,7 @@ struct MaterialVisual {
     vec4 surface;
     vec4 medium;
     vec4 shading;
+    uvec4 bindlessIndices; // x = albedoTextureIndex (must match VoxelMaterialVisual / voxel.frag)
 };
 
 struct ChunkDescriptor {

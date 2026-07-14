@@ -19,6 +19,7 @@ import projectv.string_id;
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
 #include "render/Cloudscape.hpp"
+#include "render/AaPass.hpp"
 #include "render/PostFx.hpp"
 #include "render/SkyAtmosphere.hpp"
 #include "render/VolumetricFog.hpp"
@@ -67,6 +68,7 @@ void ShutdownVulkan(AppState *state)
 		projectv::render::DestroyVolumetricFogResources(&state->context(), &state->render());
 		projectv::render::DestroyCloudscapeResources(&state->context(), &state->render());
 		projectv::render::DestroyPostFxResources(&state->context(), &state->render());
+		projectv::render::DestroyAaPassResources(&state->context(), &state->render());
 		projectv::render::DestroySkyLutResources(&state->context(), &state->render());
 		projectv::render::DestroyRayTracedShadowResources(&state->context(), &state->render());
 		delete state->render().rayTracedShadows;
@@ -85,17 +87,9 @@ void ShutdownVulkan(AppState *state)
 		}
 		DestroyGraphicsPipeline(&state->context(), &state->render());
 		DestroyDepthResources(&state->context(), &state->render());
+		projectv::render::DestroyAaSceneTargets(&state->context(), &state->render());
 		DestroyShadowResources(&state->context(), &state->render());
 		DestroyScreenshotReadbackResources(&state->context(), &state->render());
-		if (state->render().sceneColorImageView != VK_NULL_HANDLE) {
-			vkDestroyImageView(state->context().device, state->render().sceneColorImageView, nullptr);
-			state->render().sceneColorImageView = VK_NULL_HANDLE;
-		}
-		if (state->render().sceneColorImage != VK_NULL_HANDLE) {
-			vmaDestroyImage(state->context().allocator, state->render().sceneColorImage, state->render().sceneColorAllocation);
-			state->render().sceneColorImage = VK_NULL_HANDLE;
-			state->render().sceneColorAllocation = nullptr;
-		}
 		DestroySceneResources(&state->context(), &state->render());
 		projectv::asset::UnloadAllModels(&state->context(), &state->render());
 		projectv::asset::DestroyModelPipeline(&state->context(), &state->render());

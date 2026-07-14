@@ -10,17 +10,31 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "physics/PhysicsWorld.hpp"
+#include "render/AaPass.hpp"
+#include "render/AntialiasingSettings.hpp"
+#include "voxel/SceneConfig.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
 #include <array>
+#include <string>
 
 namespace {
 constexpr float kMaxFrameDeltaSeconds = 0.25f;		   // EVIL: 250ms cap; prevents huge dt spikes after pause/focus loss; tuned for 60 FPS frame budget
 constexpr float kMinLightingExposureBiasStops = -4.0f; // EVIL: -4 stops lower; matches ACES tone-map dark floor per VoxelMaterials.cpp:62
 constexpr float kMaxLightingExposureBiasStops = 4.0f;  // EVIL: +4 stops upper; symmetric to kMin; prevents exposure runaway
 
+void PersistAaSettingsToSceneConfig(const RenderState &render)
+{
+	projectv::voxel::SceneConfig config;
+	const std::string path = projectv::voxel::GetDefaultSceneConfigPath();
+	(void)projectv::voxel::LoadSceneConfig(path, config);
+	config.msaaMode = std::string{projectv::render::ToString(render.msaaMode)};
+	config.smaaEnabled = render.smaaEnabled;
+	config.renderScale = std::string{projectv::render::ToString(render.renderScaleMode)};
+	(void)projectv::voxel::SaveSceneConfig(path, config);
+}
 bool UsesPhysicsCharacter(const CameraState::ControlMode controlMode)
 {
 	return controlMode == CameraState::ControlMode::Creative ||
@@ -299,6 +313,10 @@ void MirrorRenderLightingToDebugStats(
 	stats.sceneMaxExposure = render.currentSceneLighting.exposureControl[3];
 	stats.toneMapOperator = render.lightingDebugControls.toneMapOperator;
 	stats.lightingDebugView = render.lightingDebugControls.debugView;
+	stats.msaaMode = render.msaaMode;
+	stats.smaaEnabled = render.smaaEnabled;
+	stats.renderScaleMode = render.renderScaleMode;
+	stats.progressiveAccumFrameIndex = render.progressiveAccumFrameIndex;
 	stats.sunDirection = {
 		render.currentSceneLighting.sunDirectionAndWrap[0],
 		render.currentSceneLighting.sunDirectionAndWrap[1],
@@ -511,6 +529,24 @@ bool ProcessInputActions(
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ResetLightingDebugControls)) {
 		ResetLightingDebugControls(*render);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::CycleMsaaMode)) {
+		render->msaaMode = projectv::render::CycleMsaaMode(render->msaaMode);
+		render->aaPipelinesNeedRecreate = true;
+		projectv::render::InvalidateProgressiveAccum(*render);
+		platform->windowResized = true;
+		PersistAaSettingsToSceneConfig(*render);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleSmaa)) {
+		render->smaaEnabled = !render->smaaEnabled;
+		projectv::render::InvalidateProgressiveAccum(*render);
+		PersistAaSettingsToSceneConfig(*render);
+	}
+	if (ConsumeInputActionPressed(*input, InputAction::CycleRenderScale)) {
+		render->renderScaleMode = projectv::render::CycleRenderScaleMode(render->renderScaleMode);
+		projectv::render::InvalidateProgressiveAccum(*render);
+		platform->windowResized = true; // internal extent + AA/PostFX targets only; pipelines keep MSAA samples
+		PersistAaSettingsToSceneConfig(*render);
 	}
 	if (audio) {
 		constexpr float kMusicVolumeStep = 0.05f;

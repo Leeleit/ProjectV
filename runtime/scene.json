@@ -1,7 +1,12 @@
 {
+  "antialiasing": {
+    "msaaMode": "MSAA4",
+    "renderScale": "1.50",
+    "smaaEnabled": true
+  },
   "lighting": {
     "exposure": 1.0,
-    "sunDirectionY": 0.8
+    "sunDirectionY": 0.800000011920929
   },
   "name": "ProjectV Default",
   "scenePreset": "VoxelLab",

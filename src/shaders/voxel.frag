@@ -1,12 +1,13 @@
 #version 460
-
 #include "common/common_constants.glsl" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+#extension GL_EXT_nonuniform_qualifier : enable
 
 struct MaterialVisual {
     vec4 baseColor;
     vec4 surface;
     vec4 medium;
     vec4 shading;
+    uvec4 bindlessIndices; // x = albedoTextureIndex (0xffffffff = SSBO color only)
 };
 
 struct ChunkDescriptor {
@@ -1149,7 +1150,11 @@ void main() {
     const float directDiffuseStrength = clamp(material.shading.w, 0.0, 1.0);
     const float nDotV = max(dot(normal, viewDirection), 0.0);
     const float wrappedDiffuse = clamp((dot(normal, sunDirection) + diffuseWrap) / (1.0 + diffuseWrap), 0.0, 1.0);
+    const uint albedoTexIndex = nonuniformEXT(material.bindlessIndices.x); // Phase B index ABI; 0xffffffff = SSBO color
     vec3 albedo = material.baseColor.rgb;
+    if (albedoTexIndex != 0xffffffffu) {
+        albedo = material.baseColor.rgb; // graphics set1 bindlessTextures[] reserved for BindlessHeap
+    }
     if (inMaterialIndex == 3u || inMaterialIndex == 4u) {
         const ivec3 voxelCoord = ivec3(floor(inWorldPosition - inNormal * 0.5));
         albedo = ((voxelCoord.x + voxelCoord.z) & 1) == 0 ? vec3(0.96, 0.96, 0.94) : vec3(0.56, 0.60, 0.66);
@@ -1396,15 +1401,9 @@ void main() {
     }
 
     if (lightingDebugView == 14u) {
-        color *= max(sceneLighting.postProcess.x, 0.0);
-        color = ApplyToneMap(color);
         outColor = vec4(color, material.baseColor.a);
         return;
     }
-
-    color *= max(sceneLighting.postProcess.x, 0.0);
-    color = ApplyToneMap(color);
-    color = ApplyColorGrading(color);
 
     outColor = vec4(color, material.baseColor.a);
 }

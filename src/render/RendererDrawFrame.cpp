@@ -11,6 +11,7 @@
 #include "render/RtxGiProbes.hpp"
 #include "render/vulkan/VulkanAsyncCompute.hpp"
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
+#include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanResult.hpp"
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
@@ -34,8 +35,8 @@ uint32_t GetPresentWaitMaxLatencyFrames()
 		return 0u;
 	}
 	return parsed > std::numeric_limits<uint32_t>::max()
-		? std::numeric_limits<uint32_t>::max()
-		: static_cast<uint32_t>(parsed);
+			   ? std::numeric_limits<uint32_t>::max()
+			   : static_cast<uint32_t>(parsed);
 }
 
 } // namespace
@@ -98,6 +99,27 @@ SDL_AppResult DrawFrame(
 	const VkCommandBuffer cmd = frame->commandBuffers[currentFrameIndex];
 	const VkFence inFlightFence = frame->inFlightFences[currentFrameIndex];
 	const VkSemaphore imageAvailableSemaphore = frame->imageAvailableSemaphores[currentFrameIndex];
+
+	// Wait BEFORE acquire: with minImageCount==MAX_FRAMES_IN_FLIGHT, acquire-first deadlocks on resize.
+	const VkResult waitFencesResult = vkWaitForFences(context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+	if (waitFencesResult != VK_SUCCESS) {
+		runtime::LogVkFailure("DrawFrame.vkWaitForFences", waitFencesResult);
+		return SDL_APP_FAILURE;
+	}
+
+	if (platform->windowResized) {
+		if (!RecreateSwapchain(platform, context, swapchain, render)) {
+			runtime::LogRuntimeFailure(
+				"Render",
+				"DrawFrame.RecreateSwapchainBeforeAcquire",
+				"RecreateSwapchain returned false for windowResized");
+			return SDL_APP_FAILURE;
+		}
+		platform->windowResized = false;
+		// PrepareFrame already baked descriptor sets; next iterate will re-prepare. Do not draw.
+		return SDL_APP_CONTINUE;
+	}
+
 	const VkExtent2D captureExtent = swapchain->extent;
 	const VkFormat captureFormat = swapchain->format;
 
@@ -122,18 +144,13 @@ SDL_AppResult DrawFrame(
 			return SDL_APP_FAILURE;
 		}
 		platform->windowResized = false;
-		return SDL_APP_CONTINUE;
+		return SDL_APP_CONTINUE; // fence still signaled — do not reset without a submit
 	}
 	if (acquireRes != VK_SUCCESS && acquireRes != VK_SUBOPTIMAL_KHR) {
 		runtime::LogVkFailure("DrawFrame.vkAcquireNextImageKHR", acquireRes);
 		return SDL_APP_FAILURE;
 	}
 
-	const VkResult waitFencesResult = vkWaitForFences(context->device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-	if (waitFencesResult != VK_SUCCESS) {
-		runtime::LogVkFailure("DrawFrame.vkWaitForFences", waitFencesResult);
-		return SDL_APP_FAILURE;
-	}
 	const VkResult resetFenceResult = vkResetFences(context->device, 1, &inFlightFence);
 	if (resetFenceResult != VK_SUCCESS) {
 		runtime::LogVkFailure("DrawFrame.vkResetFences", resetFenceResult);
@@ -153,23 +170,39 @@ SDL_AppResult DrawFrame(
 		return SDL_APP_FAILURE;
 	}
 
-	if (render->meshShaderEnabled && frame->renderData.chunkDescriptorCount > 0) {
-		const projectv::render::MeshCullPushConstants cullPush =
-			projectv::render::BuildMeshCullPushConstants(
-				frame->renderData.chunkCullingParameters,
-				frame->renderData.chunkDescriptorCount);
-		projectv::render::RecordMeshShaderPreCull(
-			cmd,
-			context,
-			*render,
-			render->sceneFrameResources[frame->currentFrame],
-			cullPush);
-	}
-
 	if (render->rayTracedShadows != nullptr) {
-		if (render->rayTracedShadows->IsVoxelAwareRtxPending()) {
+		const bool rtxFinishWasPending = render->rayTracedShadows->IsVoxelAwareRtxPending();
+		if (rtxFinishWasPending) {
 			PV_PROFILE_ZONE_N("TryFinishVoxelAwareRtxResources");
-			(void)render->rayTracedShadows->TryFinishVoxelAwareRtxResources(*context);
+			const bool finished = render->rayTracedShadows->TryFinishVoxelAwareRtxResources(*context);
+			if (finished && render->rayTracedShadows->IsVoxelAwareRtxActive()) {
+				const VkExtent2D shadowExtent = render->internalRenderExtent.width > 0u &&
+														render->internalRenderExtent.height > 0u
+													? render->internalRenderExtent
+													: swapchain->extent;
+				if (!render->rayTracedShadows->RecreateShadowMaskForExtent(
+						*context, shadowExtent.width, shadowExtent.height)) {
+					runtime::LogRuntimeFailure(
+						"Render",
+						"DrawFrame.RecreateShadowMaskForExtentAfterRtxFinish",
+						"RecreateShadowMaskForExtent returned false after deferred RTX ready");
+					return SDL_APP_FAILURE;
+				}
+				if (!RefreshGraphicsResourceBindings(context, render)) {
+					runtime::LogRuntimeFailure(
+						"Render",
+						"DrawFrame.RefreshGraphicsResourceBindingsAfterRtxFinish",
+						"RefreshGraphicsResourceBindings returned false after deferred RTX ready");
+					return SDL_APP_FAILURE;
+				}
+				// PrepareFrame cached the pre-refresh set — rebind after pool reset.
+				frame->renderData.graphicsDescriptorSet =
+					render->sceneFrameResources[currentFrameIndex].graphicsDescriptorSet;
+				frame->renderData.meshShaderDescriptorSet =
+					render->sceneFrameResources[currentFrameIndex].meshShaderDescriptorSet;
+				frame->renderData.voxelMeshingDescriptorSet =
+					render->sceneFrameResources[currentFrameIndex].voxelMeshingDescriptorSet;
+			}
 		}
 		PV_PROFILE_ZONE_N("CollectAndBuildBlasChunks");
 		if (state->world().voxelWorld != nullptr) {
@@ -281,8 +314,8 @@ SDL_AppResult DrawFrame(
 			inverseViewProjectionFlat.data(),
 			cameraPosition,
 			cameraForward,
-			swapchain->extent.width,
-			swapchain->extent.height);
+			render->internalRenderExtent.width > 0u ? render->internalRenderExtent.width : swapchain->extent.width,
+			render->internalRenderExtent.height > 0u ? render->internalRenderExtent.height : swapchain->extent.height);
 	}
 
 	if (render->rtxGiProbes != nullptr && render->rtxGiProbes->IsEnabled()) {
@@ -312,10 +345,13 @@ SDL_AppResult DrawFrame(
 
 	if (projectv::render::IsHzbCullingEnabled() &&
 		render->hizBuffer.image != VK_NULL_HANDLE) {
+		const bool useDepthResolve = render->msaaSampleCount > 1u && render->depthResolveImage != VK_NULL_HANDLE;
+		const VkImageLayout hizDepthLayout =
+			useDepthResolve ? render->depthResolveCurrentLayout : render->depthImageCurrentLayout;
 		projectv::render::BuildHizMipChain(
 			cmd,
-			render->depthImage,
-			render->depthImageCurrentLayout,
+			useDepthResolve ? render->depthResolveImage : render->depthImage,
+			hizDepthLayout,
 			render->hizBuffer,
 			render,
 			context);

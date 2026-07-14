@@ -40,6 +40,10 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	if (!m_config.enabled || !m_voxelAwareRtxActive) {
 		return false;
 	}
+	if (m_shadowMaskImage == VK_NULL_HANDLE || m_shadowMaskImageView == VK_NULL_HANDLE ||
+		m_shadowMaskWidth == 0u || m_shadowMaskHeight == 0u) {
+		return false;
+	}
 	if (commandBuffer == VK_NULL_HANDLE || m_rtxPipeline.GetPipeline() == VK_NULL_HANDLE || !m_rtxSbt.IsReady()) {
 		return false;
 	}

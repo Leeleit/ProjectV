@@ -8,6 +8,7 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 #include "debug/Profiling.hpp"
 #include "render/vulkan/VulkanBootstrap.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
+#include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "voxel/NanoVdb.hpp"
 #include "voxel/VoxelMaterials.hpp"
 #include "voxel/VoxelWorld.hpp"
@@ -131,14 +132,18 @@ bool CreateSceneFrameGeometryBuffers(
 		"SceneChunkVoxelPayloadBufferAllocation");
 	render->sceneMemoryBytes += chunkVoxelPayloadAllocationInfo.size;
 
-	const uint32_t visibleChunkIdCapacity = static_cast<uint32_t>(world->voxelWorld->chunks.size());
+	const uint32_t chunkCount = static_cast<uint32_t>(world->voxelWorld->chunks.size());
+	const uint32_t faceClusterCapacity = std::max(
+		chunkCount,
+		(render->sceneFaceCapacity + projectv::render::kFacesPerCluster - 1u) / projectv::render::kFacesPerCluster);
 	if (frameResourceIndex == 0) {
-		render->visibleChunkIdCapacity = visibleChunkIdCapacity;
+		render->visibleChunkIdCapacity = faceClusterCapacity;
+		render->faceClusterCapacity = faceClusterCapacity;
 	}
 	VmaAllocationInfo visibleChunkIdAllocationInfo{};
 	if (!CreateBuffer(
 			context,
-			sizeof(uint32_t) * static_cast<VkDeviceSize>(std::max(visibleChunkIdCapacity, 1u)),
+			sizeof(uint32_t) * static_cast<VkDeviceSize>(std::max(faceClusterCapacity, 1u)),
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			allocationInfo,
 			&frameResources.visibleChunkIdBuffer,
@@ -152,6 +157,63 @@ bool CreateSceneFrameGeometryBuffers(
 		visibleChunkIdAllocationInfo.size,
 		"SceneVisibleChunkIdBufferAllocation");
 	render->sceneMemoryBytes += visibleChunkIdAllocationInfo.size;
+
+	constexpr VkDeviceSize kFaceClusterBytes = 32u; // FaceCluster: 4x uint + vec4
+	VmaAllocationInfo faceClusterAllocationInfo{};
+	if (!CreateBuffer(
+			context,
+			kFaceClusterBytes * static_cast<VkDeviceSize>(std::max(faceClusterCapacity, 1u)),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			allocationInfo,
+			&frameResources.meshClusters.faceClusterBuffer,
+			&frameResources.meshClusters.faceClusterAllocation,
+			&faceClusterAllocationInfo)) {
+		return false;
+	}
+	frameResources.meshClusters.faceClusterMappedData = faceClusterAllocationInfo.pMappedData;
+	profiling::RecordAllocation(
+		frameResources.meshClusters.faceClusterAllocation,
+		faceClusterAllocationInfo.size,
+		"SceneFaceClusterBufferAllocation");
+	render->sceneMemoryBytes += faceClusterAllocationInfo.size;
+
+	VmaAllocationInfo faceClusterCountAllocationInfo{};
+	if (!CreateBuffer(
+			context,
+			sizeof(uint32_t),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			allocationInfo,
+			&frameResources.meshClusters.faceClusterCountBuffer,
+			&frameResources.meshClusters.faceClusterCountAllocation,
+			&faceClusterCountAllocationInfo)) {
+		return false;
+	}
+	frameResources.meshClusters.faceClusterCountMappedData = faceClusterCountAllocationInfo.pMappedData;
+	profiling::RecordAllocation(
+		frameResources.meshClusters.faceClusterCountAllocation,
+		faceClusterCountAllocationInfo.size,
+		"SceneFaceClusterCountBufferAllocation");
+	render->sceneMemoryBytes += faceClusterCountAllocationInfo.size;
+	std::memset(frameResources.meshClusters.faceClusterCountMappedData, 0, sizeof(uint32_t));
+
+	VmaAllocationInfo meshDrawIndirectAllocationInfo{};
+	if (!CreateBuffer(
+			context,
+			sizeof(VkDrawMeshTasksIndirectCommandEXT),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+			allocationInfo,
+			&frameResources.meshClusters.meshDrawIndirectBuffer,
+			&frameResources.meshClusters.meshDrawIndirectAllocation,
+			&meshDrawIndirectAllocationInfo)) {
+		return false;
+	}
+	frameResources.meshClusters.meshDrawIndirectMappedData = meshDrawIndirectAllocationInfo.pMappedData;
+	profiling::RecordAllocation(
+		frameResources.meshClusters.meshDrawIndirectAllocation,
+		meshDrawIndirectAllocationInfo.size,
+		"SceneMeshDrawIndirectBufferAllocation");
+	render->sceneMemoryBytes += meshDrawIndirectAllocationInfo.size;
+	std::memset(frameResources.meshClusters.meshDrawIndirectMappedData, 0, sizeof(VkDrawMeshTasksIndirectCommandEXT));
 
 	VmaAllocationInfo visibilityCounterAllocationInfo{};
 	if (!CreateBuffer(

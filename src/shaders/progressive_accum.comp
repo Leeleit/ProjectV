@@ -1,0 +1,31 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D srcCurrent;
+layout(set = 0, binding = 1, rgba16f) uniform image2D history;
+
+layout(push_constant) uniform PushConstants {
+    vec4 params0; // x=frameIndex
+} pushConstants;
+
+void main()
+{
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 historySize = imageSize(history);
+    if (any(greaterThanEqual(coord, historySize))) {
+        return;
+    }
+
+    const vec2 uv = (vec2(coord) + 0.5) / vec2(historySize);
+    const vec3 current = textureLod(srcCurrent, uv, 0.0).rgb;
+    const float frameIndex = max(pushConstants.params0.x, 1.0);
+    if (frameIndex <= 1.0) {
+        imageStore(history, coord, vec4(current, 1.0));
+        return;
+    }
+
+    const vec3 previous = imageLoad(history, coord).rgb;
+    const vec3 accumulated = previous + (current - previous) / frameIndex;
+    imageStore(history, coord, vec4(accumulated, 1.0));
+}

@@ -211,9 +211,10 @@ GPU representation нужна для fast shader-side consume без per-voxel b
 emits `PackedSceneVoxelFace` per exposed voxel on +X face. kMaxExtent=64.
 Используется только в tests (`ProjectVCpuMeshGeneratorTests`).
 
-**Pattern C (mesh shader) — feature-flagged:** `voxel_mesh_pre.comp` (compute pre-cull
-with `atomicAdd(visibleCount)`) + `voxel_mesh.mesh` (mesh shader). Gated by
-`PROJECTV_MESH_SHADER_PIPELINE=ON` (default OFF per `VulkanMeshShaderPipeline.hpp:28`).
+**Pattern C (mesh shader) — feature-flagged:** GPU-driven face-clusters.
+`voxel_face_cluster.comp` → `voxel_mesh_pre.comp` (frustum) → `voxel_mesh.mesh` (PackedFace pull).
+Gated by `PROJECTV_MESH_SHADER_PIPELINE=ON`; indirect default ON (`PROJECTV_MESH_SHADER_INDIRECT`).
+See knowledge §39.
 
 **Почему:** GPU greedy быстрее (нет CPU↔GPU transfer), 6-axis за один dispatch
 (shared bitmask amortization). CPU fallback — для регрессий и pre-RTX smoke.
@@ -418,7 +419,10 @@ via `atomicOr`).
   - Pass 2 (only if primary hit): shadow ray от
     `worldOrigin + viewDir*hitT + viewDir*0.05` (small bias) along sun direction
     with `T_max = 256`. Sky pixels (primary miss) keep `shadowFactor = 1.0`.
-- **Output:** `rtxShadowMask` image (R8_UNORM, swapchain extent) at set=0 binding=18.
+- **Output:** `rtxShadowMask` image (R8_UNORM, **internal render extent**) at set=0 binding=18.
+  Hardcoded 1920×1080 was wrong vs default 1280×720 window (shadows shifted until MSAA
+  recreate). Mask is created/resized in `RecreateShadowMaskForExtent` after deferred RTX
+  ready and on swapchain recreate.
 - **Shader consume:** `voxel.frag` (`ComputeSunShadowSample`): для non-RTX
   fallback возвращает 1.0 (lit). Voxel-aware path: `texture(rtxShadowMask,
   gl_FragCoord.xy / vec2(textureSize(rtxShadowMask, 0))).r`. Strength factor
@@ -566,51 +570,49 @@ physics re-sync, model instance snap to ground, chunk prebake if streaming enabl
 **Почему:** declarative scene config + per-preset lighting profile = reproducible
 visual regression targets для RTX-driven milestones.
 
-## 18. TAA: SPIR-V variants + history params
+## 18. Voxel AA (MSAA + SMAA + Progressive + SSAA) — no TAA
 
-**Решение:** 4 SPIR-V variants of `voxel.frag`:
-- `voxel.frag.spv` (default, Location 0 output `outColor`).
-- `voxel.frag.taa_on.spv` (`-DTAA_ENABLED`, Location 1 output `outSceneColor`).
-- `voxel.frag.rtx.spv` (`-DVOXEL_RTX_ENABLED`, ray query consume).
-- `voxel.frag.rtx_taa_on.spv` (`-DTAA_ENABLED -DVOXEL_RTX_ENABLED`).
+**Решение (2026-07-14):** TAA/DLSS/DLAA не возвращаются в mainline (воксели +
+operator). Пространственный стек:
 
-**TAA shader (`taa_resolve.frag`):**
-- YCoCg color space clamp (outlier rejection).
-- `taaHistoryParams` (vec4): `.xy` = texelSize, `.z` = historyValid (0/1), `.w` = neighbourhood radius.
-- Neighbourhood radius cycle: `1 → 3 → 5 → 7 → 1` (`,` hotkey).
-- Inline CAS (Contrast Adaptive Sharpening) at end of resolve, linear-light pre-tonemap.
-- `kTaaCasSharpnessMax = 0.5f` (`Types.hpp:858`).
-- `sharpenAmount = max(0, (1.0 - taaBlend) * taaCasSharpnessMax)`.
+| Setting | Values | Default | Hotkey |
+|---|---|---|---|
+| `msaaMode` | Off / X2 / X4 | **X4** | `T` |
+| `smaaEnabled` | bool | **true** | `Y` |
+| `renderScaleMode` | Native / 1.25 / 1.5 | **Native** | `,` / `.` |
+| Progressive | auto still-frame | on when camera+world static | — |
 
-**TAA scene color format** = `VK_FORMAT_B10G11R11_UFLOAT_PACK32` (HDR-friendly).
+**Pass order:** geometry MS color+depth → hardware resolve 1× HDR (`B10G11R11`) →
+optional PostFX → progressive accum (`RGBA16F`, Halton in NDC via
+`progressiveHaltonNdc*` when `progressiveAccumApplyHalton`; applied to voxel VP +
+sky/cloudscape rays) → after max frames: **freeze** history (no further `/N` write —
+centered adapt washed AA back to 1×). Lighting/camera/dirty invalidate and rebuild.
+→ `tonemap_resolve.comp` → SMAA-lite → blit.
 
-**TAA per-layer history** (`taaLayerHistory` = `VK_FORMAT_R8G8B8A8_UNORM`):
-- R = `CTSH` (contact shadow), G = `AOCC` (AO), B = `LOCL` (local point light), A = 1.0.
-- 3rd MRT attachment (Location 2) в `voxel.frag`.
+**Tonemap location:** `voxel.frag`/`model.frag` пишут linear HDR (без ACES);
+tonemap+grading только в `tonemap_resolve.comp`. Clear color — linear sky RGB
+(без CPU tonemap).
 
-**Jitter:** `AdvanceTtaPixelJitter` (Halton 2,3 sequence).
+**Key types/files:** `AntialiasingSettings.hpp`, `AaPass.{hpp,cpp}`,
+`RenderState::{msaaSampleCount,internalRenderExtent,sceneColorMs*,depthResolve*,ldr*,accum*,smaa*,aaPresent*}`.
 
-**Camera-cut detection:** Chebyshev L-infinity delta vs `prevViewProjectionMatrix`,
-threshold `0.10` (`FramePreparation.cpp:256-282`). On cut: `taaHistoryValid = false`.
+**Invalidation (progressive):** camera pose epsilon (pos/yaw/pitch, not jittered VP),
+dirtyChunkCount > 0, resize, MSAA/scale change, lighting debug view change,
+sun direction / exposure / env intensity epsilon. Cap `kProgressiveAccumMaxFrames = 16`.
+Persistence: `runtime/scene.json` → `antialiasing`
+{msaaMode,smaaEnabled,renderScale}; saved on hotkey change, loaded at startup.
 
-**History invalidation triggers (7):**
-1. `T` ToggleTaa (enable flip).
-2. Swapchain resize.
-3. World reload (preset/snapshot).
-4. `;`/`'` jitter scale.
-5. `-`/`=` blend.
-6. `,` neighbourhood radius.
-7. `.` InvalidateTaaHistory (explicit).
+**MSAA notes:** `sampleShadingEnable = false`; MS color **без** `TRANSIENT_ATTACHMENT`
+(sky+geometry — один `BeginRendering`); sky — `RecordSkyAtmosphereDraw` внутри geometry
+pass (не отдельный render). PostFX samples `depthResolve` when MSAA>1; cloudscape stays 1×
+(post-resolve). Device clamp via `framebufferColor/DepthSampleCounts`.
+`RecreateAaDependentPipelines` must `RefreshGraphicsResourceBindings` (DestroyGraphicsPipeline
+wipes descriptor sets; without refresh → gray scene, HUD still works).
 
-**Per-frame state** (`RenderState`, `Types.hpp:843-880`):
-- `taaEnabled=true` (default).
-- `taaBlend=0.10f` (default), range 0..1.
-- `taaFrameCounter`, `taaHistoryValid`, `taaJitterScale=0.0` (computed from
-  `taaJitterX/Y`), `taaNeighbourhoodRadius=1`, `taaCasSharpnessMax=0.5f`.
-- `taaPrevViewProjectionMatrix`, `taaPrevViewProjectionMatrixInitialized`.
+**HUD/UI:** after AA blit, 1× swapchain dynamic rendering (`swapchain.format`); vertices
+from `swapchain.extent`. Not drawn into MS/internal HDR.
 
-**Почему:** SPIR-V variants = no runtime branches в hot path, optimal code-gen.
-YCoCg + history clamp + neighbourhood = стабильность на low-frequency сценах.
+**Legacy:** old TAA code remains in `legacy/aa/` only (historical).
 
 ## 19. Multi-frame-per-frame simulation tick
 
@@ -1128,7 +1130,7 @@ benchmark/regression numbers. ON = full atmospheric look.
 | Gate | Env | Notes |
 |:-----|:----|:------|
 | HZB min-mips | `PROJECTV_HZB_MIN_MIP` (default ON) | compute min-reduction; OFF = LINEAR blit |
-| Bindless PostFX composite | `PROJECTV_BINDLESS=ON` | variable-count sampled array in `post_composite_bindless.comp` |
+| Bindless PostFX composite | `PROJECTV_BINDLESS=ON` | `UPDATE_AFTER_BIND` + `nonuniformEXT`; `BindlessHeap`; `MaterialVisual.bindlessIndices` |
 | Host image copy | `PROJECTV_HOST_IMAGE_COPY=ON` | cloud noise upload path |
 | Uint8 indices | (capability) | small meshes when `indexTypeUint8` |
 | Local-read | `PROJECTV_DYNAMIC_RENDERING_LOCAL_READ=ON` | feature enabled; **no consumer yet** — PostFX is compute-only |
@@ -1136,6 +1138,26 @@ benchmark/regression numbers. ON = full atmospheric look.
 | Present wait | `PROJECTV_PRESENT_WAIT=N` | needs present_id + present_wait |
 | SER | `PROJECTV_RTX_SER=ON` | `VK_NV_ray_tracing_invocation_reorder` |
 | OMM | — | blocked on alpha-tested assets (see §14) |
+
+## 39. GPU-driven hybrid (face-clusters + bindless + RT-first)
+
+**Decision (2026-07-14):** Raster-primary voxel surfaces; RT-first analytics/lighting; tensor reserved for future post.
+
+**Geometry (Phase G):**
+- Truth = `voxel_mesh.comp` → `PackedFace` (no dual greedy in mesh stage).
+- `voxel_face_cluster.comp` emits `FaceCluster` (≤64 faces, chunk AABB).
+- `voxel_mesh_pre.comp` frustum-culls clusters → `VkDrawMeshTasksIndirectCommandEXT`.
+- `voxel_mesh.mesh` pulls PackedFace quads; layout set0=graphics, set1=visibility.
+- Env: `PROJECTV_MESH_SHADER_PIPELINE`; `PROJECTV_MESH_SHADER_INDIRECT` default ON.
+
+**Bindless (Phase B):**
+- `BindlessHeap` (`src/render/BindlessHeap.*`) — `UPDATE_AFTER_BIND` variable sampled array.
+- PostFX composite uses bindless path with `nonuniformEXT(textureIndices)`.
+- `VoxelMaterialVisual.bindlessIndices.x` = albedo texture slot (`0xffffffff` = SSBO color).
+
+**RT / tensor slots:** RT = shadows/AO/GI/analytic hits (+ optional occlusion later). Tensor = DLSS/denoise later. Cull default remains compute+HZB.
+
+**Spec / plan:** `docs/superpowers/specs/2026-07-14-gpu-driven-hybrid-design.md`, `docs/superpowers/plans/2026-07-14-gpu-driven-hybrid.md`.
 
 ## 37. RT shadow pipeline path selection
 

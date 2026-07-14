@@ -4,6 +4,7 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
+#include "render/AntialiasingSettings.hpp"
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
@@ -259,9 +260,9 @@ bool CreateSkyAtmospherePipelines(VulkanContextState *context, RenderState *rend
 				.lineWidth = 1.0f,
 			};
 
-			static constexpr VkPipelineMultisampleStateCreateInfo multisampleState{
+			VkPipelineMultisampleStateCreateInfo multisampleState{
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-				.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+				.rasterizationSamples = projectv::render::ToVkSampleCount(render->msaaSampleCount),
 			};
 
 			static constexpr VkPipelineDepthStencilStateCreateInfo depthStencilState{

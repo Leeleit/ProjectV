@@ -4,6 +4,7 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
+#include "render/BindlessHeap.hpp"
 #include "render/RendererInternal.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
@@ -593,7 +594,9 @@ bool CreatePostFxResources(
 
 		const VkDescriptorBindingFlags bindingFlags[2] = {
 			0u,
-			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT,
+			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+				VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+				VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
 		};
 		VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo{};
 		bindingFlagsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
@@ -603,6 +606,7 @@ bool CreatePostFxResources(
 		VkDescriptorSetLayoutCreateInfo bindlessLayoutInfo{};
 		bindlessLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		bindlessLayoutInfo.pNext = &bindingFlagsInfo;
+		bindlessLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 		bindlessLayoutInfo.bindingCount = 2u;
 		bindlessLayoutInfo.pBindings = bindlessBindings;
 		if (vkCreateDescriptorSetLayout(
@@ -634,6 +638,7 @@ bool CreatePostFxResources(
 						.descriptorCount = kBindlessSetCount}};
 				VkDescriptorPoolCreateInfo bindlessPoolInfo{};
 				bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+				bindlessPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
 				bindlessPoolInfo.maxSets = kBindlessSetCount;
 				bindlessPoolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 				bindlessPoolInfo.pPoolSizes = poolSizes.data();
@@ -672,7 +677,16 @@ bool CreatePostFxResources(
 						render->postFxPipelineLayout = savedLayout;
 						if (compositeOk) {
 							render->postFxBindlessEnabled = true;
-							SDL_Log("Render: PostFX bindless composite path enabled");
+							SDL_Log("Render: PostFX bindless composite path enabled (UPDATE_AFTER_BIND + nonuniformEXT)");
+							BindlessHeap heap{};
+							if (CreateBindlessHeap(*context, heap)) {
+								render->bindlessHeapSetLayout = heap.setLayout;
+								render->bindlessHeapPool = heap.pool;
+								render->bindlessHeapSet = heap.set;
+								render->bindlessHeapCapacity = heap.capacity;
+								render->bindlessHeapNextSlot = heap.nextSlot;
+								heap = {}; // ownership transferred to RenderState; avoid DestroyBindlessHeap
+							}
 						}
 					}
 				}

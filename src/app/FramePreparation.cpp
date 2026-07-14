@@ -9,6 +9,7 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 #include "debug/DebugHud.hpp"
 #include "debug/DebugOverlays.hpp"
 #include "debug/Profiling.hpp"
+#include "render/AaPass.hpp"
 #include "render/SceneResources.hpp"
 #include "render/LodDownsampleGpuConsume.hpp"
 #include "voxel/ChunkStreamer.hpp"
@@ -238,9 +239,14 @@ bool PrepareFrameRenderData(
 		&frame->renderData.debugOverlayBoxes);
 	frame->renderData.graphicsPushConstants = {};
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
+		const bool sceneDirty = frame->renderData.dirtyChunkCount > 0u;
+		const VkExtent2D renderExtent =
+			render->internalRenderExtent.width > 0u ? render->internalRenderExtent : swapchain->extent;
+		projectv::render::UpdateProgressiveAccumState(*render, *camera, sceneDirty, renderExtent);
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(
 			*camera,
-			swapchain->extent);
+			renderExtent,
+			render);
 	}
 	if (world->voxelWorld) {
 		frame->renderData.graphicsPushConstants.worldMinAndChunkSize = {

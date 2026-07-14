@@ -5,6 +5,7 @@
 
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
+#include "render/AntialiasingSettings.hpp"
 
 namespace projectv::asset {
 
@@ -148,7 +149,7 @@ bool CreateModelPipeline(
 
 	VkPipelineMultisampleStateCreateInfo multisampling{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		.rasterizationSamples = projectv::render::ToVkSampleCount(render->msaaSampleCount),
 		.sampleShadingEnable = VK_FALSE,
 		.minSampleShading = 0.0f,
 		.alphaToCoverageEnable = VK_FALSE,

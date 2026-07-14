@@ -3,6 +3,7 @@
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
+#include "render/AntialiasingSettings.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include <array>
@@ -315,8 +316,8 @@ bool CreateCloudscapeResources(VulkanContextState *context, RenderState *render)
 				imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 				imageBarrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 				imageBarrier.oldLayout = render->cloudscapeNoiseHostCopied
-					? VK_IMAGE_LAYOUT_GENERAL
-					: VK_IMAGE_LAYOUT_UNDEFINED;
+											 ? VK_IMAGE_LAYOUT_GENERAL
+											 : VK_IMAGE_LAYOUT_UNDEFINED;
 				imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 				imageBarrier.image = render->cloudscapeNoiseImage;
 				imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
@@ -440,9 +441,9 @@ bool CreateCloudscapeResources(VulkanContextState *context, RenderState *render)
 		.lineWidth = 1.0f,
 	};
 
-	static constexpr VkPipelineMultisampleStateCreateInfo multisampleState{
+	VkPipelineMultisampleStateCreateInfo multisampleState{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT, // post-resolve pass always writes 1x sceneColor
 	};
 
 	static constexpr VkPipelineDepthStencilStateCreateInfo depthStencilState{

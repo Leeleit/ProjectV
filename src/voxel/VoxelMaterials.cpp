@@ -159,7 +159,9 @@ VoxelMaterialVisual GetVoxelMaterialVisual(const VoxelMaterial material)
 		};
 	case VoxelMaterial::Air:
 	default:
-		return {};
+		return {
+			.bindlessIndices = {0xffffffffu, 0xffffffffu, 0xffffffffu, 0xffffffffu},
+		};
 	}
 }
 
@@ -348,16 +350,13 @@ float EstimateVoxelSceneExposureKey(const VoxelSceneLighting &lighting)
 
 std::array<float, 4> GetVoxelSceneClearColor(const VoxelSceneLighting &lighting)
 {
-	const float exposure = std::max(lighting.postProcess[0], kMinSceneExposure);
-	const ToneMapOperator toneMapOperator = static_cast<ToneMapOperator>(std::lround(lighting.postProcess[2]));
-	const std::array exposedSkyColor{
-		lighting.skyColorAndFogDensity[0] * exposure,
-		lighting.skyColorAndFogDensity[1] * exposure,
-		lighting.skyColorAndFogDensity[2] * exposure,
+	// Linear HDR clear: tonemap_resolve applies exposure/ACES/grading once for the whole frame.
+	return {
+		lighting.skyColorAndFogDensity[0],
+		lighting.skyColorAndFogDensity[1],
+		lighting.skyColorAndFogDensity[2],
+		1.0f,
 	};
-	const std::array<float, 3> mappedSkyColor = ApplyToneMap(exposedSkyColor, toneMapOperator);
-	const std::array<float, 3> gradedSkyColor = ApplyColorGrading(mappedSkyColor, lighting.colorGrading);
-	return {gradedSkyColor[0], gradedSkyColor[1], gradedSkyColor[2], 1.0f};
 }
 
 const char *ToneMapOperatorToString(const ToneMapOperator toneMapOperator)

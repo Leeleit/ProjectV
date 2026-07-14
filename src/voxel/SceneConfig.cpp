@@ -81,6 +81,11 @@ bool EnsureDefaultSceneConfig(const std::string_view path)
 						 {"sunDirectionY", 0.80},
 						 {"exposure", 1.0},
 					 }},
+		{"antialiasing", {
+							 {"msaaMode", "MSAA4"},
+							 {"smaaEnabled", true},
+							 {"renderScale", "1.00"},
+						 }},
 	};
 
 	std::ofstream out{fsPath};
@@ -155,9 +160,57 @@ bool LoadSceneConfig(const std::string_view path, SceneConfig &outConfig)
 			loaded.exposure = lt["exposure"].get<float>();
 		}
 	}
+	if (doc.contains("antialiasing") && doc["antialiasing"].is_object()) {
+		const auto &aa = doc["antialiasing"];
+		if (aa.contains("msaaMode") && aa["msaaMode"].is_string()) {
+			loaded.msaaMode = aa["msaaMode"].get<std::string>();
+		}
+		if (aa.contains("smaaEnabled") && aa["smaaEnabled"].is_boolean()) {
+			loaded.smaaEnabled = aa["smaaEnabled"].get<bool>();
+		}
+		if (aa.contains("renderScale") && aa["renderScale"].is_string()) {
+			loaded.renderScale = aa["renderScale"].get<std::string>();
+		}
+	}
 
 	outConfig = loaded;
 	return true;
+}
+
+bool SaveSceneConfig(const std::string_view path, const SceneConfig &config)
+{
+	const std::filesystem::path fsPath{std::string{path}};
+	if (fsPath.has_parent_path()) {
+		std::error_code ec;
+		std::filesystem::create_directories(fsPath.parent_path(), ec);
+	}
+	const json doc = {
+		{"name", config.name},
+		{"scenePreset", std::string{VoxelScenePresetToString(config.scenePreset)}},
+		{"voxelWorld", {
+						   {"floorSize", config.voxelWorldConfig.floorSize},
+						   {"floorY", config.voxelWorldConfig.floorY},
+						   {"worldTopY", config.voxelWorldConfig.worldTopY},
+						   {"padding", config.voxelWorldConfig.padding},
+						   {"chunkSize", config.voxelWorldConfig.chunkSize},
+					   }},
+		{"lighting", {
+						 {"sunDirectionY", config.sunDirectionY},
+						 {"exposure", config.exposure},
+					 }},
+		{"antialiasing", {
+							 {"msaaMode", config.msaaMode},
+							 {"smaaEnabled", config.smaaEnabled},
+							 {"renderScale", config.renderScale},
+						 }},
+	};
+	std::ofstream out{fsPath};
+	if (!out.is_open()) {
+		std::fprintf(stderr, "[ProjectV][SceneConfig] cannot open %s for writing\n", std::string{path}.c_str());
+		return false;
+	}
+	out << doc.dump(2) << "\n";
+	return static_cast<bool>(out);
 }
 
 } // namespace projectv::voxel

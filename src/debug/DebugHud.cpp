@@ -4,6 +4,7 @@ import projectv.math;
 
 #include "app/Camera.hpp"
 #include "audio/AudioEngine.hpp"
+#include "render/AntialiasingSettings.hpp"
 #include "render/vulkan/VulkanSwapchain.hpp"
 
 #include <algorithm>
@@ -514,6 +515,15 @@ size_t BuildStatsLines(
 	PV_APPEND_HUD_LINE(
 		outLines,
 		lineCount,
+		"AA %s  SMAA %s  SCALE %s  ACCUM %u/%u",
+		projectv::render::ToString(stats.msaaMode).data(),
+		stats.smaaEnabled ? "ON" : "OFF",
+		projectv::render::ToString(stats.renderScaleMode).data(),
+		stats.progressiveAccumFrameIndex,
+		projectv::render::kProgressiveAccumMaxFrames);
+	PV_APPEND_HUD_LINE(
+		outLines,
+		lineCount,
 		"MODE %s  PAUSE %s  AIR %s",
 		GetControlModeLabel(stats.controlMode),
 		stats.simulationPaused ? "ON" : "OFF",
@@ -917,6 +927,7 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "SPD  CTL+ FAST  ALT- SLOW");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "B VIEW  N TMAP");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "H EXP-  K EXPUP  V RESET");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "T MSAA  Y SMAA  COMMA SCALE");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "Z HITNRM  C SHOT");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "R REC  Y PLAY");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "X ANCH  M PICK");
@@ -930,6 +941,7 @@ size_t BuildHelperLines(
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F11 AIR  J AUTOJUMP");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "F12 DELAY");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "B VIEW  H K EXP");
+		PV_APPEND_HUD_LINE(outLines, lineCount, "T MSAA  Y SMAA  COMMA SCALE");
 		PV_APPEND_HUD_LINE(outLines, lineCount, "C SHOT");
 	}
 	PV_APPEND_HUD_LINE(outLines, lineCount, "LMB TOOL  RMB ALT");

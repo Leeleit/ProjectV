@@ -62,6 +62,12 @@ void DestroySkyAtmospherePipelines(
 	VulkanContextState *context,
 	RenderState *render);
 
+bool RecordSkyAtmosphereDraw(
+	VkCommandBuffer commandBuffer,
+	RenderState &render,
+	const SkyAtmospherePushConstants &pushConstants,
+	uint32_t frameIndex);
+
 bool RecordSkyAtmospherePass(
 	VkCommandBuffer commandBuffer,
 	RenderState &render,

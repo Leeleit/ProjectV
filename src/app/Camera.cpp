@@ -199,7 +199,8 @@ float GetCameraVisibleSceneMaxDistance(const CameraState &camera)
 
 GraphicsPushConstants BuildGraphicsPushConstants(
 	const CameraState &camera,
-	const VkExtent2D extent)
+	const VkExtent2D extent,
+	const RenderState *const render)
 {
 	const Float3 cameraPosition{
 		camera.position[0],
@@ -237,6 +238,10 @@ GraphicsPushConstants BuildGraphicsPushConstants(
 	projection.c[1] = projectv::math::Vec4{0.0f, -1.0f / tanHalfFov, 0.0f, 0.0f};
 	projection.c[2] = projectv::math::Vec4{0.0f, 0.0f, farPlane / (nearPlane - farPlane), -1.0f};
 	projection.c[3] = projectv::math::Vec4{0.0f, 0.0f, nearPlane * farPlane / (nearPlane - farPlane), 0.0f};
+	if (render != nullptr && render->progressiveAccumApplyHalton) {
+		projection.c[2].x += render->progressiveHaltonNdcX;
+		projection.c[2].y += render->progressiveHaltonNdcY;
+	}
 
 	GraphicsPushConstants pushConstants{};
 	pushConstants.viewProjection = projection * view;

@@ -1,0 +1,33 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D srcLdr;
+layout(set = 0, binding = 1, rg16f) uniform writeonly image2D dstEdges;
+
+const float kLumaEdgeThreshold = 0.1;
+
+float Luma(const vec3 color)
+{
+    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+float LoadLuma(const ivec2 coord, const ivec2 imageSize)
+{
+    return Luma(texelFetch(srcLdr, clamp(coord, ivec2(0), imageSize - ivec2(1)), 0).rgb);
+}
+
+void main()
+{
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 dstSize = imageSize(dstEdges);
+    if (any(greaterThanEqual(coord, dstSize))) {
+        return;
+    }
+
+    const float center = LoadLuma(coord, dstSize);
+    const float horizontalDifference = abs(center - LoadLuma(coord + ivec2(1, 0), dstSize));
+    const float verticalDifference = abs(center - LoadLuma(coord + ivec2(0, 1), dstSize));
+    const vec2 edges = max(vec2(horizontalDifference, verticalDifference) - kLumaEdgeThreshold, vec2(0.0));
+    imageStore(dstEdges, coord, vec4(edges, 0.0, 1.0));
+}

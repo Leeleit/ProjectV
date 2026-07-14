@@ -10,10 +10,10 @@
 namespace {
 constexpr uint32_t kMeshShaderDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 
-constexpr std::array kMeshShaderDescriptorPoolSizes{
+constexpr std::array kMeshVisibilityPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = kMeshShaderDescriptorSetCount * 4u,
+		.descriptorCount = kMeshShaderDescriptorSetCount * 16u,
 	},
 };
 } // namespace
@@ -29,7 +29,7 @@ bool RefreshMeshShaderResourceBindings(
 		"Render",
 		"RefreshMeshShaderResourceBindings.Preconditions",
 		"context/render/device is incomplete");
-	if (!render->meshShaderDescriptorSetLayout) {
+	if (!render->meshShaderDescriptorSetLayout || !render->meshClusterizeDescriptorSetLayout) {
 		return true;
 	}
 	if (render->meshShaderEnabled == false) {
@@ -45,9 +45,9 @@ bool RefreshMeshShaderResourceBindings(
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 			.pNext = nullptr,
 			.flags = 0,
-			.maxSets = kMeshShaderDescriptorSetCount,
-			.poolSizeCount = static_cast<uint32_t>(kMeshShaderDescriptorPoolSizes.size()),
-			.pPoolSizes = kMeshShaderDescriptorPoolSizes.data(),
+			.maxSets = kMeshShaderDescriptorSetCount * 2u,
+			.poolSizeCount = static_cast<uint32_t>(kMeshVisibilityPoolSizes.size()),
+			.pPoolSizes = kMeshVisibilityPoolSizes.data(),
 		};
 		const VkResult poolResult = vkCreateDescriptorPool(
 			context->device,
@@ -58,112 +58,58 @@ bool RefreshMeshShaderResourceBindings(
 			runtime::LogVkFailure("RefreshMeshShaderResourceBindings.vkCreateDescriptorPool", poolResult);
 			return false;
 		}
-		SetVulkanObjectName(
-			*context,
-			reinterpret_cast<uint64_t>(render->meshShaderDescriptorPool),
-			VK_OBJECT_TYPE_DESCRIPTOR_POOL,
-			"MeshShaderDescriptorPool");
 	}
 
-	const std::vector setLayouts(render->sceneFrameResources.size(), render->meshShaderDescriptorSetLayout);
-	std::vector<VkDescriptorSet> descriptorSets(render->sceneFrameResources.size(), VK_NULL_HANDLE);
+	std::vector<VkDescriptorSetLayout> setLayouts;
+	setLayouts.reserve(render->sceneFrameResources.size() * 2u);
+	for (size_t i = 0; i < render->sceneFrameResources.size(); ++i) {
+		setLayouts.push_back(render->meshShaderDescriptorSetLayout);
+	}
+	for (size_t i = 0; i < render->sceneFrameResources.size(); ++i) {
+		setLayouts.push_back(render->meshClusterizeDescriptorSetLayout);
+	}
+
+	std::vector<VkDescriptorSet> descriptorSets(setLayouts.size(), VK_NULL_HANDLE);
 	VkDescriptorSetAllocateInfo allocateInfo{};
 	allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocateInfo.descriptorPool = render->meshShaderDescriptorPool;
 	allocateInfo.descriptorSetCount = static_cast<uint32_t>(setLayouts.size());
 	allocateInfo.pSetLayouts = setLayouts.data();
-	const VkResult allocResult = vkAllocateDescriptorSets(
-		context->device,
-		&allocateInfo,
-		descriptorSets.data());
+	const VkResult allocResult = vkAllocateDescriptorSets(context->device, &allocateInfo, descriptorSets.data());
 	if (allocResult != VK_SUCCESS) {
 		runtime::LogVkFailure("RefreshMeshShaderResourceBindings.vkAllocateDescriptorSets", allocResult);
-		vkDestroyDescriptorPool(context->device, render->meshShaderDescriptorPool, nullptr);
-		render->meshShaderDescriptorPool = VK_NULL_HANDLE;
 		return false;
 	}
 
-	for (size_t frameIndex = 0; frameIndex < render->sceneFrameResources.size(); ++frameIndex) {
+	const size_t frameCount = render->sceneFrameResources.size();
+	for (size_t frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
 		SceneFrameResources &frameResources = render->sceneFrameResources[frameIndex];
 		frameResources.meshShaderDescriptorSet = descriptorSets[frameIndex];
+		frameResources.meshClusters.clusterizeDescriptorSet = descriptorSets[frameCount + frameIndex];
+		if (frameResources.meshClusters.faceClusterBuffer == VK_NULL_HANDLE) {
+			continue;
+		}
 
-		const VkDescriptorBufferInfo chunkDescriptorInfo{
-			.buffer = frameResources.chunkDescriptorBuffer,
-			.offset = 0,
-			.range = VK_WHOLE_SIZE,
-		};
-		const VkDescriptorBufferInfo chunkVoxelPayloadInfo{
-			.buffer = frameResources.chunkVoxelPayloadBuffer,
-			.offset = 0,
-			.range = VK_WHOLE_SIZE,
-		};
-		const VkDescriptorBufferInfo visibleChunkIdInfo{
-			.buffer = frameResources.visibleChunkIdBuffer,
-			.offset = 0,
-			.range = VK_WHOLE_SIZE,
-		};
-		const VkDescriptorBufferInfo visibilityCounterInfo{
-			.buffer = frameResources.visibilityCounterBuffer,
-			.offset = 0,
-			.range = VK_WHOLE_SIZE,
-		};
+		const VkDescriptorBufferInfo faceClusterInfo{.buffer = frameResources.meshClusters.faceClusterBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
+		const VkDescriptorBufferInfo visibleClusterIdInfo{.buffer = frameResources.visibleChunkIdBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
+		const VkDescriptorBufferInfo faceClusterCountInfo{.buffer = frameResources.meshClusters.faceClusterCountBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
+		const VkDescriptorBufferInfo meshDrawIndirectInfo{.buffer = frameResources.meshClusters.meshDrawIndirectBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
+		const VkDescriptorBufferInfo chunkDescriptorInfo{.buffer = frameResources.chunkDescriptorBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
 
-		const std::array writes{
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.meshShaderDescriptorSet,
-				.dstBinding = 0,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &chunkDescriptorInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.meshShaderDescriptorSet,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &chunkVoxelPayloadInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.meshShaderDescriptorSet,
-				.dstBinding = 2,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &visibleChunkIdInfo,
-				.pTexelBufferView = nullptr,
-			},
-			VkWriteDescriptorSet{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.pNext = nullptr,
-				.dstSet = frameResources.meshShaderDescriptorSet,
-				.dstBinding = 3,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pImageInfo = nullptr,
-				.pBufferInfo = &visibilityCounterInfo,
-				.pTexelBufferView = nullptr,
-			},
+		const std::array visibilityWrites{
+			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshShaderDescriptorSet, .dstBinding = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &faceClusterInfo},
+			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshShaderDescriptorSet, .dstBinding = 1, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &visibleClusterIdInfo},
+			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshShaderDescriptorSet, .dstBinding = 2, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &faceClusterCountInfo},
+			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshShaderDescriptorSet, .dstBinding = 3, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &meshDrawIndirectInfo},
 		};
-		vkUpdateDescriptorSets(
-			context->device,
-			static_cast<uint32_t>(writes.size()),
-			writes.data(),
-			0u,
-			nullptr);
+		vkUpdateDescriptorSets(context->device, static_cast<uint32_t>(visibilityWrites.size()), visibilityWrites.data(), 0u, nullptr);
+
+		const std::array clusterizeWrites{
+			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshClusters.clusterizeDescriptorSet, .dstBinding = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &chunkDescriptorInfo},
+			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshClusters.clusterizeDescriptorSet, .dstBinding = 1, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &faceClusterInfo},
+			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshClusters.clusterizeDescriptorSet, .dstBinding = 2, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &faceClusterCountInfo},
+		};
+		vkUpdateDescriptorSets(context->device, static_cast<uint32_t>(clusterizeWrites.size()), clusterizeWrites.data(), 0u, nullptr);
 	}
 
 	return true;

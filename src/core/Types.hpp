@@ -11,6 +11,7 @@ import projectv.string_id;
 #include "asset/MeshGpuResources.hpp"
 import projectv.math;
 import projectv.string_id;
+#include "render/AntialiasingSettings.hpp"
 #include "render/ShadowTypes.hpp"
 #include "render/VoxelMeshingPushConstants.hpp"
 #include "render/HizCulling.hpp"
@@ -266,6 +267,10 @@ struct DebugStats {
 	float sceneMinExposure = 0.05f;
 	float sceneMaxExposure = 4.0f;
 	ToneMapOperator toneMapOperator = ToneMapOperator::AcesApprox;
+	projectv::render::MsaaMode msaaMode = projectv::render::MsaaMode::X4;
+	bool smaaEnabled = true;
+	projectv::render::RenderScaleMode renderScaleMode = projectv::render::RenderScaleMode::Native;
+	uint32_t progressiveAccumFrameIndex = 0u;
 	LightingDebugView lightingDebugView = LightingDebugView::Final;
 
 	projectv::math::Vec3 sunDirection{};
@@ -378,6 +383,18 @@ struct SceneFrameResources {
 	VkBuffer worldGenVoxelBuffer = VK_NULL_HANDLE;
 	VmaAllocation worldGenVoxelAllocation = nullptr;
 	VkDeviceSize worldGenVoxelCapacityBytes = 0u;
+	struct MeshClusterFrameResources {
+		void *faceClusterMappedData = nullptr;
+		VkBuffer faceClusterBuffer = VK_NULL_HANDLE;
+		VmaAllocation faceClusterAllocation = nullptr;
+		void *faceClusterCountMappedData = nullptr;
+		VkBuffer faceClusterCountBuffer = VK_NULL_HANDLE;
+		VmaAllocation faceClusterCountAllocation = nullptr;
+		void *meshDrawIndirectMappedData = nullptr;
+		VkBuffer meshDrawIndirectBuffer = VK_NULL_HANDLE;
+		VmaAllocation meshDrawIndirectAllocation = nullptr;
+		VkDescriptorSet clusterizeDescriptorSet = VK_NULL_HANDLE;
+	} meshClusters{};
 	VkDescriptorSet worldGenDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet graphicsDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
@@ -458,6 +475,28 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	void *tracyGraphicsContext = nullptr;
 	bool tracyGraphicsContextCalibrated = false;
 	VoxelLightingDebugControls lightingDebugControls{};
+	projectv::render::MsaaMode msaaMode = projectv::render::MsaaMode::X4;
+	bool smaaEnabled = true;
+	projectv::render::RenderScaleMode renderScaleMode = projectv::render::RenderScaleMode::Native;
+	uint32_t msaaSampleCount = 4u;
+	uint32_t pipelinesMsaaSampleCount = 0u;
+	VkExtent2D internalRenderExtent{};
+	bool aaPipelinesNeedRecreate = false;
+	uint32_t progressiveAccumFrameIndex = 0u;
+	bool progressiveAccumHistoryValid = false;
+	bool progressiveAccumUpdateThisFrame = false;
+	bool progressiveAccumApplyHalton = false;
+	float progressiveHaltonNdcX = 0.0f;
+	float progressiveHaltonNdcY = 0.0f;
+	projectv::math::Vec3 progressiveAccumPrevCameraPosition{};
+	float progressiveAccumPrevYaw = 0.0f;
+	float progressiveAccumPrevPitch = 0.0f;
+	bool progressiveAccumPrevCameraValid = false;
+	LightingDebugView progressiveAccumPrevDebugView = LightingDebugView::Final;
+	projectv::math::Vec3 progressiveAccumPrevSunDirection{};
+	float progressiveAccumPrevExposure = 0.0f;
+	float progressiveAccumPrevEnvIntensity = 0.0f;
+	bool progressiveAccumPrevLightingValid = false;
 	VoxelSceneLighting currentSceneLighting{};
 	TransparentShadowPolicy transparentShadowPolicy = TransparentShadowPolicy::GlassIgnoredFluidCasts;
 	VoxelScenePreset currentScenePreset = VoxelScenePreset::VoxelLab;
@@ -495,6 +534,52 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VmaAllocation sceneColorAllocation = nullptr;
 	VkImageLayout sceneColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	bool sceneColorNeedsInit = false;
+	VkImage sceneColorMsImage = VK_NULL_HANDLE;
+	VkImageView sceneColorMsImageView = VK_NULL_HANDLE;
+	VmaAllocation sceneColorMsAllocation = nullptr;
+	VkImageLayout sceneColorMsCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkImage depthResolveImage = VK_NULL_HANDLE;
+	VkImageView depthResolveImageView = VK_NULL_HANDLE;
+	VmaAllocation depthResolveAllocation = nullptr;
+	VkImageLayout depthResolveCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkFormat depthFormat = VK_FORMAT_UNDEFINED;
+	VkImage ldrColorImage = VK_NULL_HANDLE;
+	VkImageView ldrColorImageView = VK_NULL_HANDLE;
+	VmaAllocation ldrColorAllocation = nullptr;
+	VkImageLayout ldrColorCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkImage accumHistoryImage = VK_NULL_HANDLE;
+	VkImageView accumHistoryImageView = VK_NULL_HANDLE;
+	VmaAllocation accumHistoryAllocation = nullptr;
+	VkImageLayout accumHistoryCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	VkImage smaaEdgesImage = VK_NULL_HANDLE;
+	VkImageView smaaEdgesImageView = VK_NULL_HANDLE;
+	VmaAllocation smaaEdgesAllocation = nullptr;
+	VkImage smaaBlendImage = VK_NULL_HANDLE;
+	VkImageView smaaBlendImageView = VK_NULL_HANDLE;
+	VmaAllocation smaaBlendAllocation = nullptr;
+	VkImage smaaOutputImage = VK_NULL_HANDLE;
+	VkImageView smaaOutputImageView = VK_NULL_HANDLE;
+	VmaAllocation smaaOutputAllocation = nullptr;
+	VkSampler aaLinearSampler = VK_NULL_HANDLE;
+	VkDescriptorSetLayout aaSimpleDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorSetLayout aaNeighborhoodDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool aaDescriptorPool = VK_NULL_HANDLE;
+	std::array<VkDescriptorPool, MAX_FRAMES_IN_FLIGHT> aaFrameDescriptorPools{};
+	VkPipelineLayout aaSimplePipelineLayout = VK_NULL_HANDLE;
+	VkPipelineLayout aaNeighborhoodPipelineLayout = VK_NULL_HANDLE;
+	VkShaderModule tonemapResolveShaderModule = VK_NULL_HANDLE;
+	VkShaderModule progressiveAccumShaderModule = VK_NULL_HANDLE;
+	VkShaderModule smaaEdgeShaderModule = VK_NULL_HANDLE;
+	VkShaderModule smaaBlendShaderModule = VK_NULL_HANDLE;
+	VkShaderModule smaaNeighborhoodShaderModule = VK_NULL_HANDLE;
+	VkPipeline tonemapResolvePipeline = VK_NULL_HANDLE;
+	VkPipeline progressiveAccumPipeline = VK_NULL_HANDLE;
+	VkPipeline smaaEdgePipeline = VK_NULL_HANDLE;
+	VkPipeline smaaBlendPipeline = VK_NULL_HANDLE;
+	VkPipeline smaaNeighborhoodPipeline = VK_NULL_HANDLE;
+	VkImage aaPresentImage = VK_NULL_HANDLE;
+	VkImageView aaPresentImageView = VK_NULL_HANDLE;
+	VkImageLayout aaPresentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkImage vctClipmapImage = VK_NULL_HANDLE;
 	VkImageView vctClipmapView = VK_NULL_HANDLE;
 	VmaAllocation vctClipmapAllocation = nullptr;
@@ -609,6 +694,12 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkDescriptorPool postFxBindlessDescriptorPool = VK_NULL_HANDLE;
 	std::vector<VkDescriptorSet> postFxBindlessDescriptorSets;
 	bool postFxBindlessEnabled = false;
+	// Shared bindless sampled heap (created when PROJECTV_BINDLESS); consumers use indices + nonuniformEXT.
+	VkDescriptorSetLayout bindlessHeapSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool bindlessHeapPool = VK_NULL_HANDLE;
+	VkDescriptorSet bindlessHeapSet = VK_NULL_HANDLE;
+	uint32_t bindlessHeapCapacity = 0u;
+	uint32_t bindlessHeapNextSlot = 0u;
 	bool bloomPipelineEnabled = false;
 	bool aerialPerspectivePipelineEnabled = false;
 
@@ -633,11 +724,17 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkPipelineLayout meshCullPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline meshCullPipeline = VK_NULL_HANDLE;
 	VkDescriptorSetLayout meshShaderDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorSetLayout meshClusterizeDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool meshShaderDescriptorPool = VK_NULL_HANDLE;
 	bool meshShaderEnabled = false;
+	bool meshShaderIndirectEnabled = true; // PROJECTV_MESH_SHADER_INDIRECT default ON when mesh path is active
 	uint32_t visibleChunkIdCapacity = 0u;
+	uint32_t faceClusterCapacity = 0u;
 	uint32_t meshShaderMaxOutputVertices = 0u;
 	uint32_t meshShaderMaxOutputPrimitives = 0u;
+	VkShaderModule meshClusterizeShaderModule = VK_NULL_HANDLE;
+	VkPipeline meshClusterizePipeline = VK_NULL_HANDLE;
+	VkPipelineLayout meshClusterizePipelineLayout = VK_NULL_HANDLE;
 	bool fluidCaPipelineEnabled = false;
 	uint32_t fluidCaPingPongBufferBytes = 0u;
 	uint32_t fluidCaMaxActiveChunks = 0u;

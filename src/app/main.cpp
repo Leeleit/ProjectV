@@ -23,6 +23,7 @@ import projectv.string_id;
 #include "physics/PhysicsWorld.hpp"
 #include "platform/PlatformEvents.hpp"
 #include "render/Renderer.hpp"
+#include "render/AntialiasingSettings.hpp"
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanSwapchain.hpp"
@@ -399,6 +400,24 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 				config.name.c_str(),
 				configPath.c_str(),
 				std::string{VoxelScenePresetToString(config.scenePreset)}.c_str());
+			const projectv::render::MsaaMode loadedMsaa = config.msaaMode == "Off"
+															  ? projectv::render::MsaaMode::Off
+															  : (config.msaaMode == "MSAA2" ? projectv::render::MsaaMode::X2 : projectv::render::MsaaMode::X4);
+			const projectv::render::RenderScaleMode loadedScale = config.renderScale == "1.25"
+																	  ? projectv::render::RenderScaleMode::X125
+																	  : (config.renderScale == "1.50" ? projectv::render::RenderScaleMode::X150
+																									  : projectv::render::RenderScaleMode::Native);
+			const bool msaaChanged = loadedMsaa != state->render().msaaMode;
+			const bool scaleChanged = loadedScale != state->render().renderScaleMode;
+			state->render().msaaMode = loadedMsaa;
+			state->render().smaaEnabled = config.smaaEnabled;
+			state->render().renderScaleMode = loadedScale;
+			if (msaaChanged) {
+				state->render().aaPipelinesNeedRecreate = true;
+			}
+			if (msaaChanged || scaleChanged) {
+				state->platform().windowResized = true;
+			}
 			const WorldState *worldState = GetWorldState(state->ecs().get());
 			if (worldState && worldState->voxelWorld &&
 				worldState->voxelWorld->scenePreset != config.scenePreset) {
@@ -529,14 +548,16 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			"App",
 			"SDL_AppIterate.StartLastInputReplayPlayback",
 			"StartLastInputReplayPlayback returned false");
-		return SDL_APP_FAILURE;
+		state->input().replay.playbackRequested = false;
+		state->input().replay.playbackActive = false;
+		// Do not quit the app — missing/corrupt replay is recoverable.
 	}
 	if (state->input().replay.playbackActive &&
 		!PrepareNextInputReplayPlaybackFrame(&state->input(), &state->simulation())) {
 		StopInputReplayPlayback(&state->input());
 	}
 
-	SDL_AppResult result = SDL_APP_FAILURE;
+	SDL_AppResult result = SDL_APP_CONTINUE;
 	if (!UpdateApp(
 			&state->platform(),
 			&state->simulation(),
@@ -573,7 +594,23 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			"App",
 			"SDL_AppIterate.LoadActiveVoxelWorldSnapshot",
 			"LoadActiveVoxelWorldSnapshot returned false");
-	} else if (!SyncEcsWorldState(state->ecs().get())) {
+	} else if (state->platform().windowResized) {
+		if (!RecreateSwapchain(
+				&state->platform(),
+				&state->context(),
+				&state->swapchain(),
+				&state->render())) {
+			runtime::LogRuntimeFailure(
+				"App",
+				"SDL_AppIterate.RecreateSwapchainBeforeFrame",
+				"RecreateSwapchain returned false before PrepareFrameRenderData");
+			PV_PROFILE_FRAME_MARK();
+			return SDL_APP_FAILURE;
+		}
+		state->platform().windowResized = false;
+	}
+
+	if (!SyncEcsWorldState(state->ecs().get())) {
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.SyncEcsWorldState", "SyncEcsWorldState returned false");
 	} else if (!PrepareFrameRenderData(
 				   &state->context(),

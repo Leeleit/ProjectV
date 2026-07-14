@@ -30,6 +30,7 @@ set(SHADERS
         ${SHADER_DIR}/voxel.vert
         ${SHADER_DIR}/voxel.frag
         ${SHADER_DIR}/voxel_mesh.comp
+        ${SHADER_DIR}/voxel_face_cluster.comp
         ${SHADER_DIR}/voxel_mesh_pre.comp
         ${SHADER_DIR}/voxel_mesh.mesh
         ${SHADER_DIR}/hzb_cull.comp
@@ -58,6 +59,11 @@ set(SHADERS
         ${SHADER_DIR}/bloom_upsample.comp
         ${SHADER_DIR}/post_composite.comp
         ${SHADER_DIR}/post_composite_bindless.comp
+        ${SHADER_DIR}/tonemap_resolve.comp
+        ${SHADER_DIR}/progressive_accum.comp
+        ${SHADER_DIR}/smaa_edge.comp
+        ${SHADER_DIR}/smaa_blend.comp
+        ${SHADER_DIR}/smaa_neighborhood.comp
 )
 
 foreach (SHADER ${SHADERS})
@@ -127,6 +133,7 @@ target_sources(ProjectV PRIVATE
         render/RendererOverlay.cpp
         render/RendererScreenshot.cpp
         render/RendererRecordCommands.cpp
+        render/AaPass.cpp
         render/RendererDrawFrame.cpp
         render/ScreenshotCapture.cpp
         render/SceneResources.cpp
@@ -183,6 +190,7 @@ target_sources(ProjectV PRIVATE
         render/PostFxSetup.cpp
         render/PostFxDestroy.cpp
         render/PostFxPass.cpp
+        render/BindlessHeap.cpp
         voxel/VoxelInteraction.cpp
         voxel/VoxelMaterials.cpp
         voxel/VoxelRaycast.cpp

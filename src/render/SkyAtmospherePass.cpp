@@ -4,6 +4,48 @@
 #include "debug/Profiling.hpp"
 
 namespace projectv::render {
+bool RecordSkyAtmosphereDraw(
+	const VkCommandBuffer commandBuffer,
+	RenderState &render,
+	const SkyAtmospherePushConstants &pushConstants,
+	const uint32_t frameIndex)
+{
+	PV_PROFILE_ZONE_N("RecordSkyAtmosphereDraw");
+	if (commandBuffer == VK_NULL_HANDLE) {
+		return false;
+	}
+	if (render.skyAtmospherePipeline == VK_NULL_HANDLE ||
+		render.skyAtmospherePipelineLayout == VK_NULL_HANDLE) {
+		return false;
+	}
+	if (frameIndex >= MAX_FRAMES_IN_FLIGHT) {
+		return false;
+	}
+
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render.skyAtmospherePipeline);
+	if (render.skyAtmosphereDescriptorSets[frameIndex] != VK_NULL_HANDLE) {
+		vkCmdBindDescriptorSets(
+			commandBuffer,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			render.skyAtmospherePipelineLayout,
+			0u,
+			1u,
+			&render.skyAtmosphereDescriptorSets[frameIndex],
+			0u,
+			nullptr);
+	}
+	vkCmdPushConstants(
+		commandBuffer,
+		render.skyAtmospherePipelineLayout,
+		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		0u,
+		sizeof(SkyAtmospherePushConstants),
+		&pushConstants);
+	vkCmdDraw(commandBuffer, 3u, 1u, 0u, 0u);
+	profiling::PlotValue("Sky Atmosphere Pass", 1.0);
+	return true;
+}
+
 bool RecordSkyAtmospherePass(
 	const VkCommandBuffer commandBuffer,
 	RenderState &render,
@@ -17,17 +59,10 @@ bool RecordSkyAtmospherePass(
 	if (commandBuffer == VK_NULL_HANDLE) {
 		return false;
 	}
-	if (render.skyAtmospherePipeline == VK_NULL_HANDLE ||
-		render.skyAtmospherePipelineLayout == VK_NULL_HANDLE) {
-		return false;
-	}
 	if (sceneColorView == VK_NULL_HANDLE || depthView == VK_NULL_HANDLE) {
 		return false;
 	}
 	if (extent.width == 0u || extent.height == 0u) {
-		return false;
-	}
-	if (frameIndex >= MAX_FRAMES_IN_FLIGHT) {
 		return false;
 	}
 
@@ -72,29 +107,8 @@ bool RecordSkyAtmospherePass(
 	vkCmdBeginRendering(commandBuffer, &renderingInfo);
 	vkCmdSetViewport(commandBuffer, 0u, 1u, &viewport);
 	vkCmdSetScissor(commandBuffer, 0u, 1u, &scissor);
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, render.skyAtmospherePipeline);
-	if (render.skyAtmosphereDescriptorSets[frameIndex] != VK_NULL_HANDLE) {
-		vkCmdBindDescriptorSets(
-			commandBuffer,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			render.skyAtmospherePipelineLayout,
-			0u,
-			1u,
-			&render.skyAtmosphereDescriptorSets[frameIndex],
-			0u,
-			nullptr);
-	}
-	vkCmdPushConstants(
-		commandBuffer,
-		render.skyAtmospherePipelineLayout,
-		VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		0u,
-		sizeof(SkyAtmospherePushConstants),
-		&pushConstants);
-	vkCmdDraw(commandBuffer, 3u, 1u, 0u, 0u);
+	const bool drawn = RecordSkyAtmosphereDraw(commandBuffer, render, pushConstants, frameIndex);
 	vkCmdEndRendering(commandBuffer);
-
-	profiling::PlotValue("Sky Atmosphere Pass", 1.0);
-	return true;
+	return drawn;
 }
 } // namespace projectv::render

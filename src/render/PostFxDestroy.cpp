@@ -35,6 +35,18 @@ void DestroyPostFxResources(
 	}
 	render->postFxBindlessEnabled = false;
 
+	if (render->bindlessHeapPool != VK_NULL_HANDLE) {
+		vkDestroyDescriptorPool(context->device, render->bindlessHeapPool, nullptr);
+		render->bindlessHeapPool = VK_NULL_HANDLE;
+	}
+	render->bindlessHeapSet = VK_NULL_HANDLE;
+	if (render->bindlessHeapSetLayout != VK_NULL_HANDLE) {
+		vkDestroyDescriptorSetLayout(context->device, render->bindlessHeapSetLayout, nullptr);
+		render->bindlessHeapSetLayout = VK_NULL_HANDLE;
+	}
+	render->bindlessHeapCapacity = 0u;
+	render->bindlessHeapNextSlot = 0u;
+
 	if (render->bloomCompositePipeline != VK_NULL_HANDLE) {
 		vkDestroyPipeline(context->device, render->bloomCompositePipeline, nullptr);
 		render->bloomCompositePipeline = VK_NULL_HANDLE;
