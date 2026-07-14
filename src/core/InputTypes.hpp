@@ -65,6 +65,7 @@ enum class InputAction : uint8_t {
 	CycleMsaaMode,
 	ToggleSmaa,
 	CycleRenderScale,
+	OpenHudSettings,
 	Count,
 };
 

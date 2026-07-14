@@ -36,7 +36,6 @@ class RtxGiProbes;
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 constexpr uint32_t MAX_LOOK_DEV_CAPTURE_VIEW_COUNT = 8;
-constexpr uint32_t DEBUG_HUD_MAX_VERTEX_COUNT = 262144;
 
 struct VoxelWorld;
 struct EcsState;
@@ -141,16 +140,6 @@ static_assert(offsetof(DebugOverlayPushConstants, overlayData0) == 64);
 static_assert(offsetof(DebugOverlayPushConstants, overlayData1) == 80);
 static_assert(offsetof(DebugOverlayPushConstants, overlayColor) == 96);
 
-struct DebugHudVertex {
-	std::array<float, 2> positionNdc{};
-	projectv::math::Vec4 color{};
-};
-static_assert(std::is_standard_layout_v<DebugHudVertex>);
-static_assert(std::is_trivially_copyable_v<DebugHudVertex>);
-static_assert(sizeof(DebugHudVertex) == 32);
-static_assert(offsetof(DebugHudVertex, positionNdc) == 0);
-static_assert(offsetof(DebugHudVertex, color) == 16);
-
 struct DebugOverlayBox {
 	Int3 min{};
 	Int3 maxExclusive{};
@@ -176,7 +165,6 @@ struct FrameRenderData {
 	VkBuffer packedFaceBuffer = VK_NULL_HANDLE;
 	VkBuffer chunkDescriptorBuffer = VK_NULL_HANDLE;
 	VkBuffer chunkVoxelPayloadBuffer = VK_NULL_HANDLE;
-	VkBuffer debugHudVertexBuffer = VK_NULL_HANDLE;
 	VkBuffer chunkAabbBuffer = VK_NULL_HANDLE;
 	VkBuffer visibilityMaskBuffer = VK_NULL_HANDLE;
 	VkBuffer hzbVisibleCountBuffer = VK_NULL_HANDLE;
@@ -190,7 +178,6 @@ struct FrameRenderData {
 	uint32_t dirtyChunkCount = 0;
 	uint32_t opaqueFaceCount = 0;
 	uint32_t transparentFaceCount = 0;
-	uint32_t debugHudVertexCount = 0;
 	bool debugUiVisible = true;
 	GraphicsPushConstants graphicsPushConstants{};
 	VoxelMeshingPushConstants voxelMeshingPushConstants{};
@@ -225,7 +212,6 @@ struct DebugStats {
 	float renderPassMeshingMs = 0.0f;
 	float renderPassGraphicsMs = 0.0f;
 	float renderPassDebugOverlayMs = 0.0f;
-	float renderPassDebugHudMs = 0.0f;
 	float renderPassOtherMs = 0.0f;
 	uint32_t renderPassDirtyChunkRebuiltCount = 0;
 	uint8_t audioMusicState = 0;
@@ -300,9 +286,6 @@ struct SceneFrameResources {
 	void *packedFaceMappedData = nullptr;
 	VkBuffer packedFaceBuffer = VK_NULL_HANDLE;
 	VmaAllocation packedFaceAllocation = nullptr;
-	void *debugHudVertexMappedData = nullptr;
-	VkBuffer debugHudVertexBuffer = VK_NULL_HANDLE;
-	VmaAllocation debugHudVertexAllocation = nullptr;
 	void *chunkDescriptorMappedData = nullptr;
 	VkBuffer chunkDescriptorBuffer = VK_NULL_HANDLE;
 	VmaAllocation chunkDescriptorAllocation = nullptr;
@@ -410,7 +393,6 @@ struct SceneFrameResources {
 	uint32_t dirtyChunkCount = 0;
 	uint32_t opaqueFaceCount = 0;
 	uint32_t transparentFaceCount = 0;
-	uint32_t debugHudVertexCount = 0;
 };
 
 struct WorldState {
@@ -446,8 +428,6 @@ struct RenderPassTimings {
 	float meshingMs = 0.0f;
 	float graphicsMs = 0.0f;
 	float debugOverlayMs = 0.0f;
-	float debugHudMs = 0.0f;
-
 	float otherMs = 0.0f;
 	uint32_t dirtyChunkRebuiltCount = 0;
 };
@@ -713,8 +693,6 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkPipelineLayout debugOverlayPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline debugOverlayPipeline = VK_NULL_HANDLE;
 	VkPipeline debugCrosshairPipeline = VK_NULL_HANDLE;
-	VkPipelineLayout debugHudPipelineLayout = VK_NULL_HANDLE;
-	VkPipeline debugHudPipeline = VK_NULL_HANDLE;
 	VkPipelineLayout voxelMeshingPipelineLayout = VK_NULL_HANDLE;
 	VkPipeline voxelMeshingPipeline = VK_NULL_HANDLE;
 	VkShaderModule meshCullShaderModule = VK_NULL_HANDLE;
@@ -817,11 +795,16 @@ struct DebugState {
 	DebugStats stats{};
 	float titleUpdateAccumulatorSeconds = 0.0f;
 	bool hudVisible = true;
-	bool detailedHudVisible = false;
+	bool detailedHudVisible = false; // mirrors statsOpen for overlay detail gating
+	bool settingsOpen = false;
+	bool statsOpen = false;
 	bool showChunkBounds = false;
 	bool showDirtyChunkOverlay = false;
 
 	bool showCursorHitNormal = false;
+	bool requestQuit = false;
+	bool requestShaderReload = false;
+	bool requestPresentModeCycle = false;
 };
 
 struct PlatformState {

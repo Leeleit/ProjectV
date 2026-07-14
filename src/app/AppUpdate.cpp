@@ -20,11 +20,6 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 #include <array>
 #include <string>
 
-namespace {
-constexpr float kMaxFrameDeltaSeconds = 0.25f;		   // EVIL: 250ms cap; prevents huge dt spikes after pause/focus loss; tuned for 60 FPS frame budget
-constexpr float kMinLightingExposureBiasStops = -4.0f; // EVIL: -4 stops lower; matches ACES tone-map dark floor per VoxelMaterials.cpp:62
-constexpr float kMaxLightingExposureBiasStops = 4.0f;  // EVIL: +4 stops upper; symmetric to kMin; prevents exposure runaway
-
 void PersistAaSettingsToSceneConfig(const RenderState &render)
 {
 	projectv::voxel::SceneConfig config;
@@ -35,6 +30,33 @@ void PersistAaSettingsToSceneConfig(const RenderState &render)
 	config.renderScale = std::string{projectv::render::ToString(render.renderScaleMode)};
 	(void)projectv::voxel::SaveSceneConfig(path, config);
 }
+
+bool SetRelativeMouseMode(
+	PlatformState &platform,
+	InputState &input,
+	const bool enableRelativeMouseMode)
+{
+	if (!platform.window) {
+		return false;
+	}
+
+	if (!SDL_SetWindowRelativeMouseMode(platform.window, enableRelativeMouseMode)) {
+		runtime::LogSdlFailure("UpdateApp.ToggleRelativeMouseMode");
+		return false;
+	}
+
+	input.relativeMouseModeEnabled = enableRelativeMouseMode;
+	input.mouseDeltaX = 0.0f;
+	input.mouseDeltaY = 0.0f;
+	input.skipFirstMouseMotion = true;
+	return true;
+}
+
+namespace {
+constexpr float kMaxFrameDeltaSeconds = 0.25f;		   // EVIL: 250ms cap; prevents huge dt spikes after pause/focus loss; tuned for 60 FPS frame budget
+constexpr float kMinLightingExposureBiasStops = -4.0f; // EVIL: -4 stops lower; matches ACES tone-map dark floor per VoxelMaterials.cpp:62
+constexpr float kMaxLightingExposureBiasStops = 4.0f;  // EVIL: +4 stops upper; symmetric to kMin; prevents exposure runaway
+
 bool UsesPhysicsCharacter(const CameraState::ControlMode controlMode)
 {
 	return controlMode == CameraState::ControlMode::Creative ||
@@ -113,27 +135,6 @@ float ComputeFrameDeltaSeconds(SimulationState &simulation)
 	return std::min(
 		static_cast<float>(deltaCounter) / static_cast<float>(frequency),
 		kMaxFrameDeltaSeconds);
-}
-
-bool SetRelativeMouseMode(
-	PlatformState &platform,
-	InputState &input,
-	const bool enableRelativeMouseMode)
-{
-	if (!platform.window) {
-		return false;
-	}
-
-	if (!SDL_SetWindowRelativeMouseMode(platform.window, enableRelativeMouseMode)) {
-		runtime::LogSdlFailure("UpdateApp.ToggleRelativeMouseMode");
-		return false;
-	}
-
-	input.relativeMouseModeEnabled = enableRelativeMouseMode;
-	input.mouseDeltaX = 0.0f;
-	input.mouseDeltaY = 0.0f;
-	input.skipFirstMouseMotion = true;
-	return true;
 }
 
 void ClearInteractionClickActions(InputState &input)
@@ -242,7 +243,6 @@ void MirrorRenderPassTimingsToDebugStats(
 	stats.renderPassMeshingMs = render.renderPassTimings.meshingMs;
 	stats.renderPassGraphicsMs = render.renderPassTimings.graphicsMs;
 	stats.renderPassDebugOverlayMs = render.renderPassTimings.debugOverlayMs;
-	stats.renderPassDebugHudMs = render.renderPassTimings.debugHudMs;
 	stats.renderPassDirtyChunkRebuiltCount = render.renderPassTimings.dirtyChunkRebuiltCount;
 	stats.renderPassOtherMs = std::max(
 		0.0f,
@@ -398,13 +398,26 @@ bool ProcessInputActions(
 {
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleHud)) {
 		debug->hudVisible = !debug->hudVisible;
+		if (!debug->hudVisible) {
+			debug->settingsOpen = false;
+		}
 	}
-	if (ConsumeInputActionPressed(*input, InputAction::ToggleDetailedHud)) {
-		debug->detailedHudVisible = !debug->detailedHudVisible;
+	if (ConsumeInputActionPressed(*input, InputAction::OpenHudSettings)) {
+		debug->settingsOpen = !debug->settingsOpen;
+		if (debug->settingsOpen) {
+			debug->hudVisible = true;
+			(void)SetRelativeMouseMode(*platform, *input, false);
+		} else {
+			(void)SetRelativeMouseMode(*platform, *input, true);
+		}
 	}
 	if (ConsumeInputActionPressed(*input, InputAction::ToggleRelativeMouseMode)) {
 		SetRelativeMouseMode(*platform, *input, !input->relativeMouseModeEnabled);
 	}
+	if (ConsumeInputActionPressed(*input, InputAction::ToggleDetailedHud)) {
+		debug->statsOpen = !debug->statsOpen;
+	}
+	debug->detailedHudVisible = debug->statsOpen;
 	if (ConsumeInputActionPressed(*input, InputAction::CyclePlacementMaterial)) {
 		interaction->placementMaterial = GetNextPlacementMaterial(interaction->placementMaterial);
 	}

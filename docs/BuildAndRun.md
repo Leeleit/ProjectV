@@ -52,7 +52,6 @@ Mainline теперь опирается на два явных configure preset
 - `BUILD_TESTING=ON`
 - `PROJECTV_ENABLE_VALIDATION=ON`
 - `PROJECTV_ENABLE_TRACY=ON`
-- `PROJECTV_ENABLE_IMGUI=OFF`
 - `PROJECTV_ENABLE_RENDERDOC_MARKERS=ON`
 
 Configure:
@@ -197,8 +196,7 @@ powershell -ExecutionPolicy Bypass -File tools/windows/Invoke-ProjectVFailurePro
 
 - `PROJECTV_ENABLE_VALIDATION` — включает Vulkan validation layers.
 - `PROJECTV_ENABLE_TRACY` — включает Tracy instrumentation и для runtime, и для тестового target.
-- `PROJECTV_ENABLE_IMGUI` — собирает bundled Dear ImGui support library для будущего debug UI path; mainline HUD всё ещё
-  остаётся CPU-built overlay без `imgui`.
+- Dear ImGui HUD — всегда включён (CMake force `PROJECTV_ENABLE_IMGUI=ON`); SDL3+Vulkan backends.
 - `PROJECTV_ENABLE_RENDERDOC_MARKERS` — включает Vulkan debug names/markers path для RenderDoc-compatible captures.
 - `PROJECTV_BUILD_TRACY_PROFILER` — собирает bundled Tracy profiler UI; использовать только когда это реально нужно.
 

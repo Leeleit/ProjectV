@@ -116,7 +116,7 @@ Reference: WickedEngine 16-32 cone, Snowdrop 12-24 cone.
 **Пайплайн:** MS color+depth → resolve 1x HDR → PostFX → progressive → tonemap → SMAA → blit.
 Tonemap вынесен из `voxel.frag`/`model.frag` в `tonemap_resolve.comp`.
 
-**Hotkeys:** `T` MSAA, `Y` SMAA, `,`/`.` render scale. HUD: `AA … SMAA … SCALE … ACCUM n/16`.
+**Hotkeys:** Settings UI for MSAA/SMAA/scale (no T/Y/,/. keys). HUD strip shows `AA … SMAA … SCALE … ACCUM`.
 
 **Ключевые файлы:** `src/render/AntialiasingSettings.hpp`, `src/render/AaPass.*`,
 `RendererRecordCommands.cpp`, `VulkanSwapchain.cpp`, шейдеры `tonemap_resolve` /
@@ -358,7 +358,7 @@ RTX shadows — единственный shadow path. Минус ~1300 LoC legac
 - `src/render/ScreenshotCapture.cpp` — убрать shadow cascade metadata из sidecar
 - `src/render/ShadowProjection.hpp` — удалить `BuildSunShadowProjection` и
   `BuildSunShadowCascadeProjections` (не используется после миграции)
-- `src/debug/DebugHud.cpp` — убрать `CSM` debug view, `sunShadowCoverageScale` statistic
+- `src/ui/HudPanels.cpp` — lighting debug view labels live in Settings/Stats (bitmap DebugHud gone)
 - `src/app/AppUpdate.cpp` — убрать keyboard ladder controls F11 (shadow strength),
   F12 (delay), 6 (shadow detail)
 - `src/core/Types.hpp` — удалить `VoxelLightingDebugControls::shadowDepthBiasOffset` +

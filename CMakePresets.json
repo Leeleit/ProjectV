@@ -35,7 +35,6 @@
                 "CMAKE_CXX_COMPILER": "clang-cl.exe",
                 "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
                 "CMAKE_LINKER_TYPE": "LLD",
-                "PROJECTV_ENABLE_IMGUI": "OFF",
                 "PROJECTV_ENABLE_RENDERDOC_MARKERS": "ON",
                 "PROJECTV_ENABLE_TRACY": "ON",
                 "PROJECTV_ENABLE_VALIDATION": "ON"
@@ -97,7 +96,6 @@
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "OFF",
                 "CMAKE_LINKER_TYPE": "LLD",
-                "PROJECTV_ENABLE_IMGUI": "OFF",
                 "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
                 "PROJECTV_ENABLE_TRACY": "ON",
                 "PROJECTV_ENABLE_VALIDATION": "ON",
@@ -168,7 +166,6 @@
                 "CMAKE_CXX_COMPILER": "clang-cl.exe",
                 "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
                 "CMAKE_LINKER_TYPE": "LLD",
-                "PROJECTV_ENABLE_IMGUI": "OFF",
                 "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
                 "PROJECTV_ENABLE_TRACY": "OFF",
                 "PROJECTV_ENABLE_VALIDATION": "OFF"
@@ -201,7 +198,6 @@
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
                 "CMAKE_LINKER_TYPE": "LLD",
-                "PROJECTV_ENABLE_IMGUI": "OFF",
                 "PROJECTV_ENABLE_RENDERDOC_MARKERS": "OFF",
                 "PROJECTV_ENABLE_TRACY": "OFF",
                 "PROJECTV_ENABLE_VALIDATION": "OFF",

@@ -18,6 +18,11 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-15 ImGui HUD:** bitmap DebugHud retired; Dear ImGui status strip + Settings/Stats.
+Keys: movement + Tab + Esc + F1 hide + \` Settings; rare toggles via UI.
+Files: `src/ui/ImGuiLayer.cpp`, `HudPanels.cpp`, `HudStyle.cpp`.
+Dead DebugHud types/pipelines/buffers removed; mouse recapture on Settings close; ImGui always-on via `projectv_imgui`.
+
 **2026-07-15 Render scale DEVICE_LOST:** `CreateDepthResources` used stale
 `internalRenderExtent` before scale update → depth≠color size; HiZ was swapchain-
 sized. Fix: set internal extent first; HiZ from internal; MSAA HiZ reads depthResolve.

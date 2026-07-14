@@ -530,7 +530,6 @@ RtxSpecular → VolumetricFog → VolumetricTransmittance → GreedyMeshing`.
 | `GraphicsPushConstants`       | 192 B  | 4             |
 | `ResolvePushConstants`        | 144 B  | 4             |
 | `DebugOverlayPushConstants`   | 112 B  | 4             |
-| `DebugHudVertex`              | 32 B   | 2             |
 | `ChunkCullingParameters`      | 64 B   | 4             |
 
 **Shader mirrors:** `voxel.frag:32-52`, `voxel_mesh.comp:57-75`, `model.frag`,

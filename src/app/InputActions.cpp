@@ -122,48 +122,8 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::SpeedBoost, SDL_SCANCODE_LCTRL, SDL_SCANCODE_RCTRL);
 	BindAction(input, InputAction::SpeedSlow, SDL_SCANCODE_LALT, SDL_SCANCODE_RALT);
 	BindAction(input, InputAction::ToggleHud, SDL_SCANCODE_F1);
-	BindAction(input, InputAction::ToggleDetailedHud, SDL_SCANCODE_G);
 	BindAction(input, InputAction::ToggleRelativeMouseMode, SDL_SCANCODE_TAB);
-	BindAction(input, InputAction::CyclePlacementMaterial, SDL_SCANCODE_F2);
-	BindAction(input, InputAction::ResetCamera, SDL_SCANCODE_F3);
-	BindAction(input, InputAction::TogglePause, SDL_SCANCODE_P);
-	BindAction(input, InputAction::ToggleControlMode, SDL_SCANCODE_F4);
-	BindAction(input, InputAction::CycleScenePreset, SDL_SCANCODE_F5);
-	BindAction(input, InputAction::SaveWorldSnapshot, SDL_SCANCODE_F6);
-	BindAction(input, InputAction::LoadWorldSnapshot, SDL_SCANCODE_F7);
-	BindAction(input, InputAction::CycleEditorTool, SDL_SCANCODE_U); // was F8; F8 reserved for PlayLastInputReplay
-	BindAction(input, InputAction::ToggleChunkBounds, SDL_SCANCODE_F9);
-	BindAction(input, InputAction::ToggleDirtyChunkOverlay, SDL_SCANCODE_F10);
-	BindAction(input, InputAction::ToggleWalkAirControlMode, SDL_SCANCODE_F11);
-	BindAction(input, InputAction::ToggleWalkAutoJump, SDL_SCANCODE_J);
-	BindAction(input, InputAction::ToggleWalkAutoJumpDelay, SDL_SCANCODE_F12);
-	BindAction(input, InputAction::CaptureScreenshot, SDL_SCANCODE_C);
-	BindAction(input, InputAction::DecreaseLightingExposure, SDL_SCANCODE_H);
-	BindAction(input, InputAction::IncreaseLightingExposure, SDL_SCANCODE_K);
-	BindAction(input, InputAction::CycleToneMapOperator, SDL_SCANCODE_N);
-	BindAction(input, InputAction::CycleLightingDebugView, SDL_SCANCODE_B);
-	BindAction(input, InputAction::ResetLightingDebugControls, SDL_SCANCODE_V);
-	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_R);
-	BindAction(input, InputAction::PlayLastInputReplay, SDL_SCANCODE_F8);
-	BindAction(input, InputAction::ToggleMutationAnchor, SDL_SCANCODE_X);
-	BindAction(input, InputAction::PickTargetMaterial, SDL_SCANCODE_M);
-
-	BindAction(input, InputAction::PickModel, SDL_SCANCODE_F);
-
-	BindAction(input, InputAction::ToggleCursorHitNormal, SDL_SCANCODE_Z);
-	BindAction(input, InputAction::DecreaseTimeScale, SDL_SCANCODE_LEFTBRACKET);
-	BindAction(input, InputAction::IncreaseTimeScale, SDL_SCANCODE_RIGHTBRACKET);
-	BindAction(input, InputAction::StepSingleFrame, SDL_SCANCODE_BACKSLASH);
-	BindAction(input, InputAction::ResetTimeScale, SDL_SCANCODE_GRAVE);
-	BindAction(input, InputAction::ToggleMusicPlayPause, SDL_SCANCODE_Q);
-	BindAction(input, InputAction::StopMusic, SDL_SCANCODE_E);
-	BindAction(input, InputAction::MusicVolumeDown, SDL_SCANCODE_7);
-	BindAction(input, InputAction::MusicVolumeUp, SDL_SCANCODE_8);
-	BindAction(input, InputAction::NextMusicTrack, SDL_SCANCODE_9);
-	BindAction(input, InputAction::PreviousMusicTrack, SDL_SCANCODE_0);
-	BindAction(input, InputAction::CycleMsaaMode, SDL_SCANCODE_T);
-	BindAction(input, InputAction::ToggleSmaa, SDL_SCANCODE_Y);
-	BindAction(input, InputAction::CycleRenderScale, SDL_SCANCODE_COMMA, SDL_SCANCODE_PERIOD);
+	BindAction(input, InputAction::OpenHudSettings, SDL_SCANCODE_GRAVE);
 }
 
 void HandleInputActionEvent(

@@ -6,7 +6,6 @@ import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre
 #include "app/ModelGravigun.hpp"
 #include "c_kernels/FrustumCulling.hpp"
 #include "core/RuntimeDiagnostics.hpp"
-#include "debug/DebugHud.hpp"
 #include "debug/DebugOverlays.hpp"
 #include "debug/Profiling.hpp"
 #include "render/AaPass.hpp"
@@ -193,17 +192,6 @@ bool PrepareFrameRenderData(
 	}
 
 	SceneFrameResources &sceneFrameResources = render->sceneFrameResources[frameIndex];
-	sceneFrameResources.debugHudVertexCount = 0;
-	if (sceneFrameResources.debugHudVertexMappedData) {
-		sceneFrameResources.debugHudVertexCount = BuildDebugHudVertices(
-			debug->stats,
-			*camera,
-			*interaction,
-			debug->hudVisible,
-			swapchain->extent,
-			static_cast<DebugHudVertex *>(sceneFrameResources.debugHudVertexMappedData),
-			DEBUG_HUD_MAX_VERTEX_COUNT);
-	}
 	if (world->voxelWorld && sceneFrameResources.chunkAabbMappedData) {
 		RefreshChunkAabbBuffer(
 			std::span<const VoxelChunk>(world->voxelWorld->chunks.data(), world->voxelWorld->chunks.size()),
@@ -214,7 +202,6 @@ bool PrepareFrameRenderData(
 	frame->renderData.packedFaceBuffer = sceneFrameResources.packedFaceBuffer;
 	frame->renderData.chunkDescriptorBuffer = sceneFrameResources.chunkDescriptorBuffer;
 	frame->renderData.chunkVoxelPayloadBuffer = sceneFrameResources.chunkVoxelPayloadBuffer;
-	frame->renderData.debugHudVertexBuffer = sceneFrameResources.debugHudVertexBuffer;
 	frame->renderData.chunkAabbBuffer = sceneFrameResources.chunkAabbBuffer;
 	frame->renderData.visibilityMaskBuffer = sceneFrameResources.visibilityMaskBuffer;
 	frame->renderData.hzbVisibleCountBuffer = sceneFrameResources.hzbVisibleCountBuffer;
@@ -229,7 +216,6 @@ bool PrepareFrameRenderData(
 	frame->renderData.dirtyChunkCount = sceneFrameResources.dirtyChunkCount;
 	frame->renderData.opaqueFaceCount = sceneFrameResources.opaqueFaceCount;
 	frame->renderData.transparentFaceCount = sceneFrameResources.transparentFaceCount;
-	frame->renderData.debugHudVertexCount = sceneFrameResources.debugHudVertexCount;
 	frame->renderData.debugUiVisible = debug->hudVisible;
 	frame->renderData.interactionSelection = debug->hudVisible ? interaction->selection : InteractionSelectionState{};
 	BuildDebugOverlayBoxes(

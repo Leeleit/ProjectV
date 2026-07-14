@@ -303,13 +303,11 @@ bool SaveScreenshotCaptureMetadata(
 		"render_pass_meshing_ms={:.6f}\n"
 		"render_pass_graphics_ms={:.6f}\n"
 		"render_pass_debug_overlay_ms={:.6f}\n"
-		"render_pass_debug_hud_ms={:.6f}\n"
 		"render_pass_dirty_chunk_rebuilt_count={}\n",
 		render.renderPassTimings.shadowMs,
 		render.renderPassTimings.meshingMs,
 		render.renderPassTimings.graphicsMs,
 		render.renderPassTimings.debugOverlayMs,
-		render.renderPassTimings.debugHudMs,
 		render.renderPassTimings.dirtyChunkRebuiltCount);
 	stream << "music_initialized=0\n";
 	stream << fmt::format("music_volume={:.6f}\n", 0.0f);

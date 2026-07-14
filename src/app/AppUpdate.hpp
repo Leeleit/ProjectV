@@ -6,6 +6,13 @@ namespace projectv::audio {
 class AudioEngine;
 } // namespace projectv::audio
 
+bool SetRelativeMouseMode(
+	PlatformState &platform,
+	InputState &input,
+	const bool enableRelativeMouseMode);
+
+void PersistAaSettingsToSceneConfig(const RenderState &render);
+
 [[nodiscard]] bool UpdateApp(
 	PlatformState *platform,
 	SimulationState *simulation,

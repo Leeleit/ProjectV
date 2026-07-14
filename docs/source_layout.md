@@ -141,7 +141,7 @@ src/
 
 Ключевые файлы:
 
-- `debug/DebugHud.cpp` — генерация HUD-вершин
+- `ui/ImGuiLayer.cpp` / `ui/HudPanels.cpp` — Dear ImGui HUD (status strip, Settings, Stats)
 - `debug/DebugOverlays.cpp` — 3D дебаг-оверлеи (AABB)
 - `debug/Profiling.hpp` / `debug/ProfilingGpu.hpp` — Tracy макросы
 

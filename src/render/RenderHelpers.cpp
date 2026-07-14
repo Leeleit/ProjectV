@@ -144,27 +144,6 @@ void RecordDebugOverlayCommands(
 	}
 }
 
-void RecordDebugHudCommands(
-	RenderState &render,
-	const FrameRenderData &frameRenderData,
-	const VkCommandBuffer cmd)
-{
-	ScopedPassTimer passTimer(render.renderPassTimings.debugHudMs);
-	PV_PROFILE_ZONE_N("RecordDebugHudCommands");
-	PV_PROFILE_GPU_LABEL(cmd, "Debug HUD");
-	if (render.debugHudPipeline == VK_NULL_HANDLE ||
-		frameRenderData.debugHudVertexBuffer == VK_NULL_HANDLE ||
-		frameRenderData.debugHudVertexCount == 0) {
-		return;
-	}
-
-	PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Debug HUD");
-	constexpr VkDeviceSize vertexBufferOffset = 0;
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render.debugHudPipeline);
-	vkCmdBindVertexBuffers(cmd, 0, 1, &frameRenderData.debugHudVertexBuffer, &vertexBufferOffset);
-	vkCmdDraw(cmd, frameRenderData.debugHudVertexCount, 1, 0, 0);
-}
-
 void RecordVoxelMeshingCommands(
 	RenderState &render,
 	const FrameRenderData &frameRenderData,

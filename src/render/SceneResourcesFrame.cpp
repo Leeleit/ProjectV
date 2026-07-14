@@ -75,24 +75,6 @@ bool CreateSceneFrameGeometryBuffers(
 		"ScenePackedFaceBufferAllocation");
 	render->sceneMemoryBytes += packedFaceAllocationInfo.size;
 
-	VmaAllocationInfo debugHudVertexAllocationInfo{};
-	if (!CreateBuffer(
-			context,
-			sizeof(DebugHudVertex) * static_cast<VkDeviceSize>(DEBUG_HUD_MAX_VERTEX_COUNT),
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			allocationInfo,
-			&frameResources.debugHudVertexBuffer,
-			&frameResources.debugHudVertexAllocation,
-			&debugHudVertexAllocationInfo)) {
-		return false;
-	}
-	frameResources.debugHudVertexMappedData = debugHudVertexAllocationInfo.pMappedData;
-	profiling::RecordAllocation(
-		frameResources.debugHudVertexAllocation,
-		debugHudVertexAllocationInfo.size,
-		"SceneDebugHudVertexBufferAllocation");
-	render->sceneMemoryBytes += debugHudVertexAllocationInfo.size;
-
 	VmaAllocationInfo chunkDescriptorAllocationInfo{};
 	if (!CreateBuffer(
 			context,
@@ -474,12 +456,6 @@ bool CreateSceneFrameGeometryBuffers(
 		reinterpret_cast<uint64_t>(frameResources.packedFaceBuffer),
 		VK_OBJECT_TYPE_BUFFER,
 		bufferName);
-	std::snprintf(bufferName, sizeof(bufferName), "SceneDebugHudVertexBuffer[%zu]", frameResourceIndex);
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(frameResources.debugHudVertexBuffer),
-		VK_OBJECT_TYPE_BUFFER,
-		bufferName);
 	std::snprintf(bufferName, sizeof(bufferName), "SceneChunkDescriptorBuffer[%zu]", frameResourceIndex);
 	SetVulkanObjectName(
 		*context,
@@ -517,6 +493,5 @@ bool CreateSceneFrameGeometryBuffers(
 		VK_OBJECT_TYPE_BUFFER,
 		bufferName);
 
-	frameResources.debugHudVertexCount = 0;
 	return true;
 }

@@ -5,7 +5,6 @@
 #include "app/LookDevCaptureAutomation.hpp"
 #include "core/RuntimeProbe.hpp"
 #include "core/Types.hpp"
-#include "debug/DebugHud.hpp"
 #include "debug/DebugOverlays.hpp"
 #include "ecs/EcsWorld.hpp"
 #include "physics/PhysicsWorld.hpp"
@@ -1210,6 +1209,11 @@ void SendKeyEvent(
 	HandleInputActionEvent(*input, &event);
 }
 
+void PressInputAction(InputState &input, const InputAction action)
+{
+	input.actions[static_cast<size_t>(action)].pressed = true;
+}
+
 void SendRepeatedKeyEvent(
 	InputState *input,
 	const Uint32 eventType,
@@ -1652,62 +1656,23 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 	SendKeyEvent(&input, SDL_EVENT_KEY_UP, SDL_SCANCODE_RSHIFT);
 	EXPECT_TRUE(context, !IsInputActionDown(input, InputAction::MoveDown));
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleControlMode));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F1);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleHud));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_GRAVE);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::OpenHudSettings));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_TAB);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleRelativeMouseMode));
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F5);
+	EXPECT_EQ(
+		context,
+		SDL_SCANCODE_UNKNOWN,
+		input.bindings[static_cast<size_t>(InputAction::CycleScenePreset)].scancodes[0]);
+	EXPECT_EQ(
+		context,
+		SDL_SCANCODE_UNKNOWN,
+		input.bindings[static_cast<size_t>(InputAction::CycleMsaaMode)].scancodes[0]);
+	PressInputAction(input, InputAction::CycleScenePreset);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleScenePreset));
-
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F6);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::SaveWorldSnapshot));
-
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F7);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::LoadWorldSnapshot));
-
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F8);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleEditorTool));
-
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F9);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleChunkBounds));
-
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F10);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleDirtyChunkOverlay));
-
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F11);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkAirControlMode));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_G);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleDetailedHud));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_J);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkAutoJump));
-
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F12);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleWalkAutoJumpDelay));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_H);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::DecreaseLightingExposure));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_K);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::IncreaseLightingExposure));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_N);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleToneMapOperator));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_B);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CycleLightingDebugView));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_V);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ResetLightingDebugControls));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_C);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CaptureScreenshot));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_R);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleInputReplayRecording));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_Y);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::PlayLastInputReplay));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_X);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleMutationAnchor));
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_M);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::PickTargetMaterial));
-
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F6);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::SaveWorldSnapshot));
-
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F7);
-	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::LoadWorldSnapshot));
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_SPACE, SDL_MS_TO_NS(100));
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::MoveUp));
@@ -1890,17 +1855,18 @@ void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 	DebugState debug{};
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F1);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F2);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F3);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_P);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F8);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F9);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F10);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_G);
+	PressInputAction(input, InputAction::CyclePlacementMaterial);
+	PressInputAction(input, InputAction::ResetCamera);
+	PressInputAction(input, InputAction::TogglePause);
+	PressInputAction(input, InputAction::ToggleControlMode);
+	PressInputAction(input, InputAction::CycleEditorTool);
+	PressInputAction(input, InputAction::ToggleChunkBounds);
+	PressInputAction(input, InputAction::ToggleDirtyChunkOverlay);
+	PressInputAction(input, InputAction::ToggleDetailedHud);
 
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, !debug.hudVisible);
+	EXPECT_TRUE(context, debug.statsOpen);
 	EXPECT_TRUE(context, debug.detailedHudVisible);
 	EXPECT_EQ(context, VoxelMaterial::FloorGray, interaction.placementMaterial);
 	EXPECT_EQ(context, DebugEditorTool::Paint, interaction.editorTool);
@@ -1965,14 +1931,14 @@ void TestUpdateAppTogglesWalkAirControlMode(TestContext &context)
 	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), world.voxelWorld.get(), &camera));
 	EXPECT_EQ(context, WalkAirControlMode::MinecraftLike, GetPhysicsWalkAirControlMode(physics.get()));
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F11);
+	PressInputAction(input, InputAction::ToggleWalkAirControlMode);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_EQ(context, WalkAirControlMode::Realistic, GetPhysicsWalkAirControlMode(physics.get()));
 	EXPECT_EQ(context, WalkAirControlMode::Realistic, debug.stats.walkAirControlMode);
 
 	InputState secondInput{};
 	InitializeInputState(secondInput);
-	SendKeyEvent(&secondInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F11);
+	PressInputAction(secondInput, InputAction::ToggleWalkAirControlMode);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &secondInput, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_EQ(context, WalkAirControlMode::MinecraftLike, GetPhysicsWalkAirControlMode(physics.get()));
 	EXPECT_EQ(context, WalkAirControlMode::MinecraftLike, debug.stats.walkAirControlMode);
@@ -1998,14 +1964,14 @@ void TestUpdateAppTogglesWalkAutoJump(TestContext &context)
 	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), world.voxelWorld.get(), &camera));
 
 	const bool initialAutoJumpEnabled = IsPhysicsWalkAutoJumpEnabled(physics.get());
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_J);
+	PressInputAction(input, InputAction::ToggleWalkAutoJump);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpEnabled(physics.get()) != initialAutoJumpEnabled);
 	EXPECT_TRUE(context, debug.stats.walkAutoJumpEnabled == IsPhysicsWalkAutoJumpEnabled(physics.get()));
 
 	InputState secondInput{};
 	InitializeInputState(secondInput);
-	SendKeyEvent(&secondInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_J);
+	PressInputAction(secondInput, InputAction::ToggleWalkAutoJump);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &secondInput, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpEnabled(physics.get()) == initialAutoJumpEnabled);
 	EXPECT_TRUE(context, debug.stats.walkAutoJumpEnabled == initialAutoJumpEnabled);
@@ -2031,14 +1997,14 @@ void TestUpdateAppTogglesWalkAutoJumpDelay(TestContext &context)
 	EXPECT_TRUE(context, SnapWalkCharacterToCamera(physics.get(), world.voxelWorld.get(), &camera));
 	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpDelayEnabled(physics.get()));
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F12);
+	PressInputAction(input, InputAction::ToggleWalkAutoJumpDelay);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_TRUE(context, !IsPhysicsWalkAutoJumpDelayEnabled(physics.get()));
 	EXPECT_TRUE(context, !debug.stats.walkAutoJumpDelayEnabled);
 
 	InputState secondInput{};
 	InitializeInputState(secondInput);
-	SendKeyEvent(&secondInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F12);
+	PressInputAction(secondInput, InputAction::ToggleWalkAutoJumpDelay);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &secondInput, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_TRUE(context, IsPhysicsWalkAutoJumpDelayEnabled(physics.get()));
 	EXPECT_TRUE(context, debug.stats.walkAutoJumpDelayEnabled);
@@ -2208,7 +2174,7 @@ void TestResetCameraPreservesControlMode(TestContext &context)
 	camera.moveSpeed = 22.0f;
 	InputState input{};
 	InitializeInputState(input);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F3);
+	PressInputAction(input, InputAction::ResetCamera);
 	InteractionState interaction{};
 	WorldState world{};
 	RenderState render{};
@@ -2361,17 +2327,17 @@ void TestUpdateAppCyclesCreativeSpectatorAndWalkModes(TestContext &context)
 	EXPECT_TRUE(context, physics != nullptr);
 	EXPECT_TRUE(context, SyncPhysicsWorld(physics.get(), world.voxelWorld.get()));
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
+	PressInputAction(input, InputAction::ToggleControlMode);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_EQ(context, CameraState::ControlMode::Spectator, camera.controlMode);
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
+	PressInputAction(input, InputAction::ToggleControlMode);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_EQ(context, CameraState::ControlMode::Walk, camera.controlMode);
 	EXPECT_EQ(context, CameraState::ControlMode::Walk, debug.stats.controlMode);
 	EXPECT_NEAR(context, 6.0f, camera.position[1]);
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F4);
+	PressInputAction(input, InputAction::ToggleControlMode);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, physics.get(), &render, &debug));
 	EXPECT_EQ(context, CameraState::ControlMode::Creative, camera.controlMode);
 	EXPECT_EQ(context, CameraState::ControlMode::Creative, debug.stats.controlMode);
@@ -6107,7 +6073,7 @@ void TestUpdateAppRequestsScenePresetReload(TestContext &context)
 	RenderState render{};
 	DebugState debug{};
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F5);
+	PressInputAction(input, InputAction::CycleScenePreset);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, world.scenePresetReloadRequested);
 	EXPECT_EQ(context, VoxelScenePreset::MeshingStress, world.requestedScenePreset);
@@ -6126,7 +6092,7 @@ void TestUpdateAppRequestsWorldSnapshotSave(TestContext &context)
 	RenderState render{};
 	DebugState debug{};
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F6);
+	PressInputAction(input, InputAction::SaveWorldSnapshot);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, world.snapshotSaveRequested);
 	EXPECT_TRUE(context, !world.snapshotLoadRequested);
@@ -6145,7 +6111,7 @@ void TestUpdateAppRequestsWorldSnapshotLoad(TestContext &context)
 	RenderState render{};
 	DebugState debug{};
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F7);
+	PressInputAction(input, InputAction::LoadWorldSnapshot);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, world.snapshotLoadRequested);
 }
@@ -6163,7 +6129,7 @@ void TestUpdateAppRequestsScreenshotCapture(TestContext &context)
 	RenderState render{};
 	DebugState debug{};
 
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_C);
+	PressInputAction(input, InputAction::CaptureScreenshot);
 	EXPECT_TRUE(context, UpdateApp(&platform, &simulation, &camera, &input, &interaction, &world, nullptr, &render, &debug));
 	EXPECT_TRUE(context, render.screenshotCaptureRequested);
 }
@@ -6426,7 +6392,7 @@ void TestUpdateVoxelInteractionPickTargetMaterialCopiesSelectedVoxelMaterial(Tes
 
 	InputState input{};
 	InitializeInputState(input);
-	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_M);
+	PressInputAction(input, InputAction::PickTargetMaterial);
 
 	InteractionState interaction{};
 	interaction.editorTool = DebugEditorTool::Inspect;
@@ -6459,7 +6425,7 @@ void TestUpdateVoxelInteractionPaintModeAnchoredPlacementFillsVoxelBox(TestConte
 
 	InputState anchorInput{};
 	InitializeInputState(anchorInput);
-	SendKeyEvent(&anchorInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_X);
+	PressInputAction(anchorInput, InputAction::ToggleMutationAnchor);
 	UpdateVoxelInteraction(
 		MakeTestCamera({1.5f, 1.5f, 4.5f}),
 		&anchorInput,
@@ -6504,7 +6470,7 @@ void TestUpdateVoxelInteractionEraseModeAnchoredRemovalClearsVoxelBox(TestContex
 
 	InputState anchorInput{};
 	InitializeInputState(anchorInput);
-	SendKeyEvent(&anchorInput, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_X);
+	PressInputAction(anchorInput, InputAction::ToggleMutationAnchor);
 	UpdateVoxelInteraction(
 		MakeTestCamera({1.5f, 1.5f, 4.5f}),
 		&anchorInput,
@@ -6620,183 +6586,24 @@ void TestBuildDebugOverlayBoxesHidesDetailedSelectionOverlaysInBasicHud(TestCont
 	}
 }
 
-void TestBuildDebugHudVerticesReturnsZeroWhenHidden(TestContext &context)
+void TestHudUiStateDefaultsAndOpenSettingsBinding(TestContext &context)
 {
-	std::vector<DebugHudVertex> vertices(64);
-	const uint32_t vertexCount = BuildDebugHudVertices(
-		DebugStats{},
-		CameraState{},
-		InteractionState{},
-		false,
-		VkExtent2D{1280, 720},
-		vertices.data(),
-		static_cast<uint32_t>(vertices.size()));
+	DebugState debug{};
+	EXPECT_TRUE(context, debug.hudVisible);
+	EXPECT_TRUE(context, !debug.settingsOpen);
+	EXPECT_TRUE(context, !debug.statsOpen);
 
-	EXPECT_EQ(context, 0u, vertexCount);
-}
-
-void TestBuildDebugHudVerticesProducesGeometryWhenVisible(TestContext &context)
-{
-	DebugStats stats{};
-	stats.framesPerSecond = 120.0f;
-	stats.frameTimeMilliseconds = 8.33f;
-	stats.simulationStepsLastFrame = 1;
-	stats.sceneTriangleCount = 42;
-	stats.dirtyChunkCount = 2;
-	stats.activeChunkCount = 4;
-	stats.nonAirVoxelCount = 128;
-	stats.glassVoxelCount = 16;
-	stats.fluidVoxelCount = 8;
-	stats.floorVoxelCount = 104;
-	stats.sceneMemoryBytes = 4096;
-	stats.scenePreset = VoxelScenePreset::MeshingStress;
-
-	InteractionState interaction{};
-	interaction.selection.hasHit = true;
-	interaction.selection.hasPlacementVoxel = true;
-	interaction.selection.targetVoxel = {1, 2, 3};
-	interaction.selection.placementVoxel = {1, 2, 4};
-	interaction.selection.targetMaterial = VoxelMaterial::Glass;
-	interaction.selection.hitDistance = 3.5f;
-
-	std::vector<DebugHudVertex> basicVertices(65536);
-	const uint32_t basicVertexCount = BuildDebugHudVertices(
-		stats,
-		MakeTestCamera({2.0f, 3.0f, 4.0f}),
-		interaction,
-		true,
-		VkExtent2D{1280, 720},
-		basicVertices.data(),
-		static_cast<uint32_t>(basicVertices.size()));
-
-	DebugStats detailedStats = stats;
-	detailedStats.detailedHudVisible = true;
-	std::vector<DebugHudVertex> detailedVertices(65536);
-	const uint32_t detailedVertexCount = BuildDebugHudVertices(
-		detailedStats,
-		MakeTestCamera({2.0f, 3.0f, 4.0f}),
-		interaction,
-		true,
-		VkExtent2D{1280, 720},
-		detailedVertices.data(),
-		static_cast<uint32_t>(detailedVertices.size()));
-
-	EXPECT_TRUE(context, basicVertexCount > 6u);
-	EXPECT_TRUE(context, basicVertexCount <= static_cast<uint32_t>(basicVertices.size()));
-	EXPECT_TRUE(context, basicVertices[0].positionNdc[0] >= -1.0f);
-	EXPECT_TRUE(context, basicVertices[0].positionNdc[0] <= 1.0f);
-	EXPECT_TRUE(context, basicVertices[0].positionNdc[1] >= -1.0f);
-	EXPECT_TRUE(context, basicVertices[0].positionNdc[1] <= 1.0f);
-	EXPECT_TRUE(context, basicVertices[0].positionNdc[0] < 0.0f);
-	EXPECT_TRUE(context, basicVertices[0].positionNdc[1] < 0.0f);
-	EXPECT_TRUE(context, detailedVertexCount > basicVertexCount);
-
-	constexpr projectv::math::Vec4 helperPanelColor{0.07f, 0.09f, 0.12f, 0.76f};
-	constexpr projectv::math::Vec4 statsPanelColor{0.05f, 0.07f, 0.10f, 0.80f};
-	constexpr projectv::math::Vec4 textColor{0.95f, 0.97f, 0.98f, 0.96f};
-	float statsPanelMaxX = -1.0f;
-	float helperPanelMaxX = -1.0f;
-	float textMaxX = -1.0f;
-	for (uint32_t vertexIndex = 0; vertexIndex < detailedVertexCount; ++vertexIndex) {
-		const auto &[positionNdc, color] = detailedVertices[vertexIndex];
-		if (ColorsMatch(statsPanelColor, color)) {
-			statsPanelMaxX = std::max(statsPanelMaxX, positionNdc[0]);
-		}
-		if (ColorsMatch(helperPanelColor, color)) {
-			helperPanelMaxX = std::max(helperPanelMaxX, positionNdc[0]);
-		}
-		if (ColorsMatch(textColor, color)) {
-			textMaxX = std::max(textMaxX, positionNdc[0]);
-		}
-	}
-
-	EXPECT_TRUE(context, statsPanelMaxX > -1.0f);
-	EXPECT_TRUE(context, helperPanelMaxX > -1.0f);
-	EXPECT_TRUE(context, textMaxX > -1.0f);
-	EXPECT_TRUE(context, std::abs(statsPanelMaxX - helperPanelMaxX) <= 0.0001f);
-	EXPECT_TRUE(context, textMaxX <= helperPanelMaxX);
-
-	DebugStats stressStats = detailedStats;
-	stressStats.framesPerSecond = 9999.9f;
-	stressStats.frameTimeMilliseconds = 99.99f;
-	stressStats.simulationStepsLastFrame = 9999;
-	stressStats.dirtyChunkCount = 4096;
-	stressStats.activeChunkCount = 4096;
-	stressStats.nonAirVoxelCount = 16777215;
-	stressStats.sceneTriangleCount = 999999;
-	stressStats.sceneMemoryBytes = 987654321;
-	stressStats.worldEditVersion = 18446744073709551615ull;
-	stressStats.controlMode = CameraState::ControlMode::Walk;
-	stressStats.walkAirControlMode = WalkAirControlMode::Realistic;
-	stressStats.walkAutoJumpEnabled = true;
-	stressStats.walkAutoJumpDelayEnabled = true;
-	stressStats.simulationPaused = true;
-	stressStats.showChunkBounds = true;
-	stressStats.showDirtyChunkOverlay = true;
-	stressStats.walkDebugValid = true;
-	stressStats.walkSupportState = 2;
-	stressStats.walkFeetPosition = {-128.875f, 4096.125f, 2048.625f};
-	stressStats.walkFootSupportScore = 0.987f;
-	stressStats.walkFootSupportHitSamples = 16;
-	stressStats.walkFootSupportTotalSamples = 16;
-	stressStats.walkEdgeGraceFramesRemaining = 999;
-	stressStats.walkGroundTakeoffGraceFramesRemaining = 999;
-	stressStats.walkSneakSupportGraceFramesRemaining = 999;
-	stressStats.walkLedgeReleaseGraceFramesRemaining = 999;
-	stressStats.walkAutoJumpDelayFramesRemaining = 999;
-	stressStats.walkGroundTakeoffCached = true;
-	stressStats.walkSneakActive = true;
-	stressStats.walkJumpLockActive = true;
-	stressStats.walkSuppressPassiveSlide = true;
-	stressStats.sceneExposure = 3.75f;
-	stressStats.toneMapOperator = ToneMapOperator::AcesApprox;
-	stressStats.lightingDebugView = LightingDebugView::Direct;
-	stressStats.sunDirection = {-0.58f, 0.62f, -0.31f};
-	stressStats.sunIntensity = 1.30f;
-	stressStats.inputReplayPlaybackActive = true;
-	stressStats.inputReplayReady = true;
-	stressStats.inputReplayFrameCount = 9999;
-	stressStats.inputReplayPlaybackFrameIndex = 7777;
-
-	InteractionState stressInteraction = interaction;
-	stressInteraction.editorTool = DebugEditorTool::Inspect;
-	stressInteraction.placementMaterial = VoxelMaterial::FloorGray;
-	stressInteraction.selection.targetVoxel = {-512, 128, 2048};
-	stressInteraction.selection.placementVoxel = {-512, 129, 2048};
-	stressInteraction.selection.targetVoxelInChunk = {63, 31, 15};
-	stressInteraction.selection.hitNormal = {-1, 1, 0};
-	stressInteraction.selection.hasTargetChunk = true;
-	stressInteraction.selection.targetChunkCoord = {-8, 2, 32};
-	stressInteraction.selection.targetChunkMin = {-512, 128, 2048};
-	stressInteraction.selection.targetChunkMaxExclusive = {-448, 192, 2112};
-	stressInteraction.selection.targetChunkDirty = true;
-	stressInteraction.selection.targetChunkActive = true;
-	stressInteraction.selection.targetChunkIndex = 999;
-	stressInteraction.selection.targetChunkNonAirVoxelCount = 32768;
-	stressInteraction.selection.hasPlacementChunk = true;
-	stressInteraction.selection.placementChunkCoord = {-8, 2, 32};
-	stressInteraction.selection.placementChunkMin = {-512, 128, 2048};
-	stressInteraction.selection.placementChunkMaxExclusive = {-448, 192, 2112};
-	stressInteraction.selection.placementChunkDirty = true;
-	stressInteraction.selection.placementChunkActive = true;
-	stressInteraction.selection.placementChunkIndex = 999;
-	stressInteraction.selection.placementChunkNonAirVoxelCount = 32768;
-	stressInteraction.mutationAnchorValid = true;
-	stressInteraction.mutationAnchorUsesPlacementVoxel = true;
-	stressInteraction.mutationAnchorVoxel = {-520, 128, 2056};
-
-	std::vector<DebugHudVertex> stressVertices(static_cast<size_t>(DEBUG_HUD_MAX_VERTEX_COUNT) * 2u);
-	const uint32_t stressVertexCount = BuildDebugHudVertices(
-		stressStats,
-		MakeTestCamera({-128.875f, 4097.725f, 2048.625f}),
-		stressInteraction,
-		true,
-		VkExtent2D{1280, 720},
-		stressVertices.data(),
-		static_cast<uint32_t>(stressVertices.size()));
-
-	EXPECT_TRUE(context, stressVertexCount > detailedVertexCount);
-	EXPECT_TRUE(context, stressVertexCount < DEBUG_HUD_MAX_VERTEX_COUNT);
+	InputState input{};
+	InitializeInputState(input);
+	EXPECT_EQ(context, SDL_SCANCODE_F1, input.bindings[static_cast<size_t>(InputAction::ToggleHud)].scancodes[0]);
+	EXPECT_EQ(
+		context,
+		SDL_SCANCODE_GRAVE,
+		input.bindings[static_cast<size_t>(InputAction::OpenHudSettings)].scancodes[0]);
+	EXPECT_EQ(
+		context,
+		SDL_SCANCODE_UNKNOWN,
+		input.bindings[static_cast<size_t>(InputAction::CycleMsaaMode)].scancodes[0]);
 }
 
 void TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(TestContext &context)
@@ -7131,8 +6938,7 @@ int main() // NOLINT(*-exception-escape)
 	TestUpdateVoxelInteractionEraseModeAnchoredRemovalClearsVoxelBox(context);
 	TestBuildDebugOverlayBoxesReflectsSelectionAndChunkToggles(context);
 	TestBuildDebugOverlayBoxesHidesDetailedSelectionOverlaysInBasicHud(context);
-	TestBuildDebugHudVerticesReturnsZeroWhenHidden(context);
-	TestBuildDebugHudVerticesProducesGeometryWhenVisible(context);
+	TestHudUiStateDefaultsAndOpenSettingsBinding(context);
 	TestInitializeAppEcsCreatesPrimaryCameraPlayerAndSingletons(context);
 	TestSyncEcsWorldStateMirrorsVoxelChunksAndWorldSummary(context);
 

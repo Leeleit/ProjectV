@@ -13,12 +13,4 @@ void DestroyDebugOverlayPipeline(
 	VulkanContextState &context,
 	RenderState &render);
 
-bool CreateDebugHudPipeline(
-	VulkanContextState &context,
-	RenderState &render);
-
-void DestroyDebugHudPipeline(
-	VulkanContextState &context,
-	RenderState &render);
-
 } // namespace projectv::render

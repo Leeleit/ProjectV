@@ -516,7 +516,6 @@ binding=1, depends on shader).
 - `GraphicsPushConstants` — 128 B, 4 `static_assert` (offsets 0/64/80/96/112).
 - `ResolvePushConstants` — 144 B, 4 `static_assert`.
 - `DebugOverlayPushConstants` — 112 B, 4 `static_assert`.
-- `DebugHudVertex` — 32 B, 2 `static_assert`.
 - `ChunkCullingParameters` — 64 B, 4 `static_assert`.
 
 **Mirrored in shaders** (per TODO.md §24x consolidation):
@@ -865,48 +864,26 @@ quality чем simple majority vote (preserves surface voxels).
 
 **Решение:**
 
-**Debug HUD** (`src/debug/DebugHud.cpp`): `BuildDebugHudVertices(stats, camera,
-interaction, hudVisible, extent, vertices, maxCount)`. `DEBUG_HUD_MAX_VERTEX_COUNT
-= 262144` (`Types.hpp:276`). `kMaxStatsLineCount = 38`.
+**ImGui HUD** (`src/ui/`): `ImGuiLayer` (SDL3 + Vulkan dynamic rendering, volk
+`IMGUI_IMPL_VULKAN_USE_VOLK`) + `HudPanels` (status strip / Settings / Stats) +
+`HudStyle` (game-dev accent theme). Draw after AA blit in swapchain UI pass
+(`ImGuiRenderDrawData`). Bitmap `DebugHud` retired.
 
-**Font:** supports `A-Z, 0-9, ., -, :`. Bracket/backslash/backtick spelled out
-in helper text. Custom rendering via `DebugHudVertex` NDC quads.
+**Panels:**
+- Status strip (always when `hudVisible`): FPS/ms, mode, pause, tool, AA/scale.
+- Settings (`` ` ``): AA, overlays, lighting, walk, world, editor, music, replay, dev.
+- Stats (checkbox in Settings): detailed telemetry (was detailed bitmap HUD).
 
-**Per-frame `BuildDebugHudVertices` ordering:**
-1. Title bar (FPS + frame time + scene preset).
-2. Camera state (position, yaw/pitch, FOV, control mode).
-3. Walk debug info (support state, feet position, grace timers, jump lock).
-4. Render pass timings (mesh ms, graphics ms, TAA resolve ms, etc.).
-5. Lighting + tone-map + debug view.
-6. TAA state (jitter, blend, history valid).
-7. Audio state (music, volume, position).
-8. Input replay state.
-9. World stats (chunk count, voxel count by material).
+**Keyboard (defaults):** movement WASD/Space/Shift/Ctrl/Alt, Tab mouse, Esc quit,
+`F1` hide all UI, `` ` `` Settings (+ free/capture mouse). Rare toggles — Settings UI only
+(hotkeys may return later).
 
 **Debug overlays** (`src/debug/DebugOverlays.cpp`): `BuildDebugOverlayBoxes(world,
-interaction, debug, outBoxes)` produces world-axis-aligned
-`Int3 min/maxExclusive` boxes.
+interaction, debug, outBoxes)` — chunk bounds, dirty chunks, placement preview,
+hit-normal shaft. Gated by `hudVisible` + `detailedHudVisible` (= `statsOpen`).
 
-**Overlay types:**
-- Chunk bounds (если `debug->showChunkBounds`).
-- Dirty chunk overlay (если `debug->showDirtyChunkOverlay`).
-- Placement preview box.
-- Cursor hit normal shaft (если `debug->showCursorHitNormal`).
-
-**Toggles:**
-- `F1` ToggleHud.
-- `G` ToggleDetailedHud (normal vs detailed HUD).
-- `F9` ToggleChunkBounds.
-- `F10` ToggleDirtyChunkOverlay.
-- `Z` ToggleCursorHitNormal.
-
-**Per-pass CPU timing** (`RenderPassTimings`, `Types.hpp:652-662`): 6 measured +
-1 derived (`otherMs`) + 1 count. `ScopedPassTimer` в `Renderer.cpp:27-46` для
-graphics; manual `SDL_GetPerformanceCounter` для TAA resolve.
-
-**Почему:** operator + agent нужны оба HUD tiers (normal для readability, detailed
-для diagnostics). Overlays нужны для chunk management, dirty visualization,
-placement preview, cursor hit.
+**Почему:** ImGui даёт кликабельные toggles без клавиатурной матрицы; slim strip
+оставляет look-dev читаемым; overlays остаются для chunk/placement debug.
 
 ## 29. LookDev capture + Benchmark automation
 
@@ -1031,7 +1008,6 @@ struct RenderPassTimings {
     float graphicsMs = 0.0f;       // full graphics pass
     float taaResolveMs = 0.0f;     // TAA resolve
     float debugOverlayMs = 0.0f;   // debug overlay pass
-    float debugHudMs = 0.0f;      // debug HUD pass
     float otherMs = 0.0f;          // derived (total - sum)
     uint32_t dirtyChunkRebuiltCount = 0u;
 };

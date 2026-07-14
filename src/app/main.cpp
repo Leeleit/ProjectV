@@ -27,6 +27,8 @@ import projectv.string_id;
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanSwapchain.hpp"
+#include "ui/ImGuiLayer.hpp"
+#include "ui/HudPanels.hpp"
 #include "voxel/SceneConfig.hpp"
 #include "voxel/ChunkStreamer.hpp"
 #include "voxel/VoxelInteraction.hpp"
@@ -436,6 +438,12 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 		state->input().relativeMouseModeEnabled = false;
 	}
 
+	if (!projectv::ui::InitImGuiLayer(*state)) {
+		runtime::LogRuntimeFailure("App", "SDL_AppInit.InitImGuiLayer", "InitImGuiLayer returned false");
+		ShutdownVulkan(state.get());
+		return SDL_APP_FAILURE;
+	}
+
 	*appstate = state.release();
 	// ReSharper disable once CppDFAMemoryLeak
 	return SDL_APP_CONTINUE; // EVIL: state.release() transfers ownership of the heap-allocated AppState to SDL via *appstate.
@@ -458,53 +466,13 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		return SDL_APP_CONTINUE;
 	}
 
+	(void)projectv::ui::ImGuiProcessEvent(event);
+
 	if (ShouldRequestSwapchainRefreshForWindowEvent(event->type)) {
 		state->platform().windowResized = true;
 	}
 	if (state->input().replay.playbackActive && IsInteractiveInputEvent(*event)) {
 		return SDL_APP_CONTINUE;
-	}
-
-	if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) {
-		if (event->key.key == SDLK_1) {
-			RebuildAllShadersFromDisk();
-		} else if (event->key.key == SDLK_3) {
-			const VkPresentModeKHR newMode =
-				CyclePreferredPresentMode();
-			const char *modeName = "unknown";
-			switch (newMode) {
-			case VK_PRESENT_MODE_IMMEDIATE_KHR:
-				modeName = "IMMEDIATE (uncapped, may tear)";
-				break;
-			case VK_PRESENT_MODE_MAILBOX_KHR:
-				modeName = "MAILBOX (tear-free, uncapped)";
-				break;
-			case VK_PRESENT_MODE_FIFO_KHR:
-				modeName = "FIFO (vsync on, FPS = display rate)";
-				break;
-			default:
-				break;
-			}
-			const std::size_t cycleSize = GetPresentModeCycleSize();
-			const std::size_t cycleIndex = GetPresentModeCycleIndex(newMode);
-			std::fprintf(
-				stderr,
-				"[ProjectV][App] CycleVsync: %s [cycle %zu/%zu]\n",
-				modeName,
-				cycleIndex + 1u,
-				cycleSize);
-
-			if (!RecreateSwapchain(
-					&state->platform(),
-					&state->context(),
-					&state->swapchain(),
-					&state->render())) {
-				runtime::LogRuntimeFailure(
-					"App",
-					"SDL_AppEvent.CycleVsync.RecreateSwapchain",
-					"RecreateSwapchain returned false after vsync mode change");
-			}
-		}
 	}
 
 	CameraState *camera = GetPrimaryCameraState(state->ecs().get());
@@ -517,9 +485,17 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 		state->input().mouseDeltaX = 0.0f;
 		state->input().mouseDeltaY = 0.0f;
 	}
-	HandleInputActionEvent(state->input(), event);
-	HandleCameraEvent(camera, &state->input(), event);
-	HandleInteractionEvent(&state->input(), event);
+
+	const bool chromeKey =
+		event->type == SDL_EVENT_KEY_DOWN &&
+		(event->key.scancode == SDL_SCANCODE_F1 || event->key.scancode == SDL_SCANCODE_GRAVE);
+	if (chromeKey || !projectv::ui::ImGuiWantCaptureKeyboard()) {
+		HandleInputActionEvent(state->input(), event);
+	}
+	if (!projectv::ui::ImGuiWantCaptureMouse()) {
+		HandleCameraEvent(camera, &state->input(), event);
+		HandleInteractionEvent(&state->input(), event);
+	}
 	return SDL_APP_CONTINUE;
 }
 
@@ -557,6 +533,60 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		StopInputReplayPlayback(&state->input());
 	}
 
+	projectv::ui::ImGuiNewFrame();
+	const bool settingsWereOpen = debug->settingsOpen;
+	{
+		projectv::ui::HudFrameContext hudCtx{
+			.platform = &state->platform(),
+			.simulation = &state->simulation(),
+			.camera = camera,
+			.input = &state->input(),
+			.interaction = &state->interaction(),
+			.world = world,
+			.physics = state->physics().get(),
+			.render = &state->render(),
+			.debug = debug,
+			.audio = state->audio().get(),
+		};
+		projectv::ui::DrawHudFrame(hudCtx);
+	}
+
+	if (debug->requestQuit) {
+		debug->requestQuit = false;
+		projectv::ui::ImGuiEndFrameIfOpen();
+		PV_PROFILE_FRAME_MARK();
+		return SDL_APP_SUCCESS;
+	}
+	if (debug->requestShaderReload) {
+		debug->requestShaderReload = false;
+		RebuildAllShadersFromDisk();
+	}
+	if (debug->requestPresentModeCycle) {
+		debug->requestPresentModeCycle = false;
+		const VkPresentModeKHR newMode = CyclePreferredPresentMode();
+		const char *modeName = "unknown";
+		switch (newMode) {
+		case VK_PRESENT_MODE_IMMEDIATE_KHR:
+			modeName = "IMMEDIATE (uncapped, may tear)";
+			break;
+		case VK_PRESENT_MODE_MAILBOX_KHR:
+			modeName = "MAILBOX (tear-free, uncapped)";
+			break;
+		case VK_PRESENT_MODE_FIFO_KHR:
+			modeName = "FIFO (vsync on, FPS = display rate)";
+			break;
+		default:
+			break;
+		}
+		std::fprintf(
+			stderr,
+			"[ProjectV][App] CycleVsync: %s [cycle %zu/%zu]\n",
+			modeName,
+			GetPresentModeCycleIndex(newMode) + 1u,
+			GetPresentModeCycleSize());
+		state->platform().windowResized = true;
+	}
+
 	SDL_AppResult result = SDL_APP_CONTINUE;
 	if (!UpdateApp(
 			&state->platform(),
@@ -575,6 +605,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		TickFluidCASystem(state->ecs().get());
 		TickLookDevCaptureSystem(state->ecs().get());
 		TickBenchmarkAutomationSystem(state->ecs().get());
+	}
+	if (settingsWereOpen && !debug->settingsOpen) {
+		(void)SetRelativeMouseMode(state->platform(), state->input(), true); // Settings closed via X/`/F1 — recapture mouse
 	}
 	if (world->snapshotSaveRequested &&
 		!SaveActiveVoxelWorldSnapshot(state)) {
@@ -604,9 +637,11 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 				"App",
 				"SDL_AppIterate.RecreateSwapchainBeforeFrame",
 				"RecreateSwapchain returned false before PrepareFrameRenderData");
+			projectv::ui::ImGuiEndFrameIfOpen();
 			PV_PROFILE_FRAME_MARK();
 			return SDL_APP_FAILURE;
 		}
+		projectv::ui::OnImGuiSwapchainRecreated(*state);
 		state->platform().windowResized = false;
 	}
 
@@ -641,6 +676,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			result = SDL_APP_SUCCESS;
 		}
 	}
+	projectv::ui::ImGuiEndFrameIfOpen();
 	if (state->input().replay.playbackActive &&
 		state->input().replay.playbackFrameIndex >= state->input().replay.capture.frames.size()) {
 		StopInputReplayPlayback(&state->input());
@@ -654,6 +690,12 @@ void SDL_AppQuit(void *appstate, SDL_AppResult)
 {
 	auto *state = static_cast<AppState *>(appstate);
 	projectv::voxel::StopChunkStreamerWorker();
+	if (state) {
+		if (state->context().device != VK_NULL_HANDLE) {
+			vkDeviceWaitIdle(state->context().device);
+		}
+		projectv::ui::ShutdownImGuiLayer(*state);
+	}
 	ShutdownVulkan(state);
 	delete state;
 }

@@ -8,6 +8,7 @@
 #include "render/PostFx.hpp"
 #include "render/RayTracedShadows.hpp"
 #include "render/SkyAtmosphere.hpp"
+#include "ui/ImGuiLayer.hpp"
 
 void RecordVoxelMeshingCommands(
 	RenderState &render,
@@ -556,7 +557,7 @@ void RecordGraphicsCommands(
 			vkCmdSetViewport(cmd, 0, 1, &uiViewport);
 			vkCmdSetScissor(cmd, 0, 1, &uiScissor);
 			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
-			RecordDebugHudCommands(render, frameRenderData, cmd);
+			projectv::ui::ImGuiRenderDrawData(cmd);
 			vkCmdEndRendering(cmd);
 		}
 

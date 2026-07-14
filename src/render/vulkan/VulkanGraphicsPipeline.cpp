@@ -275,7 +275,6 @@ void DestroyGraphicsPipeline(
 	}
 
 	DestroyDebugOverlayPipeline(*context, *render);
-	DestroyDebugHudPipeline(*context, *render);
 
 	if (render->graphicsPipeline) {
 		PV_PROFILE_ZONE_N("DestroyOpaqueGraphicsPipeline");

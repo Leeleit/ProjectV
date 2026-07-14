@@ -23,7 +23,8 @@ endif ()
 
 option(PROJECTV_ENABLE_VALIDATION "Enable Vulkan validation layers" ${PROJECTV_DEFAULT_ENABLE_VALIDATION})
 option(PROJECTV_ENABLE_TRACY "Enable Tracy profiling instrumentation" ON)
-option(PROJECTV_ENABLE_IMGUI "Build bundled Dear ImGui support library" OFF)
+# ImGui HUD is mandatory; keep the cache key but force ON so stale OFF caches cannot break the build.
+set(PROJECTV_ENABLE_IMGUI ON CACHE BOOL "Dear ImGui HUD (required)" FORCE)
 option(
         PROJECTV_ENABLE_RENDERDOC_MARKERS
         "Enable Vulkan debug names and markers for tools like RenderDoc"
@@ -107,15 +108,23 @@ set(FMT_MODULE OFF CACHE BOOL "Disable fmt module target" FORCE)
 add_subdirectory(external/fmt)
 projectv_suppress_external_warnings("${CMAKE_CURRENT_SOURCE_DIR}/external/fmt")
 
-if (PROJECTV_ENABLE_IMGUI)
-    add_library(projectv_imgui STATIC
-            external/imgui/imgui.cpp
-            external/imgui/imgui_draw.cpp
-            external/imgui/imgui_tables.cpp
-            external/imgui/imgui_widgets.cpp
-    )
-    target_include_directories(projectv_imgui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui")
-endif ()
+add_library(projectv_imgui STATIC
+        external/imgui/imgui.cpp
+        external/imgui/imgui_draw.cpp
+        external/imgui/imgui_tables.cpp
+        external/imgui/imgui_widgets.cpp
+        external/imgui/backends/imgui_impl_sdl3.cpp
+        external/imgui/backends/imgui_impl_vulkan.cpp
+)
+target_include_directories(projectv_imgui PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui"
+        "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends"
+)
+target_compile_definitions(projectv_imgui PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
+target_link_libraries(projectv_imgui PUBLIC volk SDL3::SDL3)
+target_compile_options(projectv_imgui PRIVATE
+        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:GNU>>:-w>
+)
 
 set(FLECS_STATIC ON CACHE BOOL "Build static flecs lib" FORCE)
 set(FLECS_SHARED OFF CACHE BOOL "Disable shared flecs lib" FORCE)
@@ -263,12 +272,8 @@ else ()
     target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_RENDERDOC_MARKERS=0)
 endif ()
 
-if (PROJECTV_ENABLE_IMGUI)
-    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_IMGUI=1)
-    target_link_libraries(projectv_build_options INTERFACE projectv_imgui)
-else ()
-    target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_IMGUI=0)
-endif ()
+target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_IMGUI=1)
+target_link_libraries(projectv_build_options INTERFACE projectv_imgui)
 
 if (PROJECTV_ENABLE_TRACY)
     target_compile_definitions(projectv_build_options INTERFACE PROJECTV_ENABLE_TRACY=1)

@@ -52,11 +52,6 @@ void RecordDebugOverlayCommands(
 	const FrameRenderData &frameRenderData,
 	VkCommandBuffer cmd);
 
-void RecordDebugHudCommands(
-	RenderState &render,
-	const FrameRenderData &frameRenderData,
-	VkCommandBuffer cmd);
-
 void RecordVoxelMeshingCommands(
 	RenderState &render,
 	const FrameRenderData &frameRenderData,

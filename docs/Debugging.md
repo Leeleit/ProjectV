@@ -18,33 +18,21 @@ failure probes.
 
 ## HUD
 
-HUD рисуется внутри приложения отдельным debug pipeline.
+HUD — Dear ImGui (status strip + Settings/Stats). Bitmap debug HUD pipeline удалён.
 
-Сейчас через него видны:
+Видно в strip: FPS/frame time, control mode, pause, editor tool, AA/SMAA/scale.
 
-- FPS и frame time;
-- simulation steps;
-- triangle count;
-- dirty/active chunks;
-- non-air voxels, memory usage и `world edit version`;
-- текущий editor tool;
-- состояние `chunk bounds` / `dirty chunk overlay`;
-- camera telemetry;
-- selection telemetry;
-- локальные voxel coords / hit normal;
-- target/placement chunk summary;
-- mutation anchor / preview box;
-- текущий control mode;
-- параметры освещения и exposure (в detailed mode).
+Settings (`` ` ``): overlays, lighting, walk, world/editor actions, music, replay, dev
+(screenshot, shader reload, present mode, quit). Stats panel — детальная телеметрия.
 
-HUD verbosity contract:
-
-- `G` toggles `normal / detailed` HUD;
-- `F1` toggles весь debug UI on/off: HUD, selection/inspect highlight, chunk overlays и crosshair.
+- `F1` — скрыть весь UI (strip + окна);
+- `` ` `` — Settings on/off (+ освобождает/возвращает relative mouse);
+- `Tab` — relative mouse;
+- редкие debug toggles — только через Settings (не отдельные hotkey).
 
 ## Полезные hotkeys
 
-Основные клавиши рантайма (актуальные binding'и живут в `src/app/InputActions.cpp`):
+Основные клавиши рантайма (bindings в `src/app/InputActions.cpp`):
 
 - `W/A/S/D` — перемещение;
 - `Space` — вверх / двойное нажатие toggles `creative ↔ walk`;
@@ -52,37 +40,12 @@ HUD verbosity contract:
 - `Ctrl` — speed boost;
 - `Alt` — speed slow;
 - `Tab` — relative mouse mode;
-- `P` — pause;
-- `F1` — весь debug UI on/off;
-- `F2` — cycle placement material;
-- `F3` — reset camera;
-- `F4` — cycle `creative / spectator / walk`;
-- `F5` — cycle builtin scene preset (`VoxelLab`, `FlatBenchmark`, `TransparencyStress`, `ChunkGrid`, `MeshingStress`);
-- `F6` — сохранить current world snapshot;
-- `F7` — загрузить world snapshot;
-- `F8` — cycle editor tool: `OFF -> PAINT -> ERASE -> FILL -> INSPECT`;
-- `F9` — toggle `chunk bounds`;
-- `F10` — toggle `dirty chunk overlay`;
-- `F11` — toggle `walk` air-control mode (`MinecraftLike / Realistic`);
-- `F12` — toggle one-block auto-jump micro-delay when auto-jump is enabled;
-- `J` — toggle one-block auto-jump on/off;
-- `R` — записать latest input replay вместе со snapshot;
-- `Y` — проиграть latest input replay;
-- `X` — toggle mutation anchor для box paint/erase helper;
-- `M` — pick material из текущего hit voxel в placement material;
-- `F` — pick model (model gravigun);
-- `Z` — toggle cursor hit normal display;
-- `C` — capture screenshot (.bmp + sidecar);
-- `B` — cycle lighting debug view;
-- `N` — cycle tone-map operator;
-- `H/K` — decrease/increase lighting exposure;
-- `V` — reset lighting debug controls to baseline preset;
-- `Q/E` — music play/pause / stop;
-- `7/8` — music volume down/up;
-- `9/0` — next/previous music track;
-- `[ / ]` — decrease/increase time scale;
-- `\` — step single frame when paused;
-- `` ` `` — reset time scale.
+- `F1` — hide UI;
+- `` ` `` — Settings;
+- `Esc` — quit.
+
+Остальные действия (MSAA, overlays, save/load, editor tool, music, lighting, …) —
+кнопки/галочки в Settings. Editor LMB/RMB без изменений.
 
 Editor-tool contract:
 
@@ -95,10 +58,10 @@ Editor-tool contract:
 
 Anchor contract:
 
-- `X` ставит или снимает anchor на логически текущем voxel для активного tool;
+- Settings → Editor → mutation anchor ставит или снимает anchor на логически текущем voxel для активного tool;
 - для `PAINT` / `INSPECT` anchor обычно идёт по `placementVoxel`, для `ERASE` — по `targetVoxel`;
 - overlay показывает и сам anchor voxel, и preview box до текущего target/placement voxel;
-- `M` не меняет мир, а только синхронизирует placement material с текущим hit material.
+- pick material не меняет мир, а только синхронизирует placement material с текущим hit material.
 
 ## Runtime diagnostics
 

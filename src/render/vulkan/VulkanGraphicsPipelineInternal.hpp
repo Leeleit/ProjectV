@@ -16,8 +16,6 @@ VkFormat ChooseDepthFormat(VkPhysicalDevice physicalDevice);
 void DestroyGraphicsResourceBindings(VulkanContextState &context, RenderState &render);
 void DestroyDebugOverlayPipeline(VulkanContextState &context, RenderState &render);
 bool CreateDebugOverlayPipeline(VulkanContextState &context, const SwapchainState &swapchain, RenderState &render);
-void DestroyDebugHudPipeline(VulkanContextState &context, RenderState &render);
-bool CreateDebugHudPipeline(VulkanContextState &context, const SwapchainState &swapchain, RenderState &render);
 
 inline constexpr VkPipelineColorBlendAttachmentState kAlphaBlendAttachmentState{
 	.blendEnable = VK_TRUE,

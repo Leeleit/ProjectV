@@ -480,13 +480,6 @@ bool CreateGraphicsPipeline(
 		return false;
 	}
 
-	if (!CreateDebugHudPipeline(*context, *swapchain, *render)) {
-		LogGraphicsPipelineTextFailure("CreateGraphicsPipeline.DebugHud", "debug HUD pipeline creation failed");
-		destroyShaderModules();
-		DestroyGraphicsPipeline(context, render);
-		return false;
-	}
-
 	destroyShaderModules();
 	return true;
 }

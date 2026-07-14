@@ -44,11 +44,6 @@ void RecordDebugOverlayCommands(
 	const FrameRenderData &frameRenderData,
 	VkCommandBuffer cmd);
 
-void RecordDebugHudCommands(
-	RenderState &render,
-	const FrameRenderData &frameRenderData,
-	VkCommandBuffer cmd);
-
 void TransitionImage(
 	VkCommandBuffer cmd,
 	VkImage image,

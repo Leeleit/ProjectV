@@ -40,8 +40,6 @@ set(SHADERS
         ${SHADER_DIR}/voxelize.comp
         ${SHADER_DIR}/debug_overlay.vert
         ${SHADER_DIR}/debug_overlay.frag
-        ${SHADER_DIR}/debug_hud.vert
-        ${SHADER_DIR}/debug_hud.frag
         ${SHADER_DIR}/model.vert
         ${SHADER_DIR}/model.frag
         ${SHADER_DIR}/sky_atmosphere.vert
@@ -126,8 +124,10 @@ target_sources(ProjectV PRIVATE
         core/RepoRoot.cpp
         core/ShaderIO.cpp
         core/Types.cpp
-        debug/DebugHud.cpp
         debug/DebugOverlays.cpp
+        ui/ImGuiLayer.cpp
+        ui/HudStyle.cpp
+        ui/HudPanels.cpp
         platform/PlatformEvents.cpp
         render/Renderer.cpp
         render/RendererOverlay.cpp

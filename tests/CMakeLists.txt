@@ -12,6 +12,7 @@ endmacro()
 
 add_executable(ProjectVTests
         VoxelWorldTests.cpp
+        AaPassStub.cpp
         ../src/app/AppUpdate.cpp
         ../src/app/AppUpdateHelpers.cpp
         ../src/app/BenchmarkAutomation.cpp
@@ -25,11 +26,11 @@ add_executable(ProjectVTests
         ../src/physics/PhysicsWorld.cpp
         ../src/physics/PhysicsWorld_Walk.cpp
         ../src/physics/walk/WalkInternals.cpp
-        ../src/debug/DebugHud.cpp
         ../src/debug/DebugOverlays.cpp
         ../src/platform/PlatformEvents.cpp
         ../src/core/RuntimeDiagnostics.cpp
         ../src/core/RuntimeProbe.cpp
+        ../src/core/RepoRoot.cpp
         ../src/render/ScreenshotCapture.cpp
         ../src/render/vulkan/VulkanResult.cpp
         ../src/voxel/VoxelInteraction.cpp
@@ -42,6 +43,7 @@ add_executable(ProjectVTests
         ../src/voxel/VoxelWorldFluid.cpp
         ../src/voxel/VoxelWorldLod.cpp
         ../src/voxel/VoxelWorldStatic.cpp
+        ../src/voxel/SceneConfig.cpp
 )
 
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" PROJECTV_TESTS_SOURCE_DIR_CMAKE)
@@ -64,6 +66,7 @@ target_link_libraries(ProjectVTests PRIVATE
         GPUOpen::VulkanMemoryAllocator
         glm
         miniaudio
+        nlohmann_json::nlohmann_json
 )
 
 if (PROJECTV_ENABLE_TRACY)
