@@ -1,0 +1,274 @@
+diff --git a/src/core/Types.hpp b/src/core/Types.hpp
+index 565ce825..7d4e3f0d 100644
+--- a/src/core/Types.hpp
++++ b/src/core/Types.hpp
+@@ -346,6 +346,9 @@ struct SceneFrameResources {
+ 	void *visibilityCounterMappedData = nullptr;
+ 	VkBuffer visibilityCounterBuffer = VK_NULL_HANDLE;
+ 	VmaAllocation visibilityCounterAllocation = nullptr;
++	VkBuffer meshDrawIndirectBuffer = VK_NULL_HANDLE; // VkDrawMeshTasksIndirectCommandEXT
++	VmaAllocation meshDrawIndirectAllocation = nullptr;
++	void *meshDrawIndirectMappedData = nullptr;
+ 	void *fluidCaSourceMappedData = nullptr;
+ 	VkBuffer fluidCaSourceBuffer = VK_NULL_HANDLE;
+ 	VmaAllocation fluidCaSourceAllocation = nullptr;
+diff --git a/src/render/SceneResourcesDestroy.cpp b/src/render/SceneResourcesDestroy.cpp
+index 411a728e..4cb2de15 100644
+--- a/src/render/SceneResourcesDestroy.cpp
++++ b/src/render/SceneResourcesDestroy.cpp
+@@ -22,7 +22,20 @@ void DestroySceneResources(
+ 		}
+ 	}
+ 
+-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, hzbPerChunkMipMappedData, hzbPerChunkMipBuffer, hzbPerChunkMipAllocation, hzbPerChunkMipCapacityBytes, lodDownsampledVoxelPayloadMappedData, lodDownsampledVoxelPayloadBuffer, lodDownsampledVoxelPayloadAllocation, lodDownsampledVoxelPayloadCapacityBytes, chunkLodLevelsMappedData, chunkLodLevelsBuffer, chunkLodLevelsAllocation, chunkLodLevelsCapacity, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, nanovdbUpperMappedData, nanovdbUpperBuffer, nanovdbUpperAllocation, nanovdbUpperCapacityBytes, nanovdbLowerMappedData, nanovdbLowerBuffer, nanovdbLowerAllocation, nanovdbLowerCapacityBytes, nanovdbLeafMappedData, nanovdbLeafBuffer, nanovdbLeafAllocation, nanovdbLeafCapacityBytes, nanovdbMaterialMappedData, nanovdbMaterialBuffer, nanovdbMaterialAllocation, nanovdbMaterialCapacityBytes, worldGenVoxelMappedData, worldGenVoxelBuffer, worldGenVoxelAllocation, worldGenVoxelCapacityBytes, worldGenDescriptorSet, graphicsDescriptorSet, meshShaderDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, vctVoxelizeDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, uploadedNanoVdbVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
++	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
++		if (frameResources.meshDrawIndirectBuffer && frameResources.meshDrawIndirectAllocation) {
++			profiling::RecordFree(frameResources.meshDrawIndirectAllocation, "SceneMeshDrawIndirectBufferAllocation");
++			vmaDestroyBuffer(context->allocator, frameResources.meshDrawIndirectBuffer, frameResources.meshDrawIndirectAllocation);
++		}
++		frameResources.meshDrawIndirectMappedData = nullptr;
++		frameResources.meshDrawIndirectBuffer = VK_NULL_HANDLE;
++		frameResources.meshDrawIndirectAllocation = nullptr;
++	}
++
++	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, hzbPerChunkMipMappedData, hzbPerChunkMipBuffer, hzbPerChunkMipAllocation, hzbPerChunkMipCapacityBytes, lodDownsampledVoxelPayloadMappedData, lodDownsampledVoxelPayloadBuffer, lodDownsampledVoxelPayloadAllocation, lodDownsampledVoxelPayloadCapacityBytes, chunkLodLevelsMappedData, chunkLodLevelsBuffer, chunkLodLevelsAllocation, chunkLodLevelsCapacity, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, meshDrawIndirectBuffer, meshDrawIndirectAllocation, meshDrawIndirectMappedData, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, nanovdbUpperMappedData, nanovdbUpperBuffer, nanovdbUpperAllocation, nanovdbUpperCapacityBytes, nanovdbLowerMappedData, nanovdbLowerBuffer, nanovdbLowerAllocation, nanovdbLowerCapacityBytes, nanovdbLeafMappedData, nanovdbLeafBuffer, nanovdbLeafAllocation, nanovdbLeafCapacityBytes, nanovdbMaterialMappedData, nanovdbMaterialBuffer, nanovdbMaterialAllocation, nanovdbMaterialCapacityBytes, worldGenVoxelMappedData, worldGenVoxelBuffer, worldGenVoxelAllocation, worldGenVoxelCapacityBytes, worldGenDescriptorSet, graphicsDescriptorSet, meshShaderDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, vctVoxelizeDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, uploadedNanoVdbVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
++		(void)meshDrawIndirectBuffer;
++		(void)meshDrawIndirectAllocation;
++		(void)meshDrawIndirectMappedData;
+ 		if (packedFaceBuffer && packedFaceAllocation) {
+ 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
+ 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
+diff --git a/src/render/SceneResourcesFrame.cpp b/src/render/SceneResourcesFrame.cpp
+index e3c4718e..8bd36836 100644
+--- a/src/render/SceneResourcesFrame.cpp
++++ b/src/render/SceneResourcesFrame.cpp
+@@ -172,6 +172,30 @@ bool CreateSceneFrameGeometryBuffers(
+ 	render->sceneMemoryBytes += visibilityCounterAllocationInfo.size;
+ 	std::memset(frameResources.visibilityCounterMappedData, 0, sizeof(uint32_t));
+ 
++	VmaAllocationInfo meshDrawIndirectAllocationInfo{};
++	if (!CreateBuffer(
++			context,
++			sizeof(VkDrawMeshTasksIndirectCommandEXT),
++			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
++			allocationInfo,
++			&frameResources.meshDrawIndirectBuffer,
++			&frameResources.meshDrawIndirectAllocation,
++			&meshDrawIndirectAllocationInfo)) {
++		return false;
++	}
++	frameResources.meshDrawIndirectMappedData = meshDrawIndirectAllocationInfo.pMappedData;
++	profiling::RecordAllocation(
++		frameResources.meshDrawIndirectAllocation,
++		meshDrawIndirectAllocationInfo.size,
++		"SceneMeshDrawIndirectBufferAllocation");
++	render->sceneMemoryBytes += meshDrawIndirectAllocationInfo.size;
++	{
++		auto *cmd = static_cast<VkDrawMeshTasksIndirectCommandEXT *>(frameResources.meshDrawIndirectMappedData);
++		cmd->groupCountX = 0u;
++		cmd->groupCountY = 1u;
++		cmd->groupCountZ = 1u;
++	}
++
+ 	VmaAllocationInfo opaqueIndirectAllocationInfo{};
+ 	if (!CreateBuffer(
+ 			context,
+diff --git a/src/render/vulkan/VulkanMeshShaderBindings.cpp b/src/render/vulkan/VulkanMeshShaderBindings.cpp
+index 0ec98c8d..795e9519 100644
+--- a/src/render/vulkan/VulkanMeshShaderBindings.cpp
++++ b/src/render/vulkan/VulkanMeshShaderBindings.cpp
+@@ -13,7 +13,7 @@ constexpr uint32_t kMeshShaderDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+ constexpr std::array kMeshShaderDescriptorPoolSizes{
+ 	VkDescriptorPoolSize{
+ 		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+-		.descriptorCount = kMeshShaderDescriptorSetCount * 4u,
++		.descriptorCount = kMeshShaderDescriptorSetCount * 5u,
+ 	},
+ };
+ } // namespace
+@@ -107,6 +107,11 @@ bool RefreshMeshShaderResourceBindings(
+ 			.offset = 0,
+ 			.range = VK_WHOLE_SIZE,
+ 		};
++		const VkDescriptorBufferInfo meshDrawIndirectInfo{
++			.buffer = frameResources.meshDrawIndirectBuffer,
++			.offset = 0,
++			.range = VK_WHOLE_SIZE,
++		};
+ 
+ 		const std::array writes{
+ 			VkWriteDescriptorSet{
+@@ -157,6 +162,18 @@ bool RefreshMeshShaderResourceBindings(
+ 				.pBufferInfo = &visibilityCounterInfo,
+ 				.pTexelBufferView = nullptr,
+ 			},
++			VkWriteDescriptorSet{
++				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
++				.pNext = nullptr,
++				.dstSet = frameResources.meshShaderDescriptorSet,
++				.dstBinding = 4,
++				.dstArrayElement = 0,
++				.descriptorCount = 1,
++				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
++				.pImageInfo = nullptr,
++				.pBufferInfo = &meshDrawIndirectInfo,
++				.pTexelBufferView = nullptr,
++			},
+ 		};
+ 		vkUpdateDescriptorSets(
+ 			context->device,
+diff --git a/src/render/vulkan/VulkanMeshShaderCull.cpp b/src/render/vulkan/VulkanMeshShaderCull.cpp
+index 1590a901..1de01b4a 100644
+--- a/src/render/vulkan/VulkanMeshShaderCull.cpp
++++ b/src/render/vulkan/VulkanMeshShaderCull.cpp
+@@ -105,11 +105,19 @@ bool RecordMeshShaderPreCull(
+ 	}
+ 	if (frameResources.meshShaderDescriptorSet == VK_NULL_HANDLE ||
+ 		frameResources.visibleChunkIdBuffer == VK_NULL_HANDLE ||
+-		frameResources.visibilityCounterBuffer == VK_NULL_HANDLE) {
++		frameResources.visibilityCounterBuffer == VK_NULL_HANDLE ||
++		frameResources.meshDrawIndirectBuffer == VK_NULL_HANDLE ||
++		frameResources.meshDrawIndirectMappedData == nullptr) {
+ 		return false;
+ 	}
+ 
+ 	std::memset(frameResources.visibilityCounterMappedData, 0, sizeof(uint32_t));
++	{
++		auto *cmd = static_cast<VkDrawMeshTasksIndirectCommandEXT *>(frameResources.meshDrawIndirectMappedData);
++		cmd->groupCountX = 0u;
++		cmd->groupCountY = 1u;
++		cmd->groupCountZ = 1u;
++	}
+ 
+ 	VkBufferMemoryBarrier2 fillBarrier{};
+ 	fillBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+@@ -153,20 +161,29 @@ bool RecordMeshShaderPreCull(
+ 		vkCmdDispatch(commandBuffer, workgroupCount, 1u, 1u);
+ 	}
+ 
+-	VkBufferMemoryBarrier2 meshBarrier{};
+-	meshBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+-	meshBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+-	meshBarrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+-	meshBarrier.dstStageMask = VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT;
+-	meshBarrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+-	meshBarrier.buffer = frameResources.visibleChunkIdBuffer;
+-	meshBarrier.offset = 0;
+-	meshBarrier.size = VK_WHOLE_SIZE;
++	VkBufferMemoryBarrier2 meshBarriers[2]{};
++	meshBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
++	meshBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
++	meshBarriers[0].srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
++	meshBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT;
++	meshBarriers[0].dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
++	meshBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++	meshBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++	meshBarriers[0].buffer = frameResources.visibleChunkIdBuffer;
++	meshBarriers[0].offset = 0;
++	meshBarriers[0].size = VK_WHOLE_SIZE;
++	meshBarriers[1] = meshBarriers[0];
++	meshBarriers[1].dstStageMask =
++		VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT | VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
++	meshBarriers[1].dstAccessMask =
++		VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
++	meshBarriers[1].buffer = frameResources.meshDrawIndirectBuffer;
++	meshBarriers[1].size = sizeof(VkDrawMeshTasksIndirectCommandEXT);
+ 	{
+ 		VkDependencyInfo depInfo{};
+ 		depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+-		depInfo.bufferMemoryBarrierCount = 1u;
+-		depInfo.pBufferMemoryBarriers = &meshBarrier;
++		depInfo.bufferMemoryBarrierCount = 2u;
++		depInfo.pBufferMemoryBarriers = meshBarriers;
+ 		vkCmdPipelineBarrier2(commandBuffer, &depInfo);
+ 	}
+ 
+diff --git a/src/render/vulkan/VulkanMeshShaderDraw.cpp b/src/render/vulkan/VulkanMeshShaderDraw.cpp
+index 3e1b991f..1c19e407 100644
+--- a/src/render/vulkan/VulkanMeshShaderDraw.cpp
++++ b/src/render/vulkan/VulkanMeshShaderDraw.cpp
+@@ -85,7 +85,17 @@ bool RecordMeshShaderDraw(
+ 		sizeof(MeshDrawPushConstants),
+ 		&drawPushConstants);
+ 
+-	if (chunkCount > 0u) {
++	if (IsIndirectMeshDispatchEnabled()) {
++		if (frameResources.meshDrawIndirectBuffer == VK_NULL_HANDLE) {
++			return false;
++		}
++		vkCmdDrawMeshTasksIndirectEXT(
++			commandBuffer,
++			frameResources.meshDrawIndirectBuffer,
++			0u,
++			1u,
++			sizeof(VkDrawMeshTasksIndirectCommandEXT));
++	} else if (chunkCount > 0u) {
+ 		vkCmdDrawMeshTasksEXT(commandBuffer, chunkCount, 1u, 1u);
+ 	}
+ 
+diff --git a/src/render/vulkan/VulkanMeshShaderPipeline.hpp b/src/render/vulkan/VulkanMeshShaderPipeline.hpp
+index 6ca7db45..8e89395f 100644
+--- a/src/render/vulkan/VulkanMeshShaderPipeline.hpp
++++ b/src/render/vulkan/VulkanMeshShaderPipeline.hpp
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include "core/Types.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
++#include "core/EnvUtils.hpp"
+ 
+ #include <array>
+ 
+@@ -8,6 +9,12 @@
+ 
+ namespace projectv::render {
+ 
++inline bool IsIndirectMeshDispatchEnabled()
++{
++	const char *value = core::GetEnvVar("PROJECTV_MESH_SHADER_INDIRECT");
++	return value != nullptr && (value[0] == '1' || (value[0] == 'O' && value[1] == 'N'));
++}
++
+ struct MeshCullPushConstants {
+ 	std::array<uint32_t, 4> dispatchParams{};
+ 	std::array<std::array<float, 4>, 6> frustumPlanes{};
+diff --git a/src/render/vulkan/VulkanMeshShaderSetup.cpp b/src/render/vulkan/VulkanMeshShaderSetup.cpp
+index a2428ac5..242d9c70 100644
+--- a/src/render/vulkan/VulkanMeshShaderSetup.cpp
++++ b/src/render/vulkan/VulkanMeshShaderSetup.cpp
+@@ -50,6 +50,13 @@ constexpr std::array kMeshShaderDescriptorBindings{
+ 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
+ 		.pImmutableSamplers = nullptr,
+ 	},
++	VkDescriptorSetLayoutBinding{
++		.binding = 4,
++		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
++		.descriptorCount = 1,
++		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
++		.pImmutableSamplers = nullptr,
++	},
+ };
+ 
+ constexpr VkDescriptorSetLayoutCreateInfo kMeshShaderDescriptorSetLayoutInfo{
+diff --git a/src/shaders/voxel_mesh_pre.comp b/src/shaders/voxel_mesh_pre.comp
+index 18fef57c..088bf04f 100644
+--- a/src/shaders/voxel_mesh_pre.comp
++++ b/src/shaders/voxel_mesh_pre.comp
+@@ -21,6 +21,12 @@ layout(set = 0, binding = 3, std430) buffer VisibilityCounter {
+     uint visibleCount;
+ };
+ 
++layout(set = 0, binding = 4, std430) buffer MeshDrawIndirect {
++    uint groupCountX;
++    uint groupCountY;
++    uint groupCountZ;
++};
++
+ layout(push_constant) uniform CullPushConstants {
+     uvec4 dispatchParams;
+     // EVIL: 6 unnormalized frustum planes packed into push constants. Vulkan guarantees 128-byte push constant min; this is 16 + 96 = 112 bytes. Planes unnormalized OK because shader uses `r = halfExtent * (absN.x + absN.y + absN.z)` which scales linearly with plane magnitude.
+@@ -56,4 +62,5 @@ void main()
+ 
+     const uint slot = atomicAdd(visibleCount, 1u);
+     visibleChunkIds[slot] = chunkIndex;
++    atomicMax(groupCountX, slot + 1u); // converge to final visibleCount across workgroups
+ }

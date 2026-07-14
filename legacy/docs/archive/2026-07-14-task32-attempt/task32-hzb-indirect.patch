@@ -1,0 +1,891 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index e14d5fff..e839674c 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -33,6 +33,7 @@ set(SHADERS
+         ${SHADER_DIR}/voxel_mesh_pre.comp
+         ${SHADER_DIR}/voxel_mesh.mesh
+         ${SHADER_DIR}/hzb_cull.comp
++        ${SHADER_DIR}/rtx_visible_pixels.comp
+         ${SHADER_DIR}/fluid_ca.comp
+         ${SHADER_DIR}/world_gen.comp
+         ${SHADER_DIR}/voxelize.comp
+diff --git a/src/core/Types.hpp b/src/core/Types.hpp
+index 565ce825..b6785785 100644
+--- a/src/core/Types.hpp
++++ b/src/core/Types.hpp
+@@ -346,6 +346,15 @@ struct SceneFrameResources {
+ 	void *visibilityCounterMappedData = nullptr;
+ 	VkBuffer visibilityCounterBuffer = VK_NULL_HANDLE;
+ 	VmaAllocation visibilityCounterAllocation = nullptr;
++	void *rtxIndirectDispatchMappedData = nullptr;
++	VkBuffer rtxIndirectDispatchBuffer = VK_NULL_HANDLE; // VkTraceRaysIndirectCommandKHR
++	VmaAllocation rtxIndirectDispatchAllocation = nullptr;
++	void *rtxVisiblePixelCountMappedData = nullptr;
++	VkBuffer rtxVisiblePixelCountBuffer = VK_NULL_HANDLE; // uint32_t
++	VmaAllocation rtxVisiblePixelCountAllocation = nullptr;
++	VkBuffer rtxVisiblePixelIndicesBuffer = VK_NULL_HANDLE; // uint32_t[]
++	VmaAllocation rtxVisiblePixelIndicesAllocation = nullptr;
++	VkDeviceSize rtxVisiblePixelIndicesCapacityBytes = 0u;
+ 	void *fluidCaSourceMappedData = nullptr;
+ 	VkBuffer fluidCaSourceBuffer = VK_NULL_HANDLE;
+ 	VmaAllocation fluidCaSourceAllocation = nullptr;
+diff --git a/src/render/RayTracedShadows.hpp b/src/render/RayTracedShadows.hpp
+index 1e0cb00e..3fbfaf1e 100644
+--- a/src/render/RayTracedShadows.hpp
++++ b/src/render/RayTracedShadows.hpp
+@@ -6,6 +6,7 @@
+ #include <vector>
+ 
+ #include "core/Types.hpp"
++#include "core/EnvUtils.hpp"
+ #include "render/RtxShadowPipeline.hpp"
+ #include "render/RtxShadowSBT.hpp"
+ 
+@@ -122,7 +123,12 @@ class RayTracedShadows {
+ 		const float *cameraPosition,
+ 		const float *cameraForward,
+ 		uint32_t screenWidth,
+-		uint32_t screenHeight);
++		uint32_t screenHeight,
++		SceneFrameResources &frameResources,
++		VkImageView hizImageView,
++		VkSampler hizSampler,
++		uint32_t hizWidth,
++		uint32_t hizHeight);
+ 
+ 	void RecordDebugReport() const noexcept;
+ 
+@@ -220,6 +226,9 @@ class RayTracedShadows {
+ 	bool CreateVoxelAwareRtxResources(const VulkanContextState &context);
+ 	void ReleaseVoxelAwareRtxResources(const VulkanContextState &context) noexcept;
+ 
++	bool CreateRtxVisiblePixelsPipeline(const VulkanContextState &context);
++	void DestroyRtxVisiblePixelsPipeline(const VulkanContextState &context) noexcept;
++
+ 	bool InitializeShadowMaskClear(const VulkanContextState &context) const;
+ 
+ 	struct RtxFrameResources {
+@@ -247,8 +256,21 @@ class RayTracedShadows {
+ 	VkFormat m_shadowMaskFormat = VK_FORMAT_R8_UNORM;
+ 	std::array<RtxFrameResources, MAX_FRAMES_IN_FLIGHT> m_rtxFrames{};
+ 	bool m_voxelAwareRtxActive = false;
++
++	VkPipeline m_rtxVisiblePixelsPipeline = VK_NULL_HANDLE;
++	VkPipelineLayout m_rtxVisiblePixelsPipelineLayout = VK_NULL_HANDLE;
++	VkDescriptorSetLayout m_rtxVisiblePixelsDescriptorSetLayout = VK_NULL_HANDLE;
++	VkDescriptorPool m_rtxVisiblePixelsDescriptorPool = VK_NULL_HANDLE;
++	VkDescriptorSet m_rtxVisiblePixelsDescriptorSet = VK_NULL_HANDLE;
++	VkShaderModule m_rtxVisiblePixelsShaderModule = VK_NULL_HANDLE;
+ };
+ 
++inline bool IsHzbIndirectDispatchEnabled()
++{
++	const char *value = projectv::core::GetEnvVar("PROJECTV_RTX_HZB_INDIRECT");
++	return value != nullptr && (value[0] == '1' || (value[0] == 'O' && value[1] == 'N'));
++}
++
+ struct RayTracedShadowTestAccess {
+ 	static RayTracedShadowConfig &Config(RayTracedShadows &shadows) noexcept
+ 	{
+diff --git a/src/render/RayTracedShadowsMask.cpp b/src/render/RayTracedShadowsMask.cpp
+index aa952c1b..4d99c631 100644
+--- a/src/render/RayTracedShadowsMask.cpp
++++ b/src/render/RayTracedShadowsMask.cpp
+@@ -1,9 +1,11 @@
+ #include "volk.h"
+ #include "render/RayTracedShadows.hpp"
+ #include "core/RuntimeDiagnostics.hpp"
++#include "core/ShaderIO.hpp"
+ #include "SDL3/SDL_log.h"
+ 
+ #include <array>
++#include <vector>
+ 
+ namespace projectv::render {
+ 
+@@ -165,7 +167,7 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
+ 	if (!usePushDescriptors) {
+ 		std::array<VkDescriptorPoolSize, 4> poolSizes{};
+ 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+-		poolSizes[0].descriptorCount = 2u * MAX_FRAMES_IN_FLIGHT;
++		poolSizes[0].descriptorCount = 4u * MAX_FRAMES_IN_FLIGHT;
+ 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+ 		poolSizes[1].descriptorCount = MAX_FRAMES_IN_FLIGHT;
+ 		poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+@@ -220,13 +222,178 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
+ 		}
+ 	}
+ 
++	if (!CreateRtxVisiblePixelsPipeline(context)) {
++		SDL_Log("Render: RtxVisiblePixels pipeline create failed; HZB-indirect RT dispatch unavailable");
++	}
++
+ 	m_voxelAwareRtxActive = true;
+ 	SDL_Log("Render: VoxelAwareRtxShadows: ready (image=%ux%u, frames=%u)", m_shadowMaskWidth, m_shadowMaskHeight, MAX_FRAMES_IN_FLIGHT);
+ 	return true;
+ }
+ 
++bool RayTracedShadows::CreateRtxVisiblePixelsPipeline(const VulkanContextState &context)
++{
++	DestroyRtxVisiblePixelsPipeline(context);
++	const VkDevice device = context.device;
++	if (device == VK_NULL_HANDLE) {
++		return false;
++	}
++
++	std::array bindings = {
++		VkDescriptorSetLayoutBinding{
++			.binding = 0,
++			.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
++			.descriptorCount = 1u,
++			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
++			.pImmutableSamplers = nullptr},
++		VkDescriptorSetLayoutBinding{
++			.binding = 1,
++			.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
++			.descriptorCount = 1u,
++			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
++			.pImmutableSamplers = nullptr},
++		VkDescriptorSetLayoutBinding{
++			.binding = 2,
++			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
++			.descriptorCount = 1u,
++			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
++			.pImmutableSamplers = nullptr},
++		VkDescriptorSetLayoutBinding{
++			.binding = 3,
++			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
++			.descriptorCount = 1u,
++			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
++			.pImmutableSamplers = nullptr},
++		VkDescriptorSetLayoutBinding{
++			.binding = 4,
++			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
++			.descriptorCount = 1u,
++			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
++			.pImmutableSamplers = nullptr}};
++
++	VkDescriptorSetLayoutCreateInfo layoutInfo{};
++	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
++	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
++	layoutInfo.pBindings = bindings.data();
++	if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &m_rtxVisiblePixelsDescriptorSetLayout) != VK_SUCCESS) {
++		runtime::LogRuntimeFailure("Render", "CreateRtxVisiblePixelsPipeline.setLayout", "vkCreateDescriptorSetLayout failed");
++		DestroyRtxVisiblePixelsPipeline(context);
++		return false;
++	}
++
++	VkPushConstantRange pushConstantRange{};
++	pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
++	pushConstantRange.offset = 0u;
++	pushConstantRange.size = sizeof(uint32_t) * 4u; // uvec2 shadowMaskExtent + uvec2 hizExtent
++
++	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
++	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
++	pipelineLayoutInfo.setLayoutCount = 1u;
++	pipelineLayoutInfo.pSetLayouts = &m_rtxVisiblePixelsDescriptorSetLayout;
++	pipelineLayoutInfo.pushConstantRangeCount = 1u;
++	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
++	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &m_rtxVisiblePixelsPipelineLayout) != VK_SUCCESS) {
++		runtime::LogRuntimeFailure("Render", "CreateRtxVisiblePixelsPipeline.pipelineLayout", "vkCreatePipelineLayout failed");
++		DestroyRtxVisiblePixelsPipeline(context);
++		return false;
++	}
++
++	const std::vector<char> shaderCode = ReadShaderFile("rtx_visible_pixels.comp.spv");
++	if (shaderCode.empty()) {
++		runtime::LogRuntimeFailure("Render", "CreateRtxVisiblePixelsPipeline.shaderFile", "rtx_visible_pixels.comp.spv not found");
++		DestroyRtxVisiblePixelsPipeline(context);
++		return false;
++	}
++
++	VkShaderModuleCreateInfo moduleInfo{};
++	moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
++	moduleInfo.codeSize = shaderCode.size();
++	moduleInfo.pCode = reinterpret_cast<const uint32_t *>(shaderCode.data());
++	if (vkCreateShaderModule(device, &moduleInfo, nullptr, &m_rtxVisiblePixelsShaderModule) != VK_SUCCESS) {
++		runtime::LogRuntimeFailure("Render", "CreateRtxVisiblePixelsPipeline.shaderModule", "vkCreateShaderModule failed");
++		DestroyRtxVisiblePixelsPipeline(context);
++		return false;
++	}
++
++	VkComputePipelineCreateInfo pipelineInfo{};
++	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
++	pipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
++	pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
++	pipelineInfo.stage.module = m_rtxVisiblePixelsShaderModule;
++	pipelineInfo.stage.pName = "main";
++	pipelineInfo.layout = m_rtxVisiblePixelsPipelineLayout;
++	if (vkCreateComputePipelines(device, context.pipelineCache, 1u, &pipelineInfo, nullptr, &m_rtxVisiblePixelsPipeline) != VK_SUCCESS) {
++		runtime::LogRuntimeFailure("Render", "CreateRtxVisiblePixelsPipeline.pipeline", "vkCreateComputePipelines failed");
++		DestroyRtxVisiblePixelsPipeline(context);
++		return false;
++	}
++
++	std::array poolSizes = {
++		VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u},
++		VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLER, 1u},
++		VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3u}};
++	VkDescriptorPoolCreateInfo poolInfo{};
++	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
++	poolInfo.maxSets = 1u;
++	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
++	poolInfo.pPoolSizes = poolSizes.data();
++	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &m_rtxVisiblePixelsDescriptorPool) != VK_SUCCESS) {
++		runtime::LogRuntimeFailure("Render", "CreateRtxVisiblePixelsPipeline.descriptorPool", "vkCreateDescriptorPool failed");
++		DestroyRtxVisiblePixelsPipeline(context);
++		return false;
++	}
++
++	VkDescriptorSetAllocateInfo allocInfo{};
++	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
++	allocInfo.descriptorPool = m_rtxVisiblePixelsDescriptorPool;
++	allocInfo.descriptorSetCount = 1u;
++	allocInfo.pSetLayouts = &m_rtxVisiblePixelsDescriptorSetLayout;
++	if (vkAllocateDescriptorSets(device, &allocInfo, &m_rtxVisiblePixelsDescriptorSet) != VK_SUCCESS) {
++		runtime::LogRuntimeFailure("Render", "CreateRtxVisiblePixelsPipeline.allocateSets", "vkAllocateDescriptorSets failed");
++		DestroyRtxVisiblePixelsPipeline(context);
++		return false;
++	}
++	return true;
++}
++
++void RayTracedShadows::DestroyRtxVisiblePixelsPipeline(const VulkanContextState &context) noexcept
++{
++	const VkDevice device = context.device;
++	if (device == VK_NULL_HANDLE) {
++		m_rtxVisiblePixelsPipeline = VK_NULL_HANDLE;
++		m_rtxVisiblePixelsPipelineLayout = VK_NULL_HANDLE;
++		m_rtxVisiblePixelsDescriptorSetLayout = VK_NULL_HANDLE;
++		m_rtxVisiblePixelsDescriptorPool = VK_NULL_HANDLE;
++		m_rtxVisiblePixelsDescriptorSet = VK_NULL_HANDLE;
++		m_rtxVisiblePixelsShaderModule = VK_NULL_HANDLE;
++		return;
++	}
++	if (m_rtxVisiblePixelsPipeline != VK_NULL_HANDLE) {
++		vkDestroyPipeline(device, m_rtxVisiblePixelsPipeline, nullptr);
++		m_rtxVisiblePixelsPipeline = VK_NULL_HANDLE;
++	}
++	if (m_rtxVisiblePixelsPipelineLayout != VK_NULL_HANDLE) {
++		vkDestroyPipelineLayout(device, m_rtxVisiblePixelsPipelineLayout, nullptr);
++		m_rtxVisiblePixelsPipelineLayout = VK_NULL_HANDLE;
++	}
++	if (m_rtxVisiblePixelsDescriptorPool != VK_NULL_HANDLE) {
++		vkDestroyDescriptorPool(device, m_rtxVisiblePixelsDescriptorPool, nullptr);
++		m_rtxVisiblePixelsDescriptorPool = VK_NULL_HANDLE;
++	}
++	m_rtxVisiblePixelsDescriptorSet = VK_NULL_HANDLE;
++	if (m_rtxVisiblePixelsDescriptorSetLayout != VK_NULL_HANDLE) {
++		vkDestroyDescriptorSetLayout(device, m_rtxVisiblePixelsDescriptorSetLayout, nullptr);
++		m_rtxVisiblePixelsDescriptorSetLayout = VK_NULL_HANDLE;
++	}
++	if (m_rtxVisiblePixelsShaderModule != VK_NULL_HANDLE) {
++		vkDestroyShaderModule(device, m_rtxVisiblePixelsShaderModule, nullptr);
++		m_rtxVisiblePixelsShaderModule = VK_NULL_HANDLE;
++	}
++}
++
+ void RayTracedShadows::ReleaseVoxelAwareRtxResources(const VulkanContextState &context) noexcept
+ {
++	DestroyRtxVisiblePixelsPipeline(context);
+ 	const VkDevice device = context.device;
+ 	for (auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, descriptorSet] : m_rtxFrames) {
+ 		if (cameraUboBuffer != VK_NULL_HANDLE && context.allocator != nullptr) {
+diff --git a/src/render/RayTracedShadowsPass.cpp b/src/render/RayTracedShadowsPass.cpp
+index 53451573..0a44980d 100644
+--- a/src/render/RayTracedShadowsPass.cpp
++++ b/src/render/RayTracedShadowsPass.cpp
+@@ -3,6 +3,7 @@
+ #include "SDL3/SDL_log.h"
+ 
+ #include <array>
++#include <cstring>
+ 
+ namespace projectv::render {
+ 
+@@ -35,7 +36,12 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
+ 	const float *cameraPosition,
+ 	const float *cameraForward,
+ 	const uint32_t screenWidth,
+-	const uint32_t screenHeight)
++	const uint32_t screenHeight,
++	SceneFrameResources &frameResources,
++	const VkImageView hizImageView,
++	const VkSampler hizSampler,
++	const uint32_t hizWidth,
++	const uint32_t hizHeight)
+ {
+ 	if (!m_config.enabled || !m_voxelAwareRtxActive) {
+ 		return false;
+@@ -57,6 +63,19 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
+ 	if (chunkDescriptorBuffer == VK_NULL_HANDLE || sceneLightingBuffer == VK_NULL_HANDLE || chunkVoxelPayloadBuffer == VK_NULL_HANDLE) {
+ 		return false;
+ 	}
++	if (frameResources.rtxVisiblePixelIndicesBuffer == VK_NULL_HANDLE) {
++		return false;
++	}
++
++	const uint32_t requiredIndicesBytes = m_shadowMaskWidth * m_shadowMaskHeight * static_cast<uint32_t>(sizeof(uint32_t));
++	const bool useHzbIndirect = IsHzbIndirectDispatchEnabled() &&
++								hizImageView != VK_NULL_HANDLE &&
++								hizSampler != VK_NULL_HANDLE &&
++								hizWidth > 0u && hizHeight > 0u &&
++								m_rtxVisiblePixelsPipeline != VK_NULL_HANDLE &&
++								frameResources.rtxIndirectDispatchBuffer != VK_NULL_HANDLE &&
++								frameResources.rtxVisiblePixelCountBuffer != VK_NULL_HANDLE &&
++								frameResources.rtxVisiblePixelIndicesCapacityBytes >= requiredIndicesBytes;
+ 
+ 	uint8_t *uboMapped = static_cast<uint8_t *>(cameraUboMappedData);
+ 	std::memcpy(uboMapped + 0, inverseViewProjection, 64u);
+@@ -71,6 +90,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
+ 	const VkDescriptorBufferInfo chunkDescriptorInfo{chunkDescriptorBuffer, 0, VK_WHOLE_SIZE};
+ 	const VkDescriptorBufferInfo sceneLightingInfo{sceneLightingBuffer, 0, VK_WHOLE_SIZE};
+ 	const VkDescriptorBufferInfo chunkVoxelPayloadInfo{chunkVoxelPayloadBuffer, 0, VK_WHOLE_SIZE};
++	const VkDescriptorBufferInfo visiblePixelIndicesInfo{frameResources.rtxVisiblePixelIndicesBuffer, 0, VK_WHOLE_SIZE};
+ 	const VkDescriptorImageInfo shadowMaskImageInfo{VK_NULL_HANDLE, m_shadowMaskImageView, VK_IMAGE_LAYOUT_GENERAL};
+ 	const VkDescriptorBufferInfo cameraUboInfo{cameraUboBuffer, 0, 96u};
+ 	VkWriteDescriptorSetAccelerationStructureKHR tlasInfo{};
+@@ -78,7 +98,7 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
+ 	tlasInfo.accelerationStructureCount = 1u;
+ 	tlasInfo.pAccelerationStructures = &m_config.tlas;
+ 
+-	std::array<VkWriteDescriptorSet, 6> writes{};
++	std::array<VkWriteDescriptorSet, 7> writes{};
+ 	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+ 	writes[0].dstSet = descriptorSet;
+ 	writes[0].dstBinding = 1;
+@@ -105,27 +125,202 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
+ 
+ 	writes[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+ 	writes[3].dstSet = descriptorSet;
+-	writes[3].dstBinding = 13;
++	writes[3].dstBinding = 6;
+ 	writes[3].dstArrayElement = 0;
+ 	writes[3].descriptorCount = 1u;
+-	writes[3].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+-	writes[3].pNext = &tlasInfo;
++	writes[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
++	writes[3].pBufferInfo = &visiblePixelIndicesInfo;
+ 
+ 	writes[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+ 	writes[4].dstSet = descriptorSet;
+-	writes[4].dstBinding = 18;
++	writes[4].dstBinding = 13;
+ 	writes[4].dstArrayElement = 0;
+ 	writes[4].descriptorCount = 1u;
+-	writes[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+-	writes[4].pImageInfo = &shadowMaskImageInfo;
++	writes[4].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
++	writes[4].pNext = &tlasInfo;
+ 
+ 	writes[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+ 	writes[5].dstSet = descriptorSet;
+-	writes[5].dstBinding = 19;
++	writes[5].dstBinding = 18;
+ 	writes[5].dstArrayElement = 0;
+ 	writes[5].descriptorCount = 1u;
+-	writes[5].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+-	writes[5].pBufferInfo = &cameraUboInfo;
++	writes[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
++	writes[5].pImageInfo = &shadowMaskImageInfo;
++
++	writes[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
++	writes[6].dstSet = descriptorSet;
++	writes[6].dstBinding = 19;
++	writes[6].dstArrayElement = 0;
++	writes[6].descriptorCount = 1u;
++	writes[6].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
++	writes[6].pBufferInfo = &cameraUboInfo;
++
++	if (useHzbIndirect) {
++		vkCmdFillBuffer(commandBuffer, frameResources.rtxVisiblePixelCountBuffer, 0u, sizeof(uint32_t), 0u);
++		vkCmdFillBuffer(commandBuffer, frameResources.rtxIndirectDispatchBuffer, 0u, sizeof(VkTraceRaysIndirectCommandKHR), 0u);
++
++		VkBufferMemoryBarrier2 fillBarriers[2]{};
++		fillBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
++		fillBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
++		fillBarriers[0].srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
++		fillBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
++		fillBarriers[0].dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
++		fillBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++		fillBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++		fillBarriers[0].buffer = frameResources.rtxVisiblePixelCountBuffer;
++		fillBarriers[0].offset = 0u;
++		fillBarriers[0].size = VK_WHOLE_SIZE;
++		fillBarriers[1] = fillBarriers[0];
++		fillBarriers[1].buffer = frameResources.rtxIndirectDispatchBuffer;
++
++		VkDependencyInfo fillDep{};
++		fillDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
++		fillDep.bufferMemoryBarrierCount = 2u;
++		fillDep.pBufferMemoryBarriers = fillBarriers;
++		vkCmdPipelineBarrier2(commandBuffer, &fillDep);
++
++		const VkDescriptorImageInfo hizImageInfo{VK_NULL_HANDLE, hizImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
++		const VkDescriptorImageInfo hizSamplerInfo{hizSampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
++		const VkDescriptorBufferInfo indirectInfo{frameResources.rtxIndirectDispatchBuffer, 0, VK_WHOLE_SIZE};
++		const VkDescriptorBufferInfo countInfo{frameResources.rtxVisiblePixelCountBuffer, 0, VK_WHOLE_SIZE};
++		const VkDescriptorBufferInfo indicesInfo{frameResources.rtxVisiblePixelIndicesBuffer, 0, VK_WHOLE_SIZE};
++
++		std::array<VkWriteDescriptorSet, 5> computeWrites{};
++		computeWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
++		computeWrites[0].dstSet = m_rtxVisiblePixelsDescriptorSet;
++		computeWrites[0].dstBinding = 0;
++		computeWrites[0].descriptorCount = 1u;
++		computeWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
++		computeWrites[0].pImageInfo = &hizImageInfo;
++		computeWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
++		computeWrites[1].dstSet = m_rtxVisiblePixelsDescriptorSet;
++		computeWrites[1].dstBinding = 1;
++		computeWrites[1].descriptorCount = 1u;
++		computeWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
++		computeWrites[1].pImageInfo = &hizSamplerInfo;
++		computeWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
++		computeWrites[2].dstSet = m_rtxVisiblePixelsDescriptorSet;
++		computeWrites[2].dstBinding = 2;
++		computeWrites[2].descriptorCount = 1u;
++		computeWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
++		computeWrites[2].pBufferInfo = &indirectInfo;
++		computeWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
++		computeWrites[3].dstSet = m_rtxVisiblePixelsDescriptorSet;
++		computeWrites[3].dstBinding = 3;
++		computeWrites[3].descriptorCount = 1u;
++		computeWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
++		computeWrites[3].pBufferInfo = &countInfo;
++		computeWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
++		computeWrites[4].dstSet = m_rtxVisiblePixelsDescriptorSet;
++		computeWrites[4].dstBinding = 4;
++		computeWrites[4].descriptorCount = 1u;
++		computeWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
++		computeWrites[4].pBufferInfo = &indicesInfo;
++		vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(computeWrites.size()), computeWrites.data(), 0u, nullptr);
++
++		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_rtxVisiblePixelsPipeline);
++		vkCmdBindDescriptorSets(
++			commandBuffer,
++			VK_PIPELINE_BIND_POINT_COMPUTE,
++			m_rtxVisiblePixelsPipelineLayout,
++			0u,
++			1u,
++			&m_rtxVisiblePixelsDescriptorSet,
++			0u,
++			nullptr);
++
++		const uint32_t pushConstants[4] = {m_shadowMaskWidth, m_shadowMaskHeight, hizWidth, hizHeight};
++		vkCmdPushConstants(
++			commandBuffer,
++			m_rtxVisiblePixelsPipelineLayout,
++			VK_SHADER_STAGE_COMPUTE_BIT,
++			0u,
++			sizeof(pushConstants),
++			pushConstants);
++
++		constexpr uint32_t kTileSize = 8u;
++		const uint32_t tilesX = (m_shadowMaskWidth + kTileSize - 1u) / kTileSize;
++		const uint32_t tilesY = (m_shadowMaskHeight + kTileSize - 1u) / kTileSize;
++		const uint32_t totalTiles = tilesX * tilesY;
++		const uint32_t groupCount = (totalTiles + 255u) / 256u;
++		vkCmdDispatch(commandBuffer, groupCount, 1u, 1u);
++
++		VkBufferMemoryBarrier2 computeBarriers[3]{};
++		computeBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
++		computeBarriers[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
++		computeBarriers[0].srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
++		computeBarriers[0].dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
++		computeBarriers[0].dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
++		computeBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++		computeBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++		computeBarriers[0].buffer = frameResources.rtxIndirectDispatchBuffer;
++		computeBarriers[0].offset = 0u;
++		computeBarriers[0].size = VK_WHOLE_SIZE;
++		computeBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
++		computeBarriers[1].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
++		computeBarriers[1].srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
++		computeBarriers[1].dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
++		computeBarriers[1].dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
++		computeBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++		computeBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++		computeBarriers[1].buffer = frameResources.rtxVisiblePixelIndicesBuffer;
++		computeBarriers[1].offset = 0u;
++		computeBarriers[1].size = VK_WHOLE_SIZE;
++		computeBarriers[2] = computeBarriers[1];
++		computeBarriers[2].buffer = frameResources.rtxVisiblePixelCountBuffer;
++
++		VkDependencyInfo computeDep{};
++		computeDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
++		computeDep.bufferMemoryBarrierCount = 3u;
++		computeDep.pBufferMemoryBarriers = computeBarriers;
++		vkCmdPipelineBarrier2(commandBuffer, &computeDep);
++	}
++
++	VkImageMemoryBarrier2 imageBarrier{};
++	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
++	imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
++	imageBarrier.srcAccessMask = VK_ACCESS_2_NONE;
++	imageBarrier.dstStageMask = useHzbIndirect ? VK_PIPELINE_STAGE_2_TRANSFER_BIT : VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
++	imageBarrier.dstAccessMask = useHzbIndirect ? VK_ACCESS_2_TRANSFER_WRITE_BIT : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
++	imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
++	imageBarrier.newLayout = useHzbIndirect ? VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
++	imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++	imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++	imageBarrier.image = m_shadowMaskImage;
++	imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
++	VkDependencyInfo imageDepInfo{};
++	imageDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
++	imageDepInfo.imageMemoryBarrierCount = 1u;
++	imageDepInfo.pImageMemoryBarriers = &imageBarrier;
++	vkCmdPipelineBarrier2(commandBuffer, &imageDepInfo);
++
++	if (useHzbIndirect) {
++		VkClearColorValue clearValue{};
++		clearValue.float32[0] = 1.0f;
++		clearValue.float32[1] = 1.0f;
++		clearValue.float32[2] = 1.0f;
++		clearValue.float32[3] = 1.0f;
++		const VkImageSubresourceRange clearRange{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
++		vkCmdClearColorImage(commandBuffer, m_shadowMaskImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &clearRange);
++
++		VkImageMemoryBarrier2 clearBarrier{};
++		clearBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
++		clearBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
++		clearBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
++		clearBarrier.dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
++		clearBarrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
++		clearBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
++		clearBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
++		clearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++		clearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
++		clearBarrier.image = m_shadowMaskImage;
++		clearBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
++		VkDependencyInfo clearDep{};
++		clearDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
++		clearDep.imageMemoryBarrierCount = 1u;
++		clearDep.pImageMemoryBarriers = &clearBarrier;
++		vkCmdPipelineBarrier2(commandBuffer, &clearDep);
++	}
+ 
+ 	if (usePushDescriptors) {
+ 		vkCmdPushDescriptorSet(
+@@ -139,24 +334,6 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
+ 		vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()), writes.data(), 0u, nullptr);
+ 	}
+ 
+-	VkImageMemoryBarrier2 imageBarrier{};
+-	imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+-	imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+-	imageBarrier.srcAccessMask = VK_ACCESS_2_NONE;
+-	imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+-	imageBarrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+-	imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+-	imageBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+-	imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+-	imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+-	imageBarrier.image = m_shadowMaskImage;
+-	imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+-	VkDependencyInfo imageDepInfo{};
+-	imageDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+-	imageDepInfo.imageMemoryBarrierCount = 1u;
+-	imageDepInfo.pImageMemoryBarriers = &imageBarrier;
+-	vkCmdPipelineBarrier2(commandBuffer, &imageDepInfo);
+-
+ 	vkCmdBindPipeline(
+ 		commandBuffer,
+ 		VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+@@ -173,15 +350,39 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
+ 			nullptr);
+ 	}
+ 
+-	vkCmdTraceRaysKHR(
++	const uint32_t raygenPush[4] = {m_shadowMaskWidth, m_shadowMaskHeight, useHzbIndirect ? 1u : 0u, 0u};
++	vkCmdPushConstants(
+ 		commandBuffer,
+-		&m_rtxSbt.GetRaygenRegion(),
+-		&m_rtxSbt.GetMissRegion(),
+-		&m_rtxSbt.GetHitRegion(),
+-		&m_rtxSbt.GetCallableRegion(),
+-		m_shadowMaskWidth,
+-		m_shadowMaskHeight,
+-		1u);
++		m_rtxPipeline.GetPipelineLayout(),
++		VK_SHADER_STAGE_RAYGEN_BIT_KHR,
++		0u,
++		sizeof(raygenPush),
++		raygenPush);
++
++	if (useHzbIndirect) {
++		const VkBufferDeviceAddressInfo addressInfo{
++			VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
++			nullptr,
++			frameResources.rtxIndirectDispatchBuffer};
++		const VkDeviceAddress indirectAddress = vkGetBufferDeviceAddress(context.device, &addressInfo);
++		vkCmdTraceRaysIndirectKHR(
++			commandBuffer,
++			&m_rtxSbt.GetRaygenRegion(),
++			&m_rtxSbt.GetMissRegion(),
++			&m_rtxSbt.GetHitRegion(),
++			&m_rtxSbt.GetCallableRegion(),
++			indirectAddress);
++	} else {
++		vkCmdTraceRaysKHR(
++			commandBuffer,
++			&m_rtxSbt.GetRaygenRegion(),
++			&m_rtxSbt.GetMissRegion(),
++			&m_rtxSbt.GetHitRegion(),
++			&m_rtxSbt.GetCallableRegion(),
++			m_shadowMaskWidth,
++			m_shadowMaskHeight,
++			1u);
++	}
+ 
+ 	VkImageMemoryBarrier2 readBarrier{};
+ 	readBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+diff --git a/src/render/RendererDrawFrame.cpp b/src/render/RendererDrawFrame.cpp
+index 12122315..5b455612 100644
+--- a/src/render/RendererDrawFrame.cpp
++++ b/src/render/RendererDrawFrame.cpp
+@@ -255,7 +255,12 @@ SDL_AppResult DrawFrame(
+ 			cameraPosition,
+ 			cameraForward,
+ 			swapchain->extent.width,
+-			swapchain->extent.height);
++			swapchain->extent.height,
++			render->sceneFrameResources[frame->currentFrame],
++			render->hizBuffer.imageView,
++			render->hizBuffer.sampler,
++			render->hizBuffer.baseWidth,
++			render->hizBuffer.baseHeight);
+ 	}
+ 
+ 	if (render->rtxGiProbes != nullptr && render->rtxGiProbes->IsEnabled()) {
+diff --git a/src/render/RtxShadowPipeline.cpp b/src/render/RtxShadowPipeline.cpp
+index c10f40a4..234afcbe 100644
+--- a/src/render/RtxShadowPipeline.cpp
++++ b/src/render/RtxShadowPipeline.cpp
+@@ -96,7 +96,7 @@ bool RtxShadowPipeline::Initialize(
+ 		return false;
+ 	}
+ 
+-	std::array<VkDescriptorSetLayoutBinding, 6> bindings{};
++	std::array<VkDescriptorSetLayoutBinding, 7> bindings{};
+ 	bindings[0].binding = 1;
+ 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+ 	bindings[0].descriptorCount = 1;
+@@ -112,21 +112,26 @@ bool RtxShadowPipeline::Initialize(
+ 	bindings[2].descriptorCount = 1;
+ 	bindings[2].stageFlags = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
+ 
+-	bindings[3].binding = 13;
+-	bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
++	bindings[3].binding = 6;
++	bindings[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+ 	bindings[3].descriptorCount = 1;
+ 	bindings[3].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+ 
+-	bindings[4].binding = 18;
+-	bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
++	bindings[4].binding = 13;
++	bindings[4].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+ 	bindings[4].descriptorCount = 1;
+ 	bindings[4].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+ 
+-	bindings[5].binding = 19;
+-	bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
++	bindings[5].binding = 18;
++	bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+ 	bindings[5].descriptorCount = 1;
+ 	bindings[5].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+ 
++	bindings[6].binding = 19;
++	bindings[6].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
++	bindings[6].descriptorCount = 1;
++	bindings[6].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
++
+ 	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
+ 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+ 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+@@ -141,10 +146,17 @@ bool RtxShadowPipeline::Initialize(
+ 		return false;
+ 	}
+ 
++	VkPushConstantRange pushConstantRange{};
++	pushConstantRange.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
++	pushConstantRange.offset = 0u;
++	pushConstantRange.size = sizeof(uint32_t) * 4u; // uvec2 shadowMaskExtent + useIndirectDispatch + pad
++
+ 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+ 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+ 	pipelineLayoutInfo.setLayoutCount = 1u;
+ 	pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
++	pipelineLayoutInfo.pushConstantRangeCount = 1u;
++	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+ 	if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
+ 		runtime::LogVkFailure("RtxShadowPipeline.vkCreatePipelineLayout", VK_ERROR_INITIALIZATION_FAILED);
+ 		Shutdown(context);
+diff --git a/src/render/SceneResourcesDestroy.cpp b/src/render/SceneResourcesDestroy.cpp
+index 411a728e..e04a8869 100644
+--- a/src/render/SceneResourcesDestroy.cpp
++++ b/src/render/SceneResourcesDestroy.cpp
+@@ -22,7 +22,40 @@ void DestroySceneResources(
+ 		}
+ 	}
+ 
+-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, hzbPerChunkMipMappedData, hzbPerChunkMipBuffer, hzbPerChunkMipAllocation, hzbPerChunkMipCapacityBytes, lodDownsampledVoxelPayloadMappedData, lodDownsampledVoxelPayloadBuffer, lodDownsampledVoxelPayloadAllocation, lodDownsampledVoxelPayloadCapacityBytes, chunkLodLevelsMappedData, chunkLodLevelsBuffer, chunkLodLevelsAllocation, chunkLodLevelsCapacity, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, nanovdbUpperMappedData, nanovdbUpperBuffer, nanovdbUpperAllocation, nanovdbUpperCapacityBytes, nanovdbLowerMappedData, nanovdbLowerBuffer, nanovdbLowerAllocation, nanovdbLowerCapacityBytes, nanovdbLeafMappedData, nanovdbLeafBuffer, nanovdbLeafAllocation, nanovdbLeafCapacityBytes, nanovdbMaterialMappedData, nanovdbMaterialBuffer, nanovdbMaterialAllocation, nanovdbMaterialCapacityBytes, worldGenVoxelMappedData, worldGenVoxelBuffer, worldGenVoxelAllocation, worldGenVoxelCapacityBytes, worldGenDescriptorSet, graphicsDescriptorSet, meshShaderDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, vctVoxelizeDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, uploadedNanoVdbVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
++	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
++		if (frameResources.rtxIndirectDispatchBuffer && frameResources.rtxIndirectDispatchAllocation) {
++			profiling::RecordFree(frameResources.rtxIndirectDispatchAllocation, "SceneRtxIndirectDispatchBufferAllocation");
++			vmaDestroyBuffer(context->allocator, frameResources.rtxIndirectDispatchBuffer, frameResources.rtxIndirectDispatchAllocation);
++		}
++		frameResources.rtxIndirectDispatchMappedData = nullptr;
++		frameResources.rtxIndirectDispatchBuffer = VK_NULL_HANDLE;
++		frameResources.rtxIndirectDispatchAllocation = nullptr;
++		if (frameResources.rtxVisiblePixelCountBuffer && frameResources.rtxVisiblePixelCountAllocation) {
++			profiling::RecordFree(frameResources.rtxVisiblePixelCountAllocation, "SceneRtxVisiblePixelCountBufferAllocation");
++			vmaDestroyBuffer(context->allocator, frameResources.rtxVisiblePixelCountBuffer, frameResources.rtxVisiblePixelCountAllocation);
++		}
++		frameResources.rtxVisiblePixelCountMappedData = nullptr;
++		frameResources.rtxVisiblePixelCountBuffer = VK_NULL_HANDLE;
++		frameResources.rtxVisiblePixelCountAllocation = nullptr;
++		if (frameResources.rtxVisiblePixelIndicesBuffer && frameResources.rtxVisiblePixelIndicesAllocation) {
++			profiling::RecordFree(frameResources.rtxVisiblePixelIndicesAllocation, "SceneRtxVisiblePixelIndicesBufferAllocation");
++			vmaDestroyBuffer(context->allocator, frameResources.rtxVisiblePixelIndicesBuffer, frameResources.rtxVisiblePixelIndicesAllocation);
++		}
++		frameResources.rtxVisiblePixelIndicesBuffer = VK_NULL_HANDLE;
++		frameResources.rtxVisiblePixelIndicesAllocation = nullptr;
++		frameResources.rtxVisiblePixelIndicesCapacityBytes = 0u;
++	}
++
++	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, debugHudVertexMappedData, debugHudVertexBuffer, debugHudVertexAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, hzbPerChunkMipMappedData, hzbPerChunkMipBuffer, hzbPerChunkMipAllocation, hzbPerChunkMipCapacityBytes, lodDownsampledVoxelPayloadMappedData, lodDownsampledVoxelPayloadBuffer, lodDownsampledVoxelPayloadAllocation, lodDownsampledVoxelPayloadCapacityBytes, chunkLodLevelsMappedData, chunkLodLevelsBuffer, chunkLodLevelsAllocation, chunkLodLevelsCapacity, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, rtxIndirectDispatchMappedData, rtxIndirectDispatchBuffer, rtxIndirectDispatchAllocation, rtxVisiblePixelCountMappedData, rtxVisiblePixelCountBuffer, rtxVisiblePixelCountAllocation, rtxVisiblePixelIndicesBuffer, rtxVisiblePixelIndicesAllocation, rtxVisiblePixelIndicesCapacityBytes, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, nanovdbUpperMappedData, nanovdbUpperBuffer, nanovdbUpperAllocation, nanovdbUpperCapacityBytes, nanovdbLowerMappedData, nanovdbLowerBuffer, nanovdbLowerAllocation, nanovdbLowerCapacityBytes, nanovdbLeafMappedData, nanovdbLeafBuffer, nanovdbLeafAllocation, nanovdbLeafCapacityBytes, nanovdbMaterialMappedData, nanovdbMaterialBuffer, nanovdbMaterialAllocation, nanovdbMaterialCapacityBytes, worldGenVoxelMappedData, worldGenVoxelBuffer, worldGenVoxelAllocation, worldGenVoxelCapacityBytes, worldGenDescriptorSet, graphicsDescriptorSet, meshShaderDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, vctVoxelizeDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, uploadedNanoVdbVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount, debugHudVertexCount] : render->sceneFrameResources) {
++		(void)rtxIndirectDispatchMappedData;
++		(void)rtxIndirectDispatchBuffer;
++		(void)rtxIndirectDispatchAllocation;
++		(void)rtxVisiblePixelCountMappedData;
++		(void)rtxVisiblePixelCountBuffer;
++		(void)rtxVisiblePixelCountAllocation;
++		(void)rtxVisiblePixelIndicesBuffer;
++		(void)rtxVisiblePixelIndicesAllocation;
++		(void)rtxVisiblePixelIndicesCapacityBytes;
+ 		if (packedFaceBuffer && packedFaceAllocation) {
+ 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
+ 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
+diff --git a/src/render/SceneResourcesFrame.cpp b/src/render/SceneResourcesFrame.cpp
+index e3c4718e..3a47cae2 100644
+--- a/src/render/SceneResourcesFrame.cpp
++++ b/src/render/SceneResourcesFrame.cpp
+@@ -172,6 +172,69 @@ bool CreateSceneFrameGeometryBuffers(
+ 	render->sceneMemoryBytes += visibilityCounterAllocationInfo.size;
+ 	std::memset(frameResources.visibilityCounterMappedData, 0, sizeof(uint32_t));
+ 
++	constexpr uint32_t kRtxVisiblePixelIndicesMaxWidth = 3840u;
++	constexpr uint32_t kRtxVisiblePixelIndicesMaxHeight = 2160u;
++	VmaAllocationCreateInfo rtxGpuAllocationInfo{};
++	rtxGpuAllocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
++	rtxGpuAllocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
++	VmaAllocationInfo rtxIndirectDispatchAllocationInfo{};
++	if (!CreateBuffer(
++			context,
++			sizeof(VkTraceRaysIndirectCommandKHR),
++			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
++				VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
++			rtxGpuAllocationInfo,
++			&frameResources.rtxIndirectDispatchBuffer,
++			&frameResources.rtxIndirectDispatchAllocation,
++			&rtxIndirectDispatchAllocationInfo)) {
++		return false;
++	}
++	frameResources.rtxIndirectDispatchMappedData = nullptr;
++	profiling::RecordAllocation(
++		frameResources.rtxIndirectDispatchAllocation,
++		rtxIndirectDispatchAllocationInfo.size,
++		"SceneRtxIndirectDispatchBufferAllocation");
++	render->sceneMemoryBytes += rtxIndirectDispatchAllocationInfo.size;
++
++	VmaAllocationInfo rtxVisiblePixelCountAllocationInfo{};
++	if (!CreateBuffer(
++			context,
++			sizeof(uint32_t),
++			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
++			rtxGpuAllocationInfo,
++			&frameResources.rtxVisiblePixelCountBuffer,
++			&frameResources.rtxVisiblePixelCountAllocation,
++			&rtxVisiblePixelCountAllocationInfo)) {
++		return false;
++	}
++	frameResources.rtxVisiblePixelCountMappedData = nullptr;
++	profiling::RecordAllocation(
++		frameResources.rtxVisiblePixelCountAllocation,
++		rtxVisiblePixelCountAllocationInfo.size,
++		"SceneRtxVisiblePixelCountBufferAllocation");
++	render->sceneMemoryBytes += rtxVisiblePixelCountAllocationInfo.size;
++
++	const VkDeviceSize rtxVisiblePixelIndicesBytes = static_cast<VkDeviceSize>(kRtxVisiblePixelIndicesMaxWidth) *
++													 static_cast<VkDeviceSize>(kRtxVisiblePixelIndicesMaxHeight) *
++													 sizeof(uint32_t);
++	VmaAllocationInfo rtxVisiblePixelIndicesAllocationInfo{};
++	if (!CreateBuffer(
++			context,
++			rtxVisiblePixelIndicesBytes,
++			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
++			rtxGpuAllocationInfo,
++			&frameResources.rtxVisiblePixelIndicesBuffer,
++			&frameResources.rtxVisiblePixelIndicesAllocation,
++			&rtxVisiblePixelIndicesAllocationInfo)) {
++		return false;
++	}
++	frameResources.rtxVisiblePixelIndicesCapacityBytes = rtxVisiblePixelIndicesBytes;
++	profiling::RecordAllocation(
++		frameResources.rtxVisiblePixelIndicesAllocation,
++		rtxVisiblePixelIndicesAllocationInfo.size,
++		"SceneRtxVisiblePixelIndicesBufferAllocation");
++	render->sceneMemoryBytes += rtxVisiblePixelIndicesAllocationInfo.size;
++
+ 	VmaAllocationInfo opaqueIndirectAllocationInfo{};
+ 	if (!CreateBuffer(
+ 			context,
+diff --git a/src/shaders/voxel_rtx_shadow.rgen b/src/shaders/voxel_rtx_shadow.rgen
+index c0578e7d..6f7fbd89 100644
+--- a/src/shaders/voxel_rtx_shadow.rgen
++++ b/src/shaders/voxel_rtx_shadow.rgen
+@@ -19,6 +19,16 @@ layout(set = 0, binding = 19) uniform RtxShadowCamera {
+     vec4 cameraForwardAndScreenHeight;
+ } rtxShadowCamera;
+ 
++layout(set = 0, binding = 6, std430) readonly buffer VisiblePixelIndices {
++    uint visiblePixelIndices[];
++};
++
++layout(push_constant) uniform PushConstants {
++    uvec2 shadowMaskExtent;
++    uint useIndirectDispatch; // 1 = compacted, 0 = full-screen
++    uint _pad;
++} pushConstants;
++
+ layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
+     vec4 skyColorAndFogDensity;
+     vec4 horizonColorAndFogStart;
+@@ -58,9 +68,15 @@ struct ShadowPayload {
+ layout(location = 0) rayPayloadEXT ShadowPayload shadowPayload;
+ 
+ void main() {
+-    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
++    uvec2 pixel;
++    if (pushConstants.useIndirectDispatch != 0u) {
++        const uint packed = visiblePixelIndices[gl_LaunchIDEXT.x];
++        pixel = uvec2(packed & 0xFFFFu, packed >> 16u);
++    } else {
++        pixel = gl_LaunchIDEXT.xy;
++    }
+     const ivec2 maskSize = imageSize(rtxShadowMask);
+-    if (pixel.x >= maskSize.x || pixel.y >= maskSize.y) {
++    if (int(pixel.x) >= maskSize.x || int(pixel.y) >= maskSize.y) {
+         return;
+     }
+     const vec2 ndc = (vec2(pixel) + vec2(0.5)) / vec2(maskSize) * 2.0 - vec2(1.0);
+@@ -120,5 +136,5 @@ void main() {
+ 		shadowPayload.shadowFactor = 1.0;
+ 	}
+ 
+-    imageStore(rtxShadowMask, pixel, vec4(shadowPayload.shadowFactor, 0.0, 0.0, 1.0));
++    imageStore(rtxShadowMask, ivec2(pixel), vec4(shadowPayload.shadowFactor, 0.0, 0.0, 1.0));
+ }
+\ No newline at end of file

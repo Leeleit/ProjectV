@@ -18,6 +18,25 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-14 Phase 3 next-steps exit:** Tasks 3.2 and 3.3 rolled back (perf gate); 3.4 env var documented; landed 3.1/3.5 remain.
+
+### Phase 3 exit report
+
+| Task | Status | Notes |
+|---|---|---|
+| 3.1 push descriptors | ✅ landed | RT/DDGI push descriptors with fallback |
+| 3.5 TLAS refit | ✅ landed | UPDATE when instance count stable |
+| 3.4 RT pipeline library env | ✅ documented | Contract §37; `PROJECTV_RTX_PIPELINE_LIBRARY` ON/OFF |
+| 3.2 HZB indirect RT | ❌ rolled back | OFF 2.008 ms → ON 2.057 ms (~−2.4%); archive `legacy/docs/archive/2026-07-14-task32-attempt/` |
+| 3.3 mesh indirect | ❌ rolled back | OFF 2.069 ms → ON 2.101 ms (~−1.5%); archive `legacy/docs/archive/2026-07-14-task33-attempt/` |
+
+**Final env vars (Phase 3):**
+- `PROJECTV_RTX_PIPELINE_LIBRARY` — documented, wired (default = device capability)
+- `PROJECTV_RTX_HZB_INDIRECT` — not wired (rolled back)
+- `PROJECTV_MESH_SHADER_INDIRECT` — not wired (rolled back)
+
+**Verification:** `ctest` 44/44; validation smoke default + `PROJECTV_RTX_PIPELINE_LIBRARY=OFF` green.
+
 **2026-07-14 session continuation (Task 3.4):** Added `PROJECTV_RTX_PIPELINE_LIBRARY` env var; async deferred compile remains blocked by driver deadlock.
 - Added `PROJECTV_RTX_PIPELINE_LIBRARY` env var to `src/render/RtxShadowPipeline.cpp`. `ON`/`1` keeps the pipeline-library path (batched deferred host operations, ~15 ms init join); `OFF`/`0` forces the monolithic path (~8 ms init, higher FPS). Default follows device capability.
 - Smoke-test numbers (validation OFF, 10 frames): monolithic mean_ms=1.588; library path mean_ms=1.828. Both paths ready and render voxel-aware RT shadows.
@@ -574,8 +593,8 @@ Key per-session snapshots (from `workspace.md` archive):
 
 ## Cross-refs
 
-- `agent/knowledge.md` — 36 действующих engineering contracts + 5 runtime facts
-  (post-reset, rebuilt from code 2026-06-25).
+- `agent/knowledge.md` — 37 действующих engineering contracts + 6 runtime facts
+  (post-reset, rebuilt from code 2026-06-25; Phase 3 §37 + R6 notes 2026-07-14).
 - `AGENTS.md §7` — рабочий чеклист, §4 — sources of truth, §5 — протокол коммитов.
 - `TODO.md` — roadmap + 5.2-5.7 RTX milestones (closed) + 7.x post-RTX polish
   (open).

@@ -1,0 +1,66 @@
+#version 460
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct ChunkDescriptor {
+    ivec4 chunkOrigin;
+    uvec4 chunkExtentAndNonAir;
+    uvec4 voxelDataInfo;
+    uvec4 drawRanges;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer PackedChunkDescriptors {
+    ChunkDescriptor chunkDescriptors[];
+};
+
+layout(set = 0, binding = 2, std430) writeonly buffer VisibleChunkIdBuffer {
+    uint visibleChunkIds[];
+};
+
+layout(set = 0, binding = 3, std430) buffer VisibilityCounter {
+    uint visibleCount;
+};
+
+layout(set = 0, binding = 4, std430) buffer MeshDrawIndirect {
+    uint groupCountX;
+    uint groupCountY;
+    uint groupCountZ;
+};
+
+layout(push_constant) uniform CullPushConstants {
+    uvec4 dispatchParams;
+    // EVIL: 6 unnormalized frustum planes packed into push constants. Vulkan guarantees 128-byte push constant min; this is 16 + 96 = 112 bytes. Planes unnormalized OK because shader uses `r = halfExtent * (absN.x + absN.y + absN.z)` which scales linearly with plane magnitude.
+    vec4 frustumPlanes[6];
+} pushConstants;
+
+bool AabbOutsideFrustum(const vec3 origin, const float halfExtent)
+{
+    for (int i = 0; i < 6; ++i) {
+        const vec3 absN = abs(pushConstants.frustumPlanes[i].xyz);
+        const float r = halfExtent * (absN.x + absN.y + absN.z);
+        if (dot(pushConstants.frustumPlanes[i].xyz, origin) + pushConstants.frustumPlanes[i].w < -r) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void main()
+{
+    const uint chunkIndex = gl_GlobalInvocationID.x;
+    if (chunkIndex >= pushConstants.dispatchParams.x) {
+        return;
+    }
+
+    const ChunkDescriptor chunk = chunkDescriptors[chunkIndex];
+    const vec3 origin = vec3(chunk.chunkOrigin.xyz);
+    const float halfExtent = 0.5 * float(chunk.chunkExtentAndNonAir.x);
+
+    if (AabbOutsideFrustum(origin, halfExtent)) {
+        return;
+    }
+
+    const uint slot = atomicAdd(visibleCount, 1u);
+    visibleChunkIds[slot] = chunkIndex;
+    atomicMax(groupCountX, slot + 1u); // converge to final visibleCount across workgroups
+}

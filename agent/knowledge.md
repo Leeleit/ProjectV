@@ -1118,6 +1118,28 @@ shared between `volumetric_fog.comp` and `voxel.frag`.
 **Почему:** 3 subsystems — optional visual upgrades. Default OFF для predictable
 benchmark/regression numbers. ON = full atmospheric look.
 
+## 37. RT shadow pipeline path selection
+
+**Decision:** `src/render/RtxShadowPipeline.cpp` supports two paths selected at runtime by
+`PROJECTV_RTX_PIPELINE_LIBRARY`:
+
+- `ON` / `1` / unset on capable device: pipeline-library path with batched deferred host
+  operations. Cold-start join ~15 ms, slightly higher per-frame cost (~1.8 ms vs ~1.6 ms in
+  VoxelLab 10-frame smoke).
+- `OFF` / `0`: monolithic `vkCreateRayTracingPipelinesKHR` path. Cold-start ~8 ms, lower
+  per-frame cost.
+
+**Why:** The pipeline-library path is architecturally cleaner for incremental updates and
+shader hot-reload, but on the current NVIDIA driver it compiles ~2× slower for cold start.
+The env var lets us choose correctness/experimentation (library) vs. launch latency/FPS
+(monolithic) without rebuilding.
+
+**Async note:** Offloading the library-path compile to a worker thread via
+`VkDeferredOperationKHR` deadlocks on this driver when the main thread is submitting frames.
+The attempt is archived at `legacy/docs/archive/2026-07-14-task34-attempt/`. True async init
+requires restructuring the render loop to defer SBT/shadow-mask setup until the pipeline is
+ready; tracked as future work, not Phase 3.
+
 ---
 
 # Part B — Runtime facts
@@ -1225,6 +1247,18 @@ benchmark/regression numbers. ON = full atmospheric look.
   `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL` vs `VK_IMAGE_LAYOUT_GENERAL` layout warnings at
   `vkQueueSubmit2`. This exists before Phase 3 changes and is unrelated to push descriptors
   or TLAS refit.
+- **HZB-driven indirect RT shadow dispatch (Task 3.2):** implemented and rolled back.
+  VoxelLab 120-frame bench: `PROJECTV_RTX_HZB_INDIRECT=OFF` mean_ms=2.008 / 498 fps;
+  `ON` mean_ms=2.057 / 486 fps (~+2.4% slower). Gate requires ≥10% improvement. Compaction
+  + mask clear + barriers outweigh cull savings on a small scene; HZB mips are LINEAR-filtered
+  (not min-reduction), so coarse mip culling is approximate. Attempt archived at
+  `legacy/docs/archive/2026-07-14-task32-attempt/`. Validation smoke with ON was clean.
+  Env var `PROJECTV_RTX_HZB_INDIRECT` is not wired in tree after rollback.
+- **GPU-driven indirect mesh dispatch (Task 3.3):** implemented and rolled back.
+  VoxelLab 120-frame bench (`PROJECTV_MESH_SHADER_PIPELINE=ON`):
+  `PROJECTV_MESH_SHADER_INDIRECT=OFF` mean_ms=2.069 / 483 fps;
+  `ON` mean_ms=2.101 / 476 fps (~+1.5% slower). Gate requires ≥10% improvement.
+  Attempt archived at `legacy/docs/archive/2026-07-14-task33-attempt/`. Env var not wired after rollback.
 
 ---
 

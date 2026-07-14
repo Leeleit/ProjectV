@@ -1,0 +1,79 @@
+#version 460
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform texture2D hizTexture;
+layout(set = 0, binding = 1) uniform sampler hizSampler;
+
+layout(set = 0, binding = 2, std430) buffer IndirectDispatch {
+	uint width; // maps to VkTraceRaysIndirectCommandKHR::width
+	uint height;
+	uint depth;
+	uint pad;
+} indirectDispatch;
+
+layout(set = 0, binding = 3, std430) buffer VisiblePixelCount {
+	uint visiblePixelCount;
+};
+
+layout(set = 0, binding = 4, std430) writeonly buffer VisiblePixelIndices {
+	uint indices[];
+};
+
+layout(push_constant) uniform PushConstants {
+	uvec2 shadowMaskExtent;
+	uvec2 hizExtent;
+} pushConstants;
+
+const uint kTileSize = 8u;
+const uint kHzbOccluderMip = 2u; // conservative; tune with Tracy/NSight
+
+bool IsPixelVisible(ivec2 pixel)
+{
+	if (any(lessThan(pixel, ivec2(0))) ||
+		any(greaterThanEqual(pixel, ivec2(pushConstants.shadowMaskExtent)))) {
+		return false;
+	}
+	const vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(pushConstants.shadowMaskExtent);
+	const float pixelDepth = textureLod(sampler2D(hizTexture, hizSampler), uv, 0.0).r;
+	const float occluderDepth = textureLod(sampler2D(hizTexture, hizSampler), uv, float(kHzbOccluderMip)).r;
+	return pixelDepth <= occluderDepth + 1e-4; // visible if not behind coarser HZB surface
+}
+
+void main()
+{
+	const uint tileIndex = gl_GlobalInvocationID.x;
+	const uint tilesX = (pushConstants.shadowMaskExtent.x + kTileSize - 1u) / kTileSize;
+	const uint tilesY = (pushConstants.shadowMaskExtent.y + kTileSize - 1u) / kTileSize;
+	const uint totalTiles = tilesX * tilesY;
+	if (tileIndex >= totalTiles) {
+		return;
+	}
+
+	const uint tileX = tileIndex % tilesX;
+	const uint tileY = tileIndex / tilesX;
+	const uint baseX = tileX * kTileSize;
+	const uint baseY = tileY * kTileSize;
+
+	uint localVisible[kTileSize * kTileSize];
+	uint localCount = 0u;
+	for (uint dy = 0u; dy < kTileSize; ++dy) {
+		for (uint dx = 0u; dx < kTileSize; ++dx) {
+			const ivec2 pixel = ivec2(baseX + dx, baseY + dy);
+			if (IsPixelVisible(pixel)) {
+				localVisible[localCount++] = (uint(pixel.y) << 16u) | uint(pixel.x);
+			}
+		}
+	}
+
+	const uint slot = atomicAdd(visiblePixelCount, localCount);
+	for (uint i = 0u; i < localCount; ++i) {
+		indices[slot + i] = localVisible[i];
+	}
+	atomicMax(indirectDispatch.width, slot + localCount); // final width = max exclusive end across tiles
+	if (tileIndex == 0u) {
+		indirectDispatch.height = 1u;
+		indirectDispatch.depth = 1u;
+		indirectDispatch.pad = 0u;
+	}
+}

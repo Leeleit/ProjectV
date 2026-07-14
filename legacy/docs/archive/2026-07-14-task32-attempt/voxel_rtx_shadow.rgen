@@ -1,0 +1,140 @@
+#version 460
+#extension GL_EXT_ray_tracing : require // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+#extension GL_EXT_ray_query : require
+
+// Stage 5.2.E voxel-aware RTX shadow ray generation shader.
+// Per-pixel dispatch: reconstructs world position from gl_LaunchIDEXT and inverse
+// view-projection matrix, traces one shadow ray toward the sun direction, writes
+// shadow factor (0.0 = in shadow, 1.0 = lit) into rtxShadowMask storage image.
+// Per Vulkan spec: rgen shader owns the dispatch; .rint + .rchit + .rmiss are
+// called automatically by the fixed-function traversal based on ray-vs-BVH hits.
+
+layout(set = 0, binding = 13) uniform accelerationStructureEXT rtxTlas;
+
+layout(set = 0, binding = 18, r8) uniform image2D rtxShadowMask;
+
+layout(set = 0, binding = 19) uniform RtxShadowCamera {
+    mat4 inverseViewProjection;
+    vec4 cameraPositionAndScreenWidth;
+    vec4 cameraForwardAndScreenHeight;
+} rtxShadowCamera;
+
+layout(set = 0, binding = 6, std430) readonly buffer VisiblePixelIndices {
+    uint visiblePixelIndices[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uvec2 shadowMaskExtent;
+    uint useIndirectDispatch; // 1 = compacted, 0 = full-screen
+    uint _pad;
+} pushConstants;
+
+layout(set = 0, binding = 3, std430) readonly buffer SceneLightingBuffer {
+    vec4 skyColorAndFogDensity;
+    vec4 horizonColorAndFogStart;
+    vec4 groundColorAndFogMax;
+    vec4 sunColorAndIntensity;
+    vec4 sunDirectionAndWrap;
+    vec4 postProcess;
+    vec4 sunContactShadowParams;
+    vec4 ambientOcclusionParams;
+    vec4 colorGrading;
+    vec4 exposureControl;
+    vec4 localPointLightPositionAndRadius;
+    vec4 localPointLightColorAndIntensity;
+    vec4 localPointLightParams;
+} sceneLighting;
+
+// EVIL: kRtxSunShadowMaxDistanceMeters = 256. Hard cap matching voxel.frag ray-query path.
+// Identical contract per TODO.md §5.2.B "T_max = 256.0 (или scene bounding box diagonal)".
+const float kRtxSunShadowMaxDistanceMeters = 256.0;
+
+// EVIL: kRtxSunShadowTMinMeters = 0.5. T_min offset along the sun-direction ray to avoid
+// self-shadow artifacts. The ray launches from the camera near plane (NOT from the
+// shaded surface fragment) so a tiny T_min like 0.001 causes every floor fragment whose
+// near-plane ray origin lies inside a floor voxel to immediately hit that same voxel and
+// read shadowFactor = 0.0. With VoxelLab voxel size 1.0 m per `agent/knowledge.md`,
+// 0.5 m lets the ray escape the launch voxel before the procedural intersection shader
+// starts its DDA walk. Per operator-reported regression in session 22x (motion along the
+// platform floor progressively turned the floor black as more fragments sampled
+// shadowFactor = 0.0 from the self-hit AABB).
+const float kRtxSunShadowTMinMeters = 0.5;
+
+struct ShadowPayload {
+    float shadowFactor;
+    float hitT;
+};
+
+layout(location = 0) rayPayloadEXT ShadowPayload shadowPayload;
+
+void main() {
+    uvec2 pixel;
+    if (pushConstants.useIndirectDispatch != 0u) {
+        const uint packed = visiblePixelIndices[gl_LaunchIDEXT.x];
+        pixel = uvec2(packed & 0xFFFFu, packed >> 16u);
+    } else {
+        pixel = gl_LaunchIDEXT.xy;
+    }
+    const ivec2 maskSize = imageSize(rtxShadowMask);
+    if (int(pixel.x) >= maskSize.x || int(pixel.y) >= maskSize.y) {
+        return;
+    }
+    const vec2 ndc = (vec2(pixel) + vec2(0.5)) / vec2(maskSize) * 2.0 - vec2(1.0);
+    const vec4 clipNear = vec4(ndc, -1.0, 1.0);
+    const vec4 clipFar = vec4(ndc, 1.0, 1.0);
+    const vec4 worldNear = rtxShadowCamera.inverseViewProjection * clipNear;
+    const vec4 worldFar = rtxShadowCamera.inverseViewProjection * clipFar;
+    const vec3 worldOrigin = worldNear.xyz / worldNear.w;
+    const vec3 worldFarPos = worldFar.xyz / worldFar.w;
+    const vec3 viewDir = normalize(worldFarPos - worldOrigin);
+
+    const vec3 sunDir = normalize(sceneLighting.sunDirectionAndWrap.xyz);
+
+    // EVIL: 2-pass trace (operator RCA session 22x, follow-up to self-shadow fix).
+    // Primary ray from near plane along viewDir finds the surface fragment position;
+    // then shadow ray fires from that surface toward sunDir. This replaces the
+    // previous single-shot launch from near plane toward sun which gave wrong answers
+    // for floor pixels (near-plane origin inside floor voxel AABB → hit → shadowFactor=0).
+    // T_max for primary = length of the view-frustum segment at this pixel to bound
+    // the search to the visible scene.
+    const float viewSegmentLength = length(worldFarPos - worldOrigin);
+
+    // Step 1: primary ray along view direction to find the surface hit point.
+    shadowPayload.shadowFactor = 1.0;
+    shadowPayload.hitT = -1.0;
+    traceRayEXT(
+        rtxTlas,
+        gl_RayFlagsOpaqueEXT,
+        0xFFu,
+        0u,
+        1u,
+        0u,
+        worldOrigin,
+        0.001,
+        viewDir,
+        viewSegmentLength,
+        0);
+
+	if (shadowPayload.hitT >= 0.0) {
+		const vec3 surfacePos = worldOrigin + viewDir * shadowPayload.hitT;
+		// EVIL: bias 0.003 along sunDir and T_min 0.001 to prevent self-intersection of voxels (voxel size is 1.0m)
+		const vec3 biasedOrigin = surfacePos + sunDir * 0.003;
+		shadowPayload.shadowFactor = 1.0;
+		traceRayEXT(
+			rtxTlas,
+			gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT,
+			0xFFu,
+			0u,
+			1u,
+			0u,
+			biasedOrigin,
+			0.001,
+			sunDir,
+			kRtxSunShadowMaxDistanceMeters,
+			0);
+	} else {
+		shadowPayload.shadowFactor = 1.0;
+	}
+
+    imageStore(rtxShadowMask, ivec2(pixel), vec4(shadowPayload.shadowFactor, 0.0, 0.0, 1.0));
+}
