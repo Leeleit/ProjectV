@@ -36,6 +36,10 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
   - Added `VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR` to BLAS build/sizing flags in `src/render/RayTracedShadowsBlas.cpp`.
   - Added `ALLOW_UPDATE` to TLAS build flags and implemented runtime refit detection in `src/render/RayTracedShadowsTlas.cpp`: when `tlasInstanceCount` matches the previous frame, query update scratch size and use `VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR` with `srcAccelerationStructure = m_config.tlas`; otherwise fall back to `BUILD` mode.
   - Added `m_previousTlasInstanceCount` to `RayTracedShadows` and reset it on shutdown.
+- Task 3.4 (RT pipeline libraries + deferred host ops):
+  - Added `VK_KHR_pipeline_library` probe (`HardwareRayTracingSupport.pipelineLibrary`) and conditional device extension enablement in `src/render/vulkan/VulkanBootstrapFeatures.cpp`.
+  - Added a Tracy zone `RtxShadowPipeline.CreatePipeline` around `vkCreateRayTracingPipelinesKHR` in `src/render/RtxShadowPipeline.cpp` for reproducible cold-start measurement.
+  - Attempted split into ray-gen / miss / hit-group pipeline libraries with `VK_PIPELINE_CREATE_LIBRARY_BIT_KHR` and deferred host operations. Tracy showed cold-start creation time regressed from ~8.1 ms (monolithic) to ~17–18 ms (libraries + link) on the same VoxelLab capture, so the library path was rolled back. The monolithic path remains with the Tracy zone; `VK_KHR_pipeline_library` probing stays for future work.
 - Verification: `ninja -C build/linux-clang-debug ProjectV` green, `ctest` 44/44 pass, validation smoke (`PROJECTV_ENABLE_VALIDATION=ON`, single `FINAL` view) PASS. Pre-existing Vulkan validation layout warnings for DDGI irradiance/distance images remain (unrelated to this work; present before Phase 3 changes).
 
 **2026-07-14 session (Vulkan 1.4 Phase 2 cleanup):** Phase 2 exit criteria satisfied.

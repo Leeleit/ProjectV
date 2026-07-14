@@ -6,6 +6,7 @@
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
+#include "debug/Profiling.hpp"
 #include "fmt/format.h"
 
 namespace projectv::render {
@@ -181,10 +182,13 @@ bool RtxShadowPipeline::Initialize(
 	pipelineInfo.maxPipelineRayRecursionDepth = 1u;
 	pipelineInfo.layout = m_pipelineLayout;
 
-	if (vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, context.pipelineCache, 1u, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
-		runtime::LogVkFailure("RtxShadowPipeline.vkCreateRayTracingPipelinesKHR", VK_ERROR_INITIALIZATION_FAILED);
-		Shutdown(context);
-		return false;
+	{
+		PV_PROFILE_ZONE_N("RtxShadowPipeline.CreatePipeline");
+		if (vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, context.pipelineCache, 1u, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS) {
+			runtime::LogVkFailure("RtxShadowPipeline.vkCreateRayTracingPipelinesKHR", VK_ERROR_INITIALIZATION_FAILED);
+			Shutdown(context);
+			return false;
+		}
 	}
 
 	SDL_Log(

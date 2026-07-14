@@ -1209,6 +1209,14 @@ benchmark/regression numbers. ON = full atmospheric look.
   matches the previous frame and the update scratch size fits in the pre-allocated scratch
   buffer, `RecordTlasBuild` uses `VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR` with
   `srcAccelerationStructure = m_config.tlas`; otherwise it falls back to `BUILD` mode.
+- **RT pipeline libraries + deferred host ops (Task 3.4):** attempted and rolled back.
+  Baseline cold-start `vkCreateRayTracingPipelinesKHR` in `RtxShadowPipeline.Initialize` is
+  ~8.1 ms (Tracy, 120-frame VoxelLab capture). Splitting the pipeline into ray-gen, miss,
+  and procedural-hit-group libraries plus final link raised the main-thread creation time to
+  ~17–18 ms on the same hardware, even with deferred host operations and parallel waits.
+  The RT shadow pipeline is too small (3 shader groups) for library linking to amortize its
+  overhead. `VK_KHR_pipeline_library` probing and conditional enablement remain in place for
+  future reuse; the monolithic pipeline path stays with a Tracy zone for ongoing measurement.
 - **Known pre-existing validation noise:** DDGI irradiance/distance images trigger
   `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL` vs `VK_IMAGE_LAYOUT_GENERAL` layout warnings at
   `vkQueueSubmit2`. This exists before Phase 3 changes and is unrelated to push descriptors

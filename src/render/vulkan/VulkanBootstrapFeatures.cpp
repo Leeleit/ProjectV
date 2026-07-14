@@ -27,6 +27,7 @@ constexpr char kMeshShaderExtension[] = "VK_EXT_mesh_shader";
 constexpr char kAccelerationStructureExtension[] = "VK_KHR_acceleration_structure";
 constexpr char kRayQueryExtension[] = "VK_KHR_ray_query";
 constexpr char kRayTracingPipelineExtension[] = "VK_KHR_ray_tracing_pipeline";
+constexpr char kPipelineLibraryExtension[] = "VK_KHR_pipeline_library";
 constexpr char kDeferredHostOperationsExtension[] = "VK_KHR_deferred_host_operations";
 
 bool CheckDeviceExtensionSupport(const VkPhysicalDevice physicalDevice)
@@ -407,6 +408,9 @@ std::vector<const char *> BuildDeviceExtensionList(const PhysicalDeviceCandidate
 		deviceExtensions.push_back(kRayQueryExtension);
 		if (selected.supportsRayTracingPipeline) {
 			deviceExtensions.push_back(kRayTracingPipelineExtension);
+		}
+		if (selected.rayTracingSupport.pipelineLibrary) {
+			deviceExtensions.push_back(kPipelineLibraryExtension);
 		}
 		if (selected.rayTracingSupport.deferredHostOperations) {
 			deviceExtensions.push_back(kDeferredHostOperationsExtension);

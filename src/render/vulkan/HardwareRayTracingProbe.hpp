@@ -8,6 +8,7 @@ struct HardwareRayTracingSupport {
 	bool accelerationStructure = false;
 	bool rayQuery = false;
 	bool rayTracingPipeline = false;
+	bool pipelineLibrary = false;
 	bool deferredHostOperations = false;
 	bool accelerationStructureHostCommands = false;
 	bool bufferDeviceAddress = false;

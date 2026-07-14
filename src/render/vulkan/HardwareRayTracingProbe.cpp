@@ -12,6 +12,7 @@ namespace {
 constexpr const char *kAccelerationStructureExtension = "VK_KHR_acceleration_structure";
 constexpr const char *kRayQueryExtension = "VK_KHR_ray_query";
 constexpr const char *kRayTracingPipelineExtension = "VK_KHR_ray_tracing_pipeline";
+constexpr const char *kPipelineLibraryExtension = "VK_KHR_pipeline_library";
 constexpr const char *kDeferredHostOperationsExtension = "VK_KHR_deferred_host_operations";
 
 bool HasDeviceExtension(
@@ -49,6 +50,7 @@ bool ProbeHardwareRayTracingSupport(
 	outSupport->accelerationStructure = HasDeviceExtension(physicalDevice, kAccelerationStructureExtension);
 	outSupport->rayQuery = HasDeviceExtension(physicalDevice, kRayQueryExtension);
 	outSupport->rayTracingPipeline = HasDeviceExtension(physicalDevice, kRayTracingPipelineExtension);
+	outSupport->pipelineLibrary = HasDeviceExtension(physicalDevice, kPipelineLibraryExtension);
 	outSupport->deferredHostOperations = HasDeviceExtension(physicalDevice, kDeferredHostOperationsExtension);
 
 	if (outSupport->rayQuery) {
@@ -121,11 +123,12 @@ bool ProbeHardwareRayTracingSupport(
 
 	SDL_Log(
 		"Render: ProbeHardwareRayTracingSupport: RTX path available (accelerationStructure=%d rayQuery=%d "
-		"rayTracingPipeline=%d deferredHostOps=%d hostCommands=%d bufferDeviceAddress=%d "
+		"rayTracingPipeline=%d pipelineLibrary=%d deferredHostOps=%d hostCommands=%d bufferDeviceAddress=%d "
 		"maxPrimitives=%llu minScratchAlign=%u sbtHandle=%u sbtBaseAlign=%u sbtHandleAlign=%u)",
 		1,
 		1,
 		outSupport->rayTracingPipeline ? 1 : 0,
+		outSupport->pipelineLibrary ? 1 : 0,
 		outSupport->deferredHostOperations ? 1 : 0,
 		outSupport->accelerationStructureHostCommands ? 1 : 0,
 		outSupport->bufferDeviceAddress ? 1 : 0,
