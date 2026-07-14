@@ -20,13 +20,8 @@ constexpr const char *kRtxShadowClosestHitShaderFilename = "voxel_rtx_shadow.rch
 constexpr const char *kRtxShadowMissShaderFilename = "voxel_rtx_shadow.rmiss.spv";
 
 constexpr const char *kZoneCreatePipeline = "RtxShadowPipeline.CreatePipeline";
-constexpr const char *kZoneCreateRayGenLibrary = "RtxShadowPipeline.CreateRayGenLibrary";
-constexpr const char *kZoneCreateMissLibrary = "RtxShadowPipeline.CreateMissLibrary";
-constexpr const char *kZoneCreateHitGroupLibrary = "RtxShadowPipeline.CreateHitGroupLibrary";
+constexpr const char *kZoneCreateLibraries = "RtxShadowPipeline.CreateLibraries";
 constexpr const char *kZoneLinkLibraries = "RtxShadowPipeline.LinkLibraries";
-constexpr const char *kZoneJoinRayGenLibrary = "RtxShadowPipeline.JoinRayGenLibrary";
-constexpr const char *kZoneJoinMissLibrary = "RtxShadowPipeline.JoinMissLibrary";
-constexpr const char *kZoneJoinHitGroupLibrary = "RtxShadowPipeline.JoinHitGroupLibrary";
 
 VkShaderModule CreateShaderModule(const VkDevice device, const std::vector<char> &code, const char *debugName)
 {
@@ -67,68 +62,6 @@ void DestroyShaderModule(const VkDevice device, VkShaderModule &module) noexcept
 		vkDestroyShaderModule(device, module, nullptr);
 		module = VK_NULL_HANDLE;
 	}
-}
-
-struct DeferredPipelineCreate {
-	VkDeferredOperationKHR deferredOp = VK_NULL_HANDLE;
-	std::vector<std::future<void>> futures;
-	VkPipeline pipeline = VK_NULL_HANDLE;
-	bool wasDeferred = false;
-	uint32_t maxConcurrency = 0u;
-};
-
-bool CreateRayTracingPipelineWithOptionalDeferral(
-	const VkDevice device,
-	const VkPipelineCache pipelineCache,
-	const bool useDeferredHostOperations,
-	const VkRayTracingPipelineCreateInfoKHR &createInfo,
-	const char *debugName,
-	DeferredPipelineCreate *out)
-{
-	if (!useDeferredHostOperations) {
-		const VkResult result = vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, pipelineCache, 1u, &createInfo, nullptr, &out->pipeline);
-		if (result != VK_SUCCESS) {
-			runtime::LogVkFailure(fmt::format("RtxShadowPipeline.{}", debugName).c_str(), result);
-		}
-		return result == VK_SUCCESS && out->pipeline != VK_NULL_HANDLE;
-	}
-
-	VkResult createOpResult = vkCreateDeferredOperationKHR(device, nullptr, &out->deferredOp);
-	if (createOpResult != VK_SUCCESS) {
-		SDL_Log("Render: RtxShadowPipeline.%s: vkCreateDeferredOperationKHR failed (%d); falling back to inline", debugName, createOpResult);
-		const VkResult result = vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, pipelineCache, 1u, &createInfo, nullptr, &out->pipeline);
-		if (result != VK_SUCCESS) {
-			runtime::LogVkFailure(fmt::format("RtxShadowPipeline.{}", debugName).c_str(), result);
-		}
-		return result == VK_SUCCESS && out->pipeline != VK_NULL_HANDLE;
-	}
-
-	const VkResult createResult = vkCreateRayTracingPipelinesKHR(device, out->deferredOp, pipelineCache, 1u, &createInfo, nullptr, &out->pipeline);
-
-	if (createResult == VK_OPERATION_DEFERRED_KHR) {
-		out->wasDeferred = true;
-		out->maxConcurrency = vkGetDeferredOperationMaxConcurrencyKHR(device, out->deferredOp);
-		const uint32_t joinThreads = out->maxConcurrency > 0u ? out->maxConcurrency : 1u;
-		out->futures.reserve(joinThreads);
-		for (uint32_t i = 0u; i < joinThreads; ++i) {
-			out->futures.emplace_back(std::async(std::launch::async, [device, deferredOp = out->deferredOp]() {
-				PV_PROFILE_ZONE_N("RtxShadowPipeline.DeferredJoin");
-				VkResult joinResult = VK_SUCCESS;
-				do {
-					joinResult = vkDeferredOperationJoinKHR(device, deferredOp);
-				} while (joinResult == VK_THREAD_IDLE_KHR);
-			}));
-		}
-		return true;
-	}
-
-	vkDestroyDeferredOperationKHR(device, out->deferredOp, nullptr);
-	out->deferredOp = VK_NULL_HANDLE;
-	if (createResult != VK_SUCCESS && createResult != VK_OPERATION_NOT_DEFERRED_KHR) {
-		out->pipeline = VK_NULL_HANDLE;
-		runtime::LogVkFailure(fmt::format("RtxShadowPipeline.{}", debugName).c_str(), createResult);
-	}
-	return (createResult == VK_SUCCESS || createResult == VK_OPERATION_NOT_DEFERRED_KHR) && out->pipeline != VK_NULL_HANDLE;
 }
 
 } // namespace
@@ -244,121 +177,119 @@ bool RtxShadowPipeline::Initialize(
 				return info;
 			};
 
-			DeferredPipelineCreate rayGenCreate{};
-			DeferredPipelineCreate missCreate{};
-			DeferredPipelineCreate hitGroupCreate{};
+			const std::array<VkPipelineShaderStageCreateInfo, 1> rayGenStages{{
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
+			}};
+			std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> rayGenGroups{};
+			rayGenGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+			rayGenGroups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+			rayGenGroups[0].generalShader = 0;
+			rayGenGroups[0].closestHitShader = VK_SHADER_UNUSED_KHR;
+			rayGenGroups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
+			rayGenGroups[0].intersectionShader = VK_SHADER_UNUSED_KHR;
+
+			const std::array<VkPipelineShaderStageCreateInfo, 1> missStages{{
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_MISS_BIT_KHR, .module = m_missModule, .pName = "main"},
+			}};
+			std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> missGroups{};
+			missGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+			missGroups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+			missGroups[0].generalShader = 0;
+			missGroups[0].closestHitShader = VK_SHADER_UNUSED_KHR;
+			missGroups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
+			missGroups[0].intersectionShader = VK_SHADER_UNUSED_KHR;
+
+			const std::array<VkPipelineShaderStageCreateInfo, 2> hitGroupStages{{
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, .module = m_closestHitModule, .pName = "main"},
+			}};
+			std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> hitGroups{};
+			hitGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+			hitGroups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
+			hitGroups[0].generalShader = VK_SHADER_UNUSED_KHR;
+			hitGroups[0].closestHitShader = 1;
+			hitGroups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
+			hitGroups[0].intersectionShader = 0;
+
+			const std::array<VkRayTracingPipelineCreateInfoKHR, 3> libraryCreateInfos{{
+				buildLibraryCreateInfo(rayGenStages.data(), static_cast<uint32_t>(rayGenStages.size()), rayGenGroups.data(), static_cast<uint32_t>(rayGenGroups.size()), 1u),
+				buildLibraryCreateInfo(missStages.data(), static_cast<uint32_t>(missStages.size()), missGroups.data(), static_cast<uint32_t>(missGroups.size()), 1u),
+				buildLibraryCreateInfo(hitGroupStages.data(), static_cast<uint32_t>(hitGroupStages.size()), hitGroups.data(), static_cast<uint32_t>(hitGroups.size()), 1u),
+			}};
+			std::array<VkPipeline, 3> libraryPipelines{};
 
 			{
-				const std::array<VkPipelineShaderStageCreateInfo, 1> rayGenStages{{
-					{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
-				}};
-				std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> rayGenGroups{};
-				rayGenGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-				rayGenGroups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-				rayGenGroups[0].generalShader = 0;
-				rayGenGroups[0].closestHitShader = VK_SHADER_UNUSED_KHR;
-				rayGenGroups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
-				rayGenGroups[0].intersectionShader = VK_SHADER_UNUSED_KHR;
-				{
-					PV_PROFILE_ZONE_N(kZoneCreateRayGenLibrary);
-					if (!CreateRayTracingPipelineWithOptionalDeferral(
-							device,
-							VK_NULL_HANDLE,
-							useDeferredHostOperations,
-							buildLibraryCreateInfo(rayGenStages.data(), static_cast<uint32_t>(rayGenStages.size()), rayGenGroups.data(), static_cast<uint32_t>(rayGenGroups.size()), 1u),
-							"CreateRayGenLibrary",
-							&rayGenCreate)) {
+				PV_PROFILE_ZONE_N(kZoneCreateLibraries); // One zone covers all three library kickoffs.
+				if (!useDeferredHostOperations) {
+					const VkResult result = vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, context.pipelineCache, static_cast<uint32_t>(libraryCreateInfos.size()), libraryCreateInfos.data(), nullptr, libraryPipelines.data());
+					if (result != VK_SUCCESS) {
+						runtime::LogVkFailure("RtxShadowPipeline.CreateLibraries", result);
 						Shutdown(context);
 						return false;
 					}
-				}
-
-				const std::array<VkPipelineShaderStageCreateInfo, 1> missStages{{
-					{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_MISS_BIT_KHR, .module = m_missModule, .pName = "main"},
-				}};
-				std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> missGroups{};
-				missGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-				missGroups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-				missGroups[0].generalShader = 0;
-				missGroups[0].closestHitShader = VK_SHADER_UNUSED_KHR;
-				missGroups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
-				missGroups[0].intersectionShader = VK_SHADER_UNUSED_KHR;
-				{
-					PV_PROFILE_ZONE_N(kZoneCreateMissLibrary);
-					if (!CreateRayTracingPipelineWithOptionalDeferral(
-							device,
-							VK_NULL_HANDLE,
-							useDeferredHostOperations,
-							buildLibraryCreateInfo(missStages.data(), static_cast<uint32_t>(missStages.size()), missGroups.data(), static_cast<uint32_t>(missGroups.size()), 1u),
-							"CreateMissLibrary",
-							&missCreate)) {
-						Shutdown(context);
-						return false;
-					}
-				}
-
-				const std::array<VkPipelineShaderStageCreateInfo, 2> hitGroupStages{{
-					{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
-					{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, .module = m_closestHitModule, .pName = "main"},
-				}};
-				std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> hitGroups{};
-				hitGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-				hitGroups[0].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR;
-				hitGroups[0].generalShader = VK_SHADER_UNUSED_KHR;
-				hitGroups[0].closestHitShader = 1;
-				hitGroups[0].anyHitShader = VK_SHADER_UNUSED_KHR;
-				hitGroups[0].intersectionShader = 0;
-				{
-					PV_PROFILE_ZONE_N(kZoneCreateHitGroupLibrary);
-					if (!CreateRayTracingPipelineWithOptionalDeferral(
-							device,
-							VK_NULL_HANDLE,
-							useDeferredHostOperations,
-							buildLibraryCreateInfo(hitGroupStages.data(), static_cast<uint32_t>(hitGroupStages.size()), hitGroups.data(), static_cast<uint32_t>(hitGroups.size()), 1u),
-							"CreateHitGroupLibrary",
-							&hitGroupCreate)) {
-						Shutdown(context);
-						return false;
+				} else {
+					VkDeferredOperationKHR deferredOp = VK_NULL_HANDLE;
+					VkResult createOpResult = vkCreateDeferredOperationKHR(device, nullptr, &deferredOp);
+					if (createOpResult != VK_SUCCESS) {
+						SDL_Log("Render: RtxShadowPipeline: vkCreateDeferredOperationKHR failed (%d); falling back to inline", createOpResult);
+						const VkResult result = vkCreateRayTracingPipelinesKHR(device, VK_NULL_HANDLE, context.pipelineCache, static_cast<uint32_t>(libraryCreateInfos.size()), libraryCreateInfos.data(), nullptr, libraryPipelines.data());
+						if (result != VK_SUCCESS) {
+							runtime::LogVkFailure("RtxShadowPipeline.CreateLibraries", result);
+							Shutdown(context);
+							return false;
+						}
+					} else {
+						const VkResult createResult = vkCreateRayTracingPipelinesKHR(device, deferredOp, context.pipelineCache, static_cast<uint32_t>(libraryCreateInfos.size()), libraryCreateInfos.data(), nullptr, libraryPipelines.data());
+						if (createResult == VK_OPERATION_DEFERRED_KHR) {
+							const uint32_t maxConcurrency = vkGetDeferredOperationMaxConcurrencyKHR(device, deferredOp);
+							const uint32_t joinThreads = maxConcurrency > 0u ? maxConcurrency : 1u;
+							std::vector<std::future<void>> futures;
+							futures.reserve(joinThreads);
+							const uint64_t joinStartTicks = SDL_GetPerformanceCounter();
+							for (uint32_t i = 0u; i < joinThreads; ++i) {
+								futures.emplace_back(std::async(std::launch::async, [device, deferredOp]() {
+									PV_PROFILE_ZONE_N("RtxShadowPipeline.DeferredJoin");
+									VkResult joinResult = VK_SUCCESS;
+									do {
+										joinResult = vkDeferredOperationJoinKHR(device, deferredOp);
+									} while (joinResult == VK_THREAD_IDLE_KHR);
+								}));
+							}
+							for (std::future<void> &future : futures) {
+								future.wait();
+							}
+							const uint64_t joinEndTicks = SDL_GetPerformanceCounter();
+							for (std::future<void> &future : futures) {
+								future.get();
+							}
+							const VkResult opResult = vkGetDeferredOperationResultKHR(device, deferredOp);
+							vkDestroyDeferredOperationKHR(device, deferredOp, nullptr);
+							if (opResult != VK_SUCCESS) {
+								SDL_Log("Render: RtxShadowPipeline: batched library join failed (%d)", opResult);
+								runtime::LogVkFailure("RtxShadowPipeline.DeferredLibraryJoin", opResult);
+								Shutdown(context);
+								return false;
+							}
+							const Uint64 perfFrequency = SDL_GetPerformanceFrequency();
+							if (perfFrequency > 0u) {
+								const double joinMs = static_cast<double>(joinEndTicks - joinStartTicks) * 1000.0 / static_cast<double>(perfFrequency);
+								SDL_Log("Render: RtxShadowPipeline: batched library join took %.3f ms (concurrency=%u)", joinMs, maxConcurrency);
+							}
+						} else {
+							vkDestroyDeferredOperationKHR(device, deferredOp, nullptr);
+							if (createResult != VK_SUCCESS && createResult != VK_OPERATION_NOT_DEFERRED_KHR) {
+								runtime::LogVkFailure("RtxShadowPipeline.CreateLibraries", createResult);
+								Shutdown(context);
+								return false;
+							}
+						}
 					}
 				}
 			}
 
-			SDL_Log(
-				"Render: RtxShadowPipeline: library deferral (rayGen=%s concurrency=%u miss=%s concurrency=%u hitGroup=%s concurrency=%u)",
-				rayGenCreate.wasDeferred ? "yes" : "no",
-				rayGenCreate.maxConcurrency,
-				missCreate.wasDeferred ? "yes" : "no",
-				missCreate.maxConcurrency,
-				hitGroupCreate.wasDeferred ? "yes" : "no",
-				hitGroupCreate.maxConcurrency);
-
-			std::array<DeferredPipelineCreate *, 3> libraryCreates{&rayGenCreate, &missCreate, &hitGroupCreate};
-			for (DeferredPipelineCreate *libraryCreate : libraryCreates) {
-				for (std::future<void> &future : libraryCreate->futures) {
-					future.wait();
-				}
-			}
-			for (DeferredPipelineCreate *libraryCreate : libraryCreates) {
-				for (std::future<void> &future : libraryCreate->futures) {
-					future.get();
-				}
-				if (libraryCreate->deferredOp != VK_NULL_HANDLE) {
-					const VkResult opResult = vkGetDeferredOperationResultKHR(device, libraryCreate->deferredOp);
-					vkDestroyDeferredOperationKHR(device, libraryCreate->deferredOp, nullptr);
-					libraryCreate->deferredOp = VK_NULL_HANDLE;
-					if (opResult != VK_SUCCESS) {
-						SDL_Log("Render: RtxShadowPipeline: deferred library join failed (%d)", opResult);
-						libraryCreate->pipeline = VK_NULL_HANDLE;
-						runtime::LogVkFailure("RtxShadowPipeline.DeferredLibraryJoin", opResult);
-						Shutdown(context);
-						return false;
-					}
-				}
-			}
-
-			m_rayGenLibrary = rayGenCreate.pipeline;
-			m_missLibrary = missCreate.pipeline;
-			m_hitGroupLibrary = hitGroupCreate.pipeline;
+			m_rayGenLibrary = libraryPipelines[0];
+			m_missLibrary = libraryPipelines[1];
+			m_hitGroupLibrary = libraryPipelines[2];
 
 			const std::array<VkPipeline, 3> libraries{{m_rayGenLibrary, m_missLibrary, m_hitGroupLibrary}};
 			VkPipelineLibraryCreateInfoKHR libraryInfo{};
