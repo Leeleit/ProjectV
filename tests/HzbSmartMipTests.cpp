@@ -324,7 +324,7 @@ void TestWritePerChunkMipAndBlendWidthsToBufferZeroChunkCount(SmartMipTestContex
 
 } // namespace
 
-int main()
+int main() // NOLINT(*-exception-escape)
 {
 	SmartMipTestContext test{};
 	TestEnvGateDefault(test);

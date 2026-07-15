@@ -203,7 +203,7 @@ void TestIsLodDownsampleEnabledEnv(TestContext &context)
 
 } // namespace
 
-int main()
+int main() // NOLINT(*-exception-escape)
 {
 	TestContext context{};
 	TestLodDownsampleStepForLod(context);

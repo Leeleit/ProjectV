@@ -570,7 +570,7 @@ void TestRtxGiProbeHostHeaderExistsAndLinks()
 
 } // namespace
 
-int main()
+int main() // NOLINT(*-exception-escape)
 {
 	TestEnvGateDefaultsOff();
 	TestEnvGateOnRespected();

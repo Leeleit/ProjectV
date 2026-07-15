@@ -18,11 +18,11 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
-**2026-07-15 Lint gate:** `tools/git/lint-gate.{sh,ps1}` — auto `clang-format`
-+ `clang-tidy --warnings-as-errors=*` на changed files; `pre-commit` /
-`pre-push` reject при warnings/errors. Install: `install-hooks.ps1` /
-`install-hooks.sh` → `core.hooksPath=tools/git`. Pre-push Docker CI
-остаётся, но skip'ается если нет docker (`PROJECTV_SKIP_DOCKER_CI=1`).
+**2026-07-15 Lint gate:** full check restored — tidy all TUs in
+`compile_commands.json` (incl. tests); point `// NOLINT(*-exception-escape)`
+only on the 6 test mains that failed MSVC STL false-positives on push
+(not a blanket); `src/bench/*` warn-only if benchmarks OFF. Format:
+auto-fix on commit, dry-run on push.
 
 **2026-07-15 CI Not Run fix:** `ProjectVVulkanBootstrapTests` был в `add_test`,
 но отсутствовал в `targets[]` всех build-presets → CI

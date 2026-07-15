@@ -18,8 +18,15 @@ Sets `core.hooksPath=tools/git`.
 
 | Hook | Action |
 |------|--------|
-| `pre-commit` | Auto `clang-format -i` on staged lintable files, re-stage, then `clang-tidy --warnings-as-errors=*` on changed **`src/`** TUs (not `tests/`, not `src/bench/`). Reject commit on any warning/error. |
-| `pre-push` | Same clang-tidy over pushed `src/` TUs (format not rewritten on push), then Docker CI (`docker/run-ci.sh`) if `docker` is available. |
+| `pre-commit` | Auto `clang-format -i` on staged lintable files, re-stage, then `clang-tidy --warnings-as-errors=*` on all changed TUs present in `compile_commands.json`. Reject on any warning/error. |
+| `pre-push` | `clang-format --dry-run --Werror` (no rewrite) + same clang-tidy over push-range TUs in the compile DB, then Docker CI if `docker` is available. |
+
+Optional / platform-gated targets missing from the compile DB (e.g. `src/bench/*` when
+benchmarks OFF, or `ModuleSmoke`/`StdModuleProbe` on Windows clang-cl) are **warned and
+skipped** for tidy — everything present in the DB is checked.
+
+Test `main()` uses point `// NOLINT(*-exception-escape)` only where MSVC STL
+false-positives were observed (same idea as `VoxelWorldTests` / `AssetLoaderTests` — not a blanket on every test).
 
 Scope: `src/`, `tests/`, `tools/` with `*.{c,cc,cxx,cpp,h,hh,hpp,ixx}`. Excludes `external/`, `build/`, `legacy/`.
 

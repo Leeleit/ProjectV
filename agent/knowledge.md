@@ -109,8 +109,14 @@ sync или при риске device-lost/hang.
 
 | Hook | Behavior |
 |---|---|
-| `pre-commit` | Auto `clang-format -i` на staged lintable files → re-stage → `clang-tidy --warnings-as-errors=*` на changed **`src/`** TUs (не `tests/`, не `src/bench/`). Non-zero = reject commit. |
-| `pre-push` | Тот же clang-tidy по push-range `src/` (без rewrite format), затем Docker CI (`docker/run-ci.sh`) если `docker` доступен. |
+| `pre-commit` | Auto `clang-format -i` на staged lintable files → re-stage → `clang-tidy --warnings-as-errors=*` на **всех** changed TUs из `compile_commands.json`. Non-zero = reject. |
+| `pre-push` | `clang-format --dry-run --Werror` (без rewrite) + тот же clang-tidy по push-range; затем Docker CI если `docker` доступен. |
+
+Optional/platform-gated TUs missing from compile DB (bench OFF, ModuleSmoke на
+Win clang-cl) — warning + skip tidy. Всё, что есть в DB, проверяется полностью.
+
+Test `main()`: точечный `// NOLINT(*-exception-escape)` только на TU, где
+MSVC STL реально даёт false-positive (не blanket по всем тестам).
 
 **Scope:** `src/`, `tests/`, `tools/` + `*.{c,cc,cxx,cpp,h,hh,hpp,ixx}`. Исключения: `external/`, `build/`, `legacy/`.
 

@@ -325,7 +325,7 @@ void TestPrebakeVersionIncrementsAfterBake(StreamTestContext &test)
 
 } // namespace
 
-int main()
+int main() // NOLINT(*-exception-escape)
 {
 	StreamTestContext test{};
 	TestEnvGateDefault(test);

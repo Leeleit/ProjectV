@@ -115,6 +115,33 @@ collect_files() {
 	esac
 }
 
+# Normalize compile_commands paths to repo-relative forward-slash form.
+load_compile_db_files() {
+	python - "${BUILD_DIR}" <<'PY'
+import json, os, sys
+from pathlib import Path
+build = Path(sys.argv[1])
+root = Path(".").resolve()
+data = json.loads((build / "compile_commands.json").read_text(encoding="utf-8"))
+out = set()
+for e in data:
+    f = Path(e.get("file", ""))
+    if not f.is_absolute():
+        f = (Path(e.get("directory", build)) / f)
+    try:
+        rel = f.resolve().relative_to(root).as_posix()
+    except Exception:
+        rel = f.as_posix().replace("\\", "/")
+        # Strip drive + repo prefix if present
+        marker = "/ProjectV/"
+        if marker in rel:
+            rel = rel.split(marker, 1)[1]
+    out.add(rel)
+for r in sorted(out):
+    print(r)
+PY
+}
+
 mapfile -t FILES < <(collect_files)
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
@@ -125,8 +152,10 @@ fi
 echo "lint-gate: mode=${MODE} build=${BUILD_DIR} files=${#FILES[@]}"
 printf '  %s\n' "${FILES[@]}"
 
+# Format: auto-fix on commit/working; dry-run only on push (no rewrite of pushed history).
 if [[ "${MODE}" == "push" ]]; then
-	echo "lint-gate: clang-format check skipped on push (enforced on commit; avoids rewrite + backlog churn)"
+	echo "lint-gate: clang-format --dry-run --Werror ..."
+	clang-format --dry-run --Werror --style=file "${FILES[@]}"
 else
 	echo "lint-gate: clang-format -i ..."
 	clang-format -i --style=file "${FILES[@]}"
@@ -137,23 +166,40 @@ else
 	clang-format --dry-run --Werror --style=file "${FILES[@]}"
 fi
 
-# clang-tidy scope matches .clang-tidy HeaderFilterRegex (src/); skip tests (MSVC STL
-# bugprone-exception-escape noise) and src/bench (optional target / incomplete compile DB).
-TIDY_FILES=()
-for f in "${FILES[@]}"; do
-	[[ "${f}" == src/* ]] || continue
-	[[ "${f}" == src/bench/* ]] && continue
-	case "${f}" in
-		*.cpp | *.cc | *.cxx | *.c) TIDY_FILES+=("${f}") ;;
-	esac
+mapfile -t COMPILE_DB_FILES < <(load_compile_db_files)
+declare -A IN_COMPILE_DB=()
+for f in "${COMPILE_DB_FILES[@]}"; do
+	f="${f%$'\r'}" # Windows Python may emit CRLF into the pipe
+	[[ -n "${f}" ]] || continue
+	IN_COMPILE_DB["${f}"]=1
 done
 
+TIDY_FILES=()
+SKIPPED_NO_DB=()
+for f in "${FILES[@]}"; do
+	f="${f%$'\r'}"
+	case "${f}" in
+		*.cpp | *.cc | *.cxx | *.c) ;;
+		*) continue ;;
+	esac
+	if [[ -n "${IN_COMPILE_DB[${f}]+x}" ]]; then
+		TIDY_FILES+=("${f}")
+	else
+		SKIPPED_NO_DB+=("${f}")
+	fi
+done
+
+if [[ ${#SKIPPED_NO_DB[@]} -gt 0 ]]; then
+	echo "lint-gate: WARNING: not in compile_commands.json (target disabled/not built in this preset — tidy skipped):"
+	printf '  %s\n' "${SKIPPED_NO_DB[@]}"
+fi
+
 if [[ ${#TIDY_FILES[@]} -eq 0 ]]; then
-	echo "lint-gate: no src/ TUs for clang-tidy — format OK"
+	echo "lint-gate: no TUs in compile_commands for clang-tidy — format OK"
 	exit 0
 fi
 
-echo "lint-gate: clang-tidy --warnings-as-errors=* (${#TIDY_FILES[@]} src/ TUs) ..."
+echo "lint-gate: clang-tidy --warnings-as-errors=* (${#TIDY_FILES[@]} TUs) ..."
 TIDY_FAIL=0
 for f in "${TIDY_FILES[@]}"; do
 	# clang-tidy 22 may still print "Processing file" progress under --quiet; only exit code matters (--warnings-as-errors=*).

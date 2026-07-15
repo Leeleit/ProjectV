@@ -69,6 +69,30 @@ function Get-ChangedFiles {
 	$raw | Where-Object { $_ -and (Test-Path $_) -and (Test-Lintable $_) } | Sort-Object -Unique
 }
 
+function Get-CompileDbFiles {
+	python -c @"
+import json
+from pathlib import Path
+build = Path(r'$BuildDir')
+root = Path('.').resolve()
+data = json.loads((build / 'compile_commands.json').read_text(encoding='utf-8'))
+out = set()
+for e in data:
+    f = Path(e.get('file', ''))
+    if not f.is_absolute():
+        f = (Path(e.get('directory', build)) / f)
+    try:
+        rel = f.resolve().relative_to(root).as_posix()
+    except Exception:
+        rel = f.as_posix().replace('\\\\', '/')
+        marker = '/ProjectV/'
+        if marker in rel:
+            rel = rel.split(marker, 1)[1]
+    out.add(rel)
+print('\n'.join(sorted(out)))
+"@
+}
+
 $Files = @(Get-ChangedFiles)
 if ($Files.Count -eq 0) {
 	Write-Host "lint-gate: no lintable C/C++ files ($Mode) — OK"
@@ -79,7 +103,9 @@ Write-Host "lint-gate: mode=$Mode build=$BuildDir files=$($Files.Count)"
 $Files | ForEach-Object { Write-Host "  $_" }
 
 if ($Mode -eq "push") {
-	Write-Host "lint-gate: clang-format check skipped on push (enforced on commit; avoids rewrite + backlog churn)"
+	Write-Host "lint-gate: clang-format --dry-run --Werror ..."
+	& clang-format --dry-run --Werror --style=file @Files
+	if ($LASTEXITCODE -ne 0) { Die "clang-format check failed" }
 } else {
 	Write-Host "lint-gate: clang-format -i ..."
 	& clang-format -i --style=file @Files
@@ -92,23 +118,31 @@ if ($Mode -eq "push") {
 	if ($LASTEXITCODE -ne 0) { Die "clang-format check failed" }
 }
 
-# Match .clang-tidy HeaderFilterRegex (src/); skip tests + src/bench.
-$TidyFiles = @(
-	$Files | Where-Object {
-		($_ -match '^src/' -or $_ -match '^src\\') -and
-		($_ -notmatch '^src[/\\]bench[/\\]') -and
-		($_ -match '\.(cpp|cc|cxx|c)$')
-	}
-)
+$compileDb = @{}
+Get-CompileDbFiles | ForEach-Object { if ($_) { $compileDb[$_] = $true } }
+
+$TidyFiles = @()
+$SkippedNoDb = @()
+foreach ($f in $Files) {
+	$norm = $f.Replace("\", "/")
+	if ($norm -notmatch '\.(cpp|cc|cxx|c)$') { continue }
+	if ($compileDb.ContainsKey($norm)) { $TidyFiles += $norm }
+	else { $SkippedNoDb += $norm }
+}
+
+if ($SkippedNoDb.Count -gt 0) {
+	Write-Host "lint-gate: WARNING: not in compile_commands.json (target disabled/not built in this preset — tidy skipped):"
+	$SkippedNoDb | ForEach-Object { Write-Host "  $_" }
+}
+
 if ($TidyFiles.Count -eq 0) {
-	Write-Host "lint-gate: no src/ TUs for clang-tidy — format OK"
+	Write-Host "lint-gate: no TUs in compile_commands for clang-tidy — format OK"
 	exit 0
 }
 
-Write-Host "lint-gate: clang-tidy --warnings-as-errors=* ($($TidyFiles.Count) src/ TUs) ..."
+Write-Host "lint-gate: clang-tidy --warnings-as-errors=* ($($TidyFiles.Count) TUs) ..."
 $tidyFail = $false
 foreach ($f in $TidyFiles) {
-	# clang-tidy 22 may still print progress under --quiet; only exit code matters (--warnings-as-errors=*).
 	$out = & clang-tidy $f -p $BuildDir --warnings-as-errors='*' --quiet 2>&1
 	$code = $LASTEXITCODE
 	if ($code -ne 0) {
