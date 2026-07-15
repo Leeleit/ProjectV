@@ -109,8 +109,8 @@ sync или при риске device-lost/hang.
 
 | Hook | Behavior |
 |---|---|
-| `pre-commit` | Auto `clang-format -i` на staged lintable files → re-stage → `clang-tidy --warnings-as-errors=*` на changed TUs. Non-zero = reject commit. |
-| `pre-push` | Тот же lint по push-range, затем Docker CI (`docker/run-ci.sh`) если `docker` доступен. |
+| `pre-commit` | Auto `clang-format -i` на staged lintable files → re-stage → `clang-tidy --warnings-as-errors=*` на changed **`src/`** TUs (не `tests/`, не `src/bench/`). Non-zero = reject commit. |
+| `pre-push` | Тот же clang-tidy по push-range `src/` (без rewrite format), затем Docker CI (`docker/run-ci.sh`) если `docker` доступен. |
 
 **Scope:** `src/`, `tests/`, `tools/` + `*.{c,cc,cxx,cpp,h,hh,hpp,ixx}`. Исключения: `external/`, `build/`, `legacy/`.
 

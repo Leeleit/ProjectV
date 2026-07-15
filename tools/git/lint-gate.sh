@@ -125,29 +125,35 @@ fi
 echo "lint-gate: mode=${MODE} build=${BUILD_DIR} files=${#FILES[@]}"
 printf '  %s\n' "${FILES[@]}"
 
-echo "lint-gate: clang-format -i ..."
-clang-format -i --style=file "${FILES[@]}"
-
-if [[ "${MODE}" == "commit" ]]; then
-	git add -- "${FILES[@]}"
+if [[ "${MODE}" == "push" ]]; then
+	echo "lint-gate: clang-format check skipped on push (enforced on commit; avoids rewrite + backlog churn)"
+else
+	echo "lint-gate: clang-format -i ..."
+	clang-format -i --style=file "${FILES[@]}"
+	if [[ "${MODE}" == "commit" ]]; then
+		git add -- "${FILES[@]}"
+	fi
+	echo "lint-gate: clang-format --dry-run --Werror ..."
+	clang-format --dry-run --Werror --style=file "${FILES[@]}"
 fi
 
-echo "lint-gate: clang-format --dry-run --Werror ..."
-clang-format --dry-run --Werror --style=file "${FILES[@]}"
-
+# clang-tidy scope matches .clang-tidy HeaderFilterRegex (src/); skip tests (MSVC STL
+# bugprone-exception-escape noise) and src/bench (optional target / incomplete compile DB).
 TIDY_FILES=()
 for f in "${FILES[@]}"; do
+	[[ "${f}" == src/* ]] || continue
+	[[ "${f}" == src/bench/* ]] && continue
 	case "${f}" in
 		*.cpp | *.cc | *.cxx | *.c) TIDY_FILES+=("${f}") ;;
 	esac
 done
 
 if [[ ${#TIDY_FILES[@]} -eq 0 ]]; then
-	echo "lint-gate: no TU sources for clang-tidy — format OK"
+	echo "lint-gate: no src/ TUs for clang-tidy — format OK"
 	exit 0
 fi
 
-echo "lint-gate: clang-tidy --warnings-as-errors=* (${#TIDY_FILES[@]} TUs) ..."
+echo "lint-gate: clang-tidy --warnings-as-errors=* (${#TIDY_FILES[@]} src/ TUs) ..."
 TIDY_FAIL=0
 for f in "${TIDY_FILES[@]}"; do
 	# clang-tidy 22 may still print "Processing file" progress under --quiet; only exit code matters (--warnings-as-errors=*).

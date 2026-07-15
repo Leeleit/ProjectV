@@ -78,25 +78,34 @@ if ($Files.Count -eq 0) {
 Write-Host "lint-gate: mode=$Mode build=$BuildDir files=$($Files.Count)"
 $Files | ForEach-Object { Write-Host "  $_" }
 
-Write-Host "lint-gate: clang-format -i ..."
-& clang-format -i --style=file @Files
-if ($LASTEXITCODE -ne 0) { Die "clang-format -i failed" }
-
-if ($Mode -eq "commit") {
-	git add -- @Files
+if ($Mode -eq "push") {
+	Write-Host "lint-gate: clang-format check skipped on push (enforced on commit; avoids rewrite + backlog churn)"
+} else {
+	Write-Host "lint-gate: clang-format -i ..."
+	& clang-format -i --style=file @Files
+	if ($LASTEXITCODE -ne 0) { Die "clang-format -i failed" }
+	if ($Mode -eq "commit") {
+		git add -- @Files
+	}
+	Write-Host "lint-gate: clang-format --dry-run --Werror ..."
+	& clang-format --dry-run --Werror --style=file @Files
+	if ($LASTEXITCODE -ne 0) { Die "clang-format check failed" }
 }
 
-Write-Host "lint-gate: clang-format --dry-run --Werror ..."
-& clang-format --dry-run --Werror --style=file @Files
-if ($LASTEXITCODE -ne 0) { Die "clang-format check failed" }
-
-$TidyFiles = @($Files | Where-Object { $_ -match '\.(cpp|cc|cxx|c)$' })
+# Match .clang-tidy HeaderFilterRegex (src/); skip tests + src/bench.
+$TidyFiles = @(
+	$Files | Where-Object {
+		($_ -match '^src/' -or $_ -match '^src\\') -and
+		($_ -notmatch '^src[/\\]bench[/\\]') -and
+		($_ -match '\.(cpp|cc|cxx|c)$')
+	}
+)
 if ($TidyFiles.Count -eq 0) {
-	Write-Host "lint-gate: no TU sources for clang-tidy — format OK"
+	Write-Host "lint-gate: no src/ TUs for clang-tidy — format OK"
 	exit 0
 }
 
-Write-Host "lint-gate: clang-tidy --warnings-as-errors=* ($($TidyFiles.Count) TUs) ..."
+Write-Host "lint-gate: clang-tidy --warnings-as-errors=* ($($TidyFiles.Count) src/ TUs) ..."
 $tidyFail = $false
 foreach ($f in $TidyFiles) {
 	# clang-tidy 22 may still print progress under --quiet; only exit code matters (--warnings-as-errors=*).

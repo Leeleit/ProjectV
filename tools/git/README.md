@@ -18,8 +18,8 @@ Sets `core.hooksPath=tools/git`.
 
 | Hook | Action |
 |------|--------|
-| `pre-commit` | Auto `clang-format -i` on staged lintable files, re-stage, then `clang-tidy --warnings-as-errors=*` on changed TUs. Reject commit on any warning/error. |
-| `pre-push` | Same lint over pushed commits, then Docker CI (`docker/run-ci.sh`) if `docker` is available. |
+| `pre-commit` | Auto `clang-format -i` on staged lintable files, re-stage, then `clang-tidy --warnings-as-errors=*` on changed **`src/`** TUs (not `tests/`, not `src/bench/`). Reject commit on any warning/error. |
+| `pre-push` | Same clang-tidy over pushed `src/` TUs (format not rewritten on push), then Docker CI (`docker/run-ci.sh`) if `docker` is available. |
 
 Scope: `src/`, `tests/`, `tools/` with `*.{c,cc,cxx,cpp,h,hh,hpp,ixx}`. Excludes `external/`, `build/`, `legacy/`.
 
