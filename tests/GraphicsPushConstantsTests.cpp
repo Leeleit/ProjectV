@@ -1,5 +1,4 @@
-import projectv.math;
-
+#include "core/Math.hpp"
 #include "app/Camera.hpp"
 #include "core/Types.hpp"
 

@@ -1,5 +1,7 @@
 #include "render/vulkan/VulkanDebug.hpp"
 
+#include "volk.h"
+
 void SetVulkanObjectName(
 	const VulkanContextState &context,
 	const uint64_t handle,

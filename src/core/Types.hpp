@@ -1,16 +1,9 @@
 #pragma once
 
-#if defined(__clang__) && defined(_MSC_VER) // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
-
-#else
-import projectv.math;
-import projectv.string_id;
-#endif
-
 #include "SDL3/SDL.h"
 #include "asset/MeshGpuResources.hpp"
-import projectv.math;
-import projectv.string_id;
+#include "core/Math.hpp"
+#include "core/StringId.hpp"
 #include "render/AntialiasingSettings.hpp"
 #include "render/ShadowTypes.hpp"
 #include "render/VoxelMeshingPushConstants.hpp"

@@ -1,5 +1,4 @@
-import projectv.string_id;
-
+#include "core/StringId.hpp"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -74,8 +73,13 @@ void VerifyRuntimeStringViewCtor()
 	VERIFY(runtimeID == literalID);
 	VERIFY_EQ(runtimeID.hash, literalID.hash);
 	VERIFY_EQ(runtimeID.length, literalID.length);
-	constexpr std::string s{"rock_diffuse"};
+#if !defined(_WIN32)
+	constexpr std::string s{"rock_diffuse"}; // libc++: constexpr std::string; MSVC STL: not yet
 	constexpr StringID fromString{std::string_view{s}};
+#else
+	const std::string s{"rock_diffuse"};
+	const StringID fromString{std::string_view{s}};
+#endif
 	VERIFY(fromString == literalID);
 	constexpr StringID partial{std::string_view{"rock_"}};
 	VERIFY(partial != literalID);

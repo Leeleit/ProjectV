@@ -1,4 +1,5 @@
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
+#include "core/EnvUtils.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -32,7 +33,7 @@ void ExpectEqualUInt(TestContext &context, const uint32_t expected, const uint32
 
 void TestFluidCaPipelineRequestedDefaultOn(TestContext &context)
 {
-	unsetenv("PROJECTV_FLUID_CA_GPU");
+	projectv::core::UnsetEnvVar("PROJECTV_FLUID_CA_GPU");
 	const bool requested = projectv::render::IsFluidCaGpuPipelineRequested();
 	if (!requested) {
 		context.Fail(__LINE__, "PROJECTV_FLUID_CA_GPU unset -> true (per TODO Stage 3.1 Step 2 default flip)");
@@ -41,9 +42,9 @@ void TestFluidCaPipelineRequestedDefaultOn(TestContext &context)
 
 void TestFluidCaPipelineRequestedOptOut(TestContext &context)
 {
-	setenv("PROJECTV_FLUID_CA_GPU", "0", 1);
+	projectv::core::SetEnvVar("PROJECTV_FLUID_CA_GPU", "0", 1);
 	const bool requested = projectv::render::IsFluidCaGpuPipelineRequested();
-	unsetenv("PROJECTV_FLUID_CA_GPU");
+	projectv::core::UnsetEnvVar("PROJECTV_FLUID_CA_GPU");
 	if (requested) {
 		context.Fail(__LINE__, "PROJECTV_FLUID_CA_GPU=0 -> false (opt-out)");
 	}
@@ -51,9 +52,9 @@ void TestFluidCaPipelineRequestedOptOut(TestContext &context)
 
 void TestFluidCaPipelineRequestedExplicit(TestContext &context)
 {
-	setenv("PROJECTV_FLUID_CA_GPU", "1", 1);
+	projectv::core::SetEnvVar("PROJECTV_FLUID_CA_GPU", "1", 1);
 	const bool requested = projectv::render::IsFluidCaGpuPipelineRequested();
-	unsetenv("PROJECTV_FLUID_CA_GPU");
+	projectv::core::UnsetEnvVar("PROJECTV_FLUID_CA_GPU");
 	if (!requested) {
 		context.Fail(__LINE__, "PROJECTV_FLUID_CA_GPU=1 -> true");
 	}

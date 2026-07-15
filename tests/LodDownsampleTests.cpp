@@ -1,4 +1,5 @@
 #include "voxel/VoxelLodDownsample.hpp"
+#include "core/EnvUtils.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 #include <cstdio>
@@ -157,7 +158,7 @@ void TestSurfacePreserveLod0NoOp(TestContext &context)
 
 void TestRunLodDownsampleJobsAir(TestContext &context)
 {
-	unsetenv("PROJECTV_LOD_DOWNSAMPLE");
+	projectv::core::UnsetEnvVar("PROJECTV_LOD_DOWNSAMPLE");
 	VoxelWorld world = BuildUniformWorld(0u);
 	world.chunks[0].lodLevel = 1u;
 	const uint32_t processed = projectv::voxel::RunLodDownsampleJobs(world);
@@ -173,7 +174,7 @@ void TestRunLodDownsampleJobsAir(TestContext &context)
 
 void TestRunLodDownsampleJobsSolid(TestContext &context)
 {
-	unsetenv("PROJECTV_LOD_DOWNSAMPLE");
+	projectv::core::UnsetEnvVar("PROJECTV_LOD_DOWNSAMPLE");
 	VoxelWorld world = BuildUniformWorld(3u);
 	world.chunks[0].lodLevel = 1u;
 	const uint32_t processed = projectv::voxel::RunLodDownsampleJobs(world);
@@ -189,15 +190,15 @@ void TestRunLodDownsampleJobsSolid(TestContext &context)
 
 void TestIsLodDownsampleEnabledEnv(TestContext &context)
 {
-	unsetenv("PROJECTV_LOD_DOWNSAMPLE");
+	projectv::core::UnsetEnvVar("PROJECTV_LOD_DOWNSAMPLE");
 	if (projectv::voxel::IsLodDownsampleEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_LOD_DOWNSAMPLE unset -> false");
 	}
-	setenv("PROJECTV_LOD_DOWNSAMPLE", "1", 1);
+	projectv::core::SetEnvVar("PROJECTV_LOD_DOWNSAMPLE", "1", 1);
 	if (!projectv::voxel::IsLodDownsampleEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_LOD_DOWNSAMPLE=1 -> true");
 	}
-	unsetenv("PROJECTV_LOD_DOWNSAMPLE");
+	projectv::core::UnsetEnvVar("PROJECTV_LOD_DOWNSAMPLE");
 }
 
 } // namespace

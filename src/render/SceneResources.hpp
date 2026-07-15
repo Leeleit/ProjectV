@@ -1,6 +1,6 @@
 #pragma once
 
-import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+#include "core/Math.hpp"
 #include "core/Types.hpp"
 #include "voxel/NanoVdb.hpp"
 

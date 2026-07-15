@@ -1,6 +1,5 @@
-import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
-import projectv.string_id;
-
+#include "core/Math.hpp"
+#include "core/StringId.hpp"
 #include "app/BenchmarkAutomation.hpp"
 
 #include "core/Types.hpp"

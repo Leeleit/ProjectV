@@ -1,3 +1,4 @@
+#include "core/EnvUtils.hpp"
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -114,19 +115,19 @@ void TestEnvGateDefault(SmartMipTestContext &test)
 	const char *value = std::getenv("PROJECTV_HZB_SMART_MIP");
 	const bool wasSet = value != nullptr;
 	if (wasSet) {
-		unsetenv("PROJECTV_HZB_SMART_MIP");
+		projectv::core::UnsetEnvVar("PROJECTV_HZB_SMART_MIP");
 	}
 	if (IsHzbSmartMipEnabled()) {
 		test.Fail(__LINE__, "Default env gate must disable HZB smart mip (off by default per experiment)");
 	}
 	if (wasSet) {
-		setenv("PROJECTV_HZB_SMART_MIP", value, 1);
+		projectv::core::SetEnvVar("PROJECTV_HZB_SMART_MIP", value, 1);
 	}
 }
 
 void TestEnvGateOff(SmartMipTestContext &test)
 {
-	const int setenvResult = setenv("PROJECTV_HZB_SMART_MIP", "0", 1);
+	const int setenvResult = projectv::core::SetEnvVar("PROJECTV_HZB_SMART_MIP", "0", 1);
 	if (setenvResult != 0) {
 		test.Fail(__LINE__, "setenv failed");
 		return;
@@ -134,12 +135,12 @@ void TestEnvGateOff(SmartMipTestContext &test)
 	if (IsHzbSmartMipEnabled()) {
 		test.Fail(__LINE__, "env=0 must disable HZB smart mip");
 	}
-	unsetenv("PROJECTV_HZB_SMART_MIP");
+	projectv::core::UnsetEnvVar("PROJECTV_HZB_SMART_MIP");
 }
 
 void TestEnvGateOn(SmartMipTestContext &test)
 {
-	const int setenvResult = setenv("PROJECTV_HZB_SMART_MIP", "1", 1);
+	const int setenvResult = projectv::core::SetEnvVar("PROJECTV_HZB_SMART_MIP", "1", 1);
 	if (setenvResult != 0) {
 		test.Fail(__LINE__, "setenv failed");
 		return;
@@ -147,7 +148,7 @@ void TestEnvGateOn(SmartMipTestContext &test)
 	if (!IsHzbSmartMipEnabled()) {
 		test.Fail(__LINE__, "env=1 must enable HZB smart mip");
 	}
-	unsetenv("PROJECTV_HZB_SMART_MIP");
+	projectv::core::UnsetEnvVar("PROJECTV_HZB_SMART_MIP");
 }
 
 void TestComputePerChunkMipLevelCpuCloseChunk(SmartMipTestContext &test)

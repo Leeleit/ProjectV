@@ -1,4 +1,5 @@
 #include "render/SkyAtmosphere.hpp"
+#include "core/EnvUtils.hpp"
 
 #include "core/Types.hpp"
 
@@ -19,7 +20,7 @@ struct TestContext {
 
 void TestSkyAtmosphereEnvDefaultOff(TestContext &context)
 {
-	unsetenv("PROJECTV_SKY");
+	projectv::core::UnsetEnvVar("PROJECTV_SKY");
 	if (projectv::render::IsSkyAtmosphereEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_SKY unset -> false");
 	}
@@ -27,29 +28,29 @@ void TestSkyAtmosphereEnvDefaultOff(TestContext &context)
 
 void TestSkyAtmosphereEnvExplicitOn(TestContext &context)
 {
-	setenv("PROJECTV_SKY", "ON", 1);
+	projectv::core::SetEnvVar("PROJECTV_SKY", "ON", 1);
 	if (!projectv::render::IsSkyAtmosphereEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_SKY=ON -> true");
 	}
-	unsetenv("PROJECTV_SKY");
+	projectv::core::UnsetEnvVar("PROJECTV_SKY");
 }
 
 void TestSkyAtmosphereEnvZeroIsOff(TestContext &context)
 {
-	setenv("PROJECTV_SKY", "0", 1);
+	projectv::core::SetEnvVar("PROJECTV_SKY", "0", 1);
 	if (projectv::render::IsSkyAtmosphereEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_SKY=0 -> false");
 	}
-	unsetenv("PROJECTV_SKY");
+	projectv::core::UnsetEnvVar("PROJECTV_SKY");
 }
 
 void TestSkyAtmosphereEnvOffString(TestContext &context)
 {
-	setenv("PROJECTV_SKY", "OFF", 1);
+	projectv::core::SetEnvVar("PROJECTV_SKY", "OFF", 1);
 	if (projectv::render::IsSkyAtmosphereEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_SKY=OFF -> false");
 	}
-	unsetenv("PROJECTV_SKY");
+	projectv::core::UnsetEnvVar("PROJECTV_SKY");
 }
 
 void TestSkyAtmospherePushConstantsSize(TestContext &context)
@@ -60,7 +61,7 @@ void TestSkyAtmospherePushConstantsSize(TestContext &context)
 
 void TestCreateSkyAtmospherePipelinesRejectsNullContext(TestContext &context)
 {
-	unsetenv("PROJECTV_SKY");
+	projectv::core::UnsetEnvVar("PROJECTV_SKY");
 	if (projectv::render::CreateSkyAtmospherePipelines(nullptr, nullptr)) {
 		context.Fail(__LINE__, "CreateSkyAtmospherePipelines(null) must return false");
 	}

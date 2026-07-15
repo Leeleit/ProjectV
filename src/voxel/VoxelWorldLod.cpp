@@ -1,6 +1,5 @@
-import projectv.math;
-import projectv.string_id;
-
+#include "core/Math.hpp"
+#include "core/StringId.hpp"
 #include "voxel/VoxelLodDownsample.hpp"
 
 #include <cmath>

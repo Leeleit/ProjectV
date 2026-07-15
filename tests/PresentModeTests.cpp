@@ -95,7 +95,11 @@ void TestPresentModeCycleOnlyFifo(TestContext &context)
 
 void TestPresentModeCycleEmptyFallsBackToFifo(TestContext &context)
 {
-	constexpr std::vector<VkPresentModeKHR> surfaceModes{};
+#if !defined(_WIN32)
+	constexpr std::vector<VkPresentModeKHR> surfaceModes{}; // libc++: constexpr vector; MSVC STL: not yet
+#else
+	const std::vector<VkPresentModeKHR> surfaceModes{};
+#endif
 	const std::vector<VkPresentModeKHR> cycle = BuildPresentModeCycle(surfaceModes);
 	EXPECT_EQ(context, static_cast<std::size_t>(1), cycle.size());
 	EXPECT_EQ(context, VK_PRESENT_MODE_FIFO_KHR, cycle[0]);

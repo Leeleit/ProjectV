@@ -1291,6 +1291,7 @@ add_executable(ProjectVRayTracedShadowTests
 
 target_compile_definitions(ProjectVRayTracedShadowTests PRIVATE
         PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+        PROJECTV_BUILD_DIR="${CMAKE_BINARY_DIR}"
 )
 
 target_include_directories(ProjectVRayTracedShadowTests PRIVATE

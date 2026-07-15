@@ -1,4 +1,5 @@
 #include "render/VolumetricFog.hpp"
+#include "core/EnvUtils.hpp"
 
 #include "core/Types.hpp"
 
@@ -19,7 +20,7 @@ struct TestContext {
 
 void TestVolumetricFogEnvDefaultOff(TestContext &context)
 {
-	unsetenv("PROJECTV_FOG");
+	projectv::core::UnsetEnvVar("PROJECTV_FOG");
 	if (projectv::render::IsVolumetricFogEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_FOG unset -> false");
 	}
@@ -27,20 +28,20 @@ void TestVolumetricFogEnvDefaultOff(TestContext &context)
 
 void TestVolumetricFogEnvExplicitOn(TestContext &context)
 {
-	setenv("PROJECTV_FOG", "ON", 1);
+	projectv::core::SetEnvVar("PROJECTV_FOG", "ON", 1);
 	if (!projectv::render::IsVolumetricFogEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_FOG=ON -> true");
 	}
-	unsetenv("PROJECTV_FOG");
+	projectv::core::UnsetEnvVar("PROJECTV_FOG");
 }
 
 void TestVolumetricFogEnvZeroIsOff(TestContext &context)
 {
-	setenv("PROJECTV_FOG", "0", 1);
+	projectv::core::SetEnvVar("PROJECTV_FOG", "0", 1);
 	if (projectv::render::IsVolumetricFogEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_FOG=0 -> false");
 	}
-	unsetenv("PROJECTV_FOG");
+	projectv::core::UnsetEnvVar("PROJECTV_FOG");
 }
 
 void TestVolumetricFogPushConstantsSize(TestContext &context)
@@ -74,7 +75,7 @@ void TestVolumetricFogDispatchDimensions(TestContext &context)
 
 void TestCreateVolumetricFogResourcesRejectsNullContext(TestContext &context)
 {
-	unsetenv("PROJECTV_FOG");
+	projectv::core::UnsetEnvVar("PROJECTV_FOG");
 	if (projectv::render::CreateVolumetricFogResources(nullptr, nullptr)) {
 		context.Fail(__LINE__, "CreateVolumetricFogResources(null) must return false");
 	}

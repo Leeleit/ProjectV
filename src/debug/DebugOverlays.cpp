@@ -1,5 +1,4 @@
-import projectv.math;
-
+#include "core/Math.hpp"
 #include "debug/DebugOverlays.hpp"
 
 #include "voxel/VoxelWorld.hpp"

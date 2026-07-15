@@ -1,4 +1,5 @@
 #include "render/LodDownsampleGpuConsume.hpp"
+#include "core/EnvUtils.hpp"
 
 #include <array>
 #include <cstdio>
@@ -21,7 +22,7 @@ struct TestContext {
 
 void TestLodGpuConsumeEnvDefaultOff(TestContext &context)
 {
-	unsetenv("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME");
+	projectv::core::UnsetEnvVar("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME");
 	if (projectv::render::IsLodDownsampledGpuConsumeEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME unset -> false");
 	}
@@ -29,27 +30,27 @@ void TestLodGpuConsumeEnvDefaultOff(TestContext &context)
 
 void TestLodGpuConsumeEnvOn(TestContext &context)
 {
-	setenv("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME", "ON", 1);
+	projectv::core::SetEnvVar("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME", "ON", 1);
 	if (!projectv::render::IsLodDownsampledGpuConsumeEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME=ON -> true");
 	}
-	unsetenv("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME");
+	projectv::core::UnsetEnvVar("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME");
 }
 
 void TestLodGpuConsumeEnvZeroIsOff(TestContext &context)
 {
-	setenv("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME", "0", 1);
+	projectv::core::SetEnvVar("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME", "0", 1);
 	if (projectv::render::IsLodDownsampledGpuConsumeEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME=0 -> false");
 	}
-	unsetenv("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME");
+	projectv::core::UnsetEnvVar("PROJECTV_LOD_DOWNSAMPLE_GPU_CONSUME");
 }
 
 void TestComputeLodDownsampledPayloadBytesScalesWithChunks(TestContext &context)
 {
-	const uint32_t small = projectv::render::ComputeLodDownsampledVoxelPayloadBytes(8u, 8u);
-	const uint32_t large = projectv::render::ComputeLodDownsampledVoxelPayloadBytes(64u, 8u);
-	if (large <= small) {
+	const uint32_t smallPayload = projectv::render::ComputeLodDownsampledVoxelPayloadBytes(8u, 8u);
+	const uint32_t largePayload = projectv::render::ComputeLodDownsampledVoxelPayloadBytes(64u, 8u);
+	if (largePayload <= smallPayload) {
 		context.Fail(__LINE__, "LOD payload bytes must grow with chunk count");
 	}
 }

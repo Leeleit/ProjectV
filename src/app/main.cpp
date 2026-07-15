@@ -1,6 +1,5 @@
-import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
-import projectv.string_id;
-
+#include "core/Math.hpp"
+#include "core/StringId.hpp"
 #define SDL_MAIN_USE_CALLBACKS 1
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"

@@ -1,4 +1,5 @@
 #include "render/vulkan/VulkanAsyncCompute.hpp"
+#include "core/EnvUtils.hpp"
 #include "render/vulkan/VulkanFluidCaPipeline.hpp"
 
 #include <array>
@@ -19,7 +20,7 @@ struct TestContext {
 
 void TestAsyncComputeEnvDefaultOn(TestContext &context)
 {
-	unsetenv("PROJECTV_ASYNC_COMPUTE");
+	projectv::core::UnsetEnvVar("PROJECTV_ASYNC_COMPUTE");
 	if (!projectv::render::IsAsyncComputeEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_ASYNC_COMPUTE unset -> true (per TODO Stage 6.3 close-out)");
 	}
@@ -27,20 +28,20 @@ void TestAsyncComputeEnvDefaultOn(TestContext &context)
 
 void TestAsyncComputeEnvExplicitOn(TestContext &context)
 {
-	setenv("PROJECTV_ASYNC_COMPUTE", "1", 1);
+	projectv::core::SetEnvVar("PROJECTV_ASYNC_COMPUTE", "1", 1);
 	if (!projectv::render::IsAsyncComputeEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_ASYNC_COMPUTE=1 -> true");
 	}
-	unsetenv("PROJECTV_ASYNC_COMPUTE");
+	projectv::core::UnsetEnvVar("PROJECTV_ASYNC_COMPUTE");
 }
 
 void TestAsyncComputeEnvZeroIsOff(TestContext &context)
 {
-	setenv("PROJECTV_ASYNC_COMPUTE", "0", 1);
+	projectv::core::SetEnvVar("PROJECTV_ASYNC_COMPUTE", "0", 1);
 	if (projectv::render::IsAsyncComputeEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_ASYNC_COMPUTE=0 -> false");
 	}
-	unsetenv("PROJECTV_ASYNC_COMPUTE");
+	projectv::core::UnsetEnvVar("PROJECTV_ASYNC_COMPUTE");
 }
 
 void TestEnsureAsyncComputeResourcesRejectsNullContext(TestContext &context)

@@ -1,4 +1,5 @@
 #include "render/vulkan/VulkanVoxelizePipeline.hpp"
+#include "core/EnvUtils.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
 #include <cstdio>
@@ -18,7 +19,7 @@ struct TestContext {
 
 void TestVctGpuPipelineEnvDefaultOff(TestContext &context)
 {
-	unsetenv("PROJECTV_VCT_GPU");
+	projectv::core::UnsetEnvVar("PROJECTV_VCT_GPU");
 	if (projectv::render::IsVctGpuPipelineRequested()) {
 		context.Fail(__LINE__, "PROJECTV_VCT_GPU unset -> false");
 	}
@@ -26,20 +27,20 @@ void TestVctGpuPipelineEnvDefaultOff(TestContext &context)
 
 void TestVctGpuPipelineEnvExplicitOn(TestContext &context)
 {
-	setenv("PROJECTV_VCT_GPU", "1", 1);
+	projectv::core::SetEnvVar("PROJECTV_VCT_GPU", "1", 1);
 	if (!projectv::render::IsVctGpuPipelineRequested()) {
 		context.Fail(__LINE__, "PROJECTV_VCT_GPU=1 -> true");
 	}
-	unsetenv("PROJECTV_VCT_GPU");
+	projectv::core::UnsetEnvVar("PROJECTV_VCT_GPU");
 }
 
 void TestVctGpuPipelineEnvZeroIsOff(TestContext &context)
 {
-	setenv("PROJECTV_VCT_GPU", "0", 1);
+	projectv::core::SetEnvVar("PROJECTV_VCT_GPU", "0", 1);
 	if (projectv::render::IsVctGpuPipelineRequested()) {
 		context.Fail(__LINE__, "PROJECTV_VCT_GPU=0 -> false");
 	}
-	unsetenv("PROJECTV_VCT_GPU");
+	projectv::core::UnsetEnvVar("PROJECTV_VCT_GPU");
 }
 
 void TestVoxelizePushConstantsSize(TestContext &context)

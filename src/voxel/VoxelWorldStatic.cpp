@@ -1,7 +1,6 @@
-import projectv.math;
+#include "core/Math.hpp"
 #include "core/EnvUtils.hpp"
-import projectv.string_id;
-
+#include "core/StringId.hpp"
 #include "voxel/VoxelWorldInternal.hpp"
 #include <cstdlib>
 

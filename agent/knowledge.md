@@ -148,7 +148,18 @@ sync или при риске device-lost/hang.
   Linux-clang попадает в `else()` (libc++ + libstdc++ hybrid). Windows-clang-cl
   попадает в `elseif (WIN32)` (MSVC STL, no libc++).
 - Module `FILE_SET` в `src/CMakeLists.txt:3-13` и `tests/CMakeLists.txt:1-11`
-  пропускается на WIN32 + Clang (clang-cl не поддерживает C++20 modules).
+  пропускается на WIN32 + Clang (CMake < 4.4 не умеет scan modules для clang-cl;
+  CMake 4.4+ + clang-cl ≥19.1 — кандидат на включение).
+- **Consumer rule:** TU/`#include` headers **не** пишут голый `import projectv.math;` /
+  `import projectv.string_id;`. Только через шимы `core/Math.hpp` /
+  `core/StringId.hpp` (`#if defined(__clang__) && defined(_MSC_VER)` →
+  `*_fallback.hpp`, иначе `import`). Bare `import` ломает Windows clang-cl,
+  потому что BMI не собираются.
+- `core::SetEnvVar` / `UnsetEnvVar` в `EnvUtils.hpp` — кроссплатформенная замена
+  POSIX `setenv`/`unsetenv` (Windows: `_putenv_s`). Тесты обязаны использовать их.
+- libc++-only `constexpr std::string` / `constexpr std::vector` в тестах
+  оборачиваются в `#if !defined(_WIN32)` с runtime-фолбэком под MSVC STL;
+  Linux-ветку не удалять.
 
 **`import std;` — probe-only.** `tests/StdModuleProbe.cpp` тестирует precompiled
 `std.pcm` от libc++ 22; в mainline **не** используется (libc++ 22 std.cppm

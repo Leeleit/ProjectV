@@ -6,8 +6,7 @@
 
 #include <glm/glm.hpp>
 
-import projectv.string_id;
-
+#include "core/StringId.hpp"
 namespace projectv::asset {
 
 struct ManifestEntry {

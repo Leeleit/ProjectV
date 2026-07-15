@@ -14,6 +14,10 @@
 #include "render/RtxShadowPipeline.hpp"
 #include "render/RtxShadowSBT.hpp"
 
+#ifndef PROJECTV_BUILD_DIR
+#define PROJECTV_BUILD_DIR ""
+#endif
+
 namespace {
 
 int gFailureCount = 0;
@@ -352,8 +356,13 @@ void TestRtxAoShaderBinaryBuilt()
 {
 	bool found = false;
 	constexpr const char *const kCandidatePaths[]{
+		PROJECTV_BUILD_DIR "/src/voxel.frag.rtx.spv",
+		PROJECTV_BUILD_DIR "/bin/voxel.frag.rtx.spv",
+		// Legacy hard-coded preset paths kept for out-of-tree IDE runs without PROJECTV_BUILD_DIR refresh.
 		PROJECTV_TESTS_SOURCE_DIR "/../build/linux-clang-debug/src/voxel.frag.rtx.spv",
 		PROJECTV_TESTS_SOURCE_DIR "/../build/linux-clang-debug/bin/voxel.frag.rtx.spv",
+		PROJECTV_TESTS_SOURCE_DIR "/../build/windows-clang-debug/src/voxel.frag.rtx.spv",
+		PROJECTV_TESTS_SOURCE_DIR "/../build/windows-clang-debug/bin/voxel.frag.rtx.spv",
 	};
 	for (const char *path : kCandidatePaths) {
 		FILE *const fp = std::fopen(path, "rb");

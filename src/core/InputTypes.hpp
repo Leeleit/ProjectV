@@ -1,13 +1,7 @@
 #pragma once
 
-#if defined(__clang__) && defined(_MSC_VER)
-
-#else
-import projectv.math;
-#endif
-
 #include "SDL3/SDL.h"
-import projectv.math;
+#include "core/Math.hpp"
 #include "voxel/VoxelMaterials.hpp"
 
 #include <array>

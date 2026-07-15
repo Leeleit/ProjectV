@@ -1,4 +1,5 @@
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
+#include "core/EnvUtils.hpp"
 
 #include <array>
 #include <cstdio>
@@ -26,7 +27,7 @@ void TestEnvGateDefault(WorldGenTestContext &test)
 
 void TestEnvGateOff(WorldGenTestContext &test)
 {
-	const int setenvResult = setenv("PROJECTV_WORLD_GEN_GPU", "OFF", 1);
+	const int setenvResult = projectv::core::SetEnvVar("PROJECTV_WORLD_GEN_GPU", "OFF", 1);
 	if (setenvResult != 0) {
 		test.Fail(__LINE__, "setenv failed");
 		return;
@@ -34,13 +35,13 @@ void TestEnvGateOff(WorldGenTestContext &test)
 	if (projectv::render::IsWorldGenGpuPipelineRequested()) {
 		test.Fail(__LINE__, "env=OFF must disable world gen pipeline");
 	}
-	const int unsetResult = unsetenv("PROJECTV_WORLD_GEN_GPU");
+	const int unsetResult = projectv::core::UnsetEnvVar("PROJECTV_WORLD_GEN_GPU");
 	(void)unsetResult;
 }
 
 void TestEnvGateOn(WorldGenTestContext &test)
 {
-	const int setenvResult = setenv("PROJECTV_WORLD_GEN_GPU", "ON", 1);
+	const int setenvResult = projectv::core::SetEnvVar("PROJECTV_WORLD_GEN_GPU", "ON", 1);
 	if (setenvResult != 0) {
 		test.Fail(__LINE__, "setenv failed");
 		return;
@@ -48,7 +49,7 @@ void TestEnvGateOn(WorldGenTestContext &test)
 	if (!projectv::render::IsWorldGenGpuPipelineRequested()) {
 		test.Fail(__LINE__, "env=ON must enable world gen pipeline");
 	}
-	const int unsetResult = unsetenv("PROJECTV_WORLD_GEN_GPU");
+	const int unsetResult = projectv::core::UnsetEnvVar("PROJECTV_WORLD_GEN_GPU");
 	(void)unsetResult;
 }
 

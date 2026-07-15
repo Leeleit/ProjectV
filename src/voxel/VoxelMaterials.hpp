@@ -1,6 +1,6 @@
 #pragma once
 
-import projectv.math;
+#include "core/Math.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 #include <array>

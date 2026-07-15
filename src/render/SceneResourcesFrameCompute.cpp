@@ -1,4 +1,4 @@
-import projectv.math; // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+#include "core/Math.hpp"
 
 #include "render/SceneResources.hpp"
 #include "render/SceneResourcesInternal.hpp"

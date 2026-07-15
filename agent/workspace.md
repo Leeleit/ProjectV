@@ -18,6 +18,19 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-15 Windows clang-cl portability:** clone с Arch → Windows не собирался.
+Root cause: `FILE_SET CXX_MODULES` пропускается на WIN32+Clang, а mainline TU
+делали голый `import projectv.math` / `string_id` в обход шимов `Math.hpp` /
+`StringId.hpp` (+ сломанные пустые `#if` в `Types.hpp`/`InputTypes.hpp`).
+Fix: все consumers → shim includes; `VulkanDebug.cpp` + `#include "volk.h"`;
+`EnvUtils::{Set,Unset}EnvVar` вместо POSIX `setenv`/`unsetenv` в тестах;
+MSVC STL gaps (`constexpr string/vector`, `VK_NULL_HANDLE` vs handle,
+Windows macro `small`) закрыты `#if !defined(_WIN32)` / casts / rename;
+`ProjectVRayTracedShadowTests` ищет `voxel.frag.rtx.spv` через
+`PROJECTV_BUILD_DIR` (не hard-coded `linux-clang-debug`). Verify:
+`ProjectV.exe` green, **ctest 42/42**, lookdev smoke EXIT=0 (RTX ready,
+capture saved). Toolchain: clang-cl 22.1.8 + CMake 4.2.2 + Vulkan SDK 1.4.350.
+
 **2026-07-15 Selection box AA (moved into scene pass):** operator reported the
 yellow block-selection wireframe had no antialiasing while the rest of the
 scene did. Root cause: the debug-overlay box pipeline (`debug_overlay.vert`/
@@ -667,9 +680,10 @@ Key per-session snapshots (from `workspace.md` archive):
 
 **Post-reset baseline risks:**
 
-1. **No Windows host verification** — `CMakePresets.json` Windows paths defined
-   (clang-cl + LLD) но не post-reset verified. Per AGENTS.md §3: основной dev tree
-   = `linux-clang-debug`; Windows = secondary.
+1. **Windows host verified 2026-07-15** — `windows-clang-debug` (clang-cl 22.1.8,
+   CMake 4.2.2): ProjectV + ctest 42/42 + lookdev smoke EXIT=0. Modules still
+   via header fallback on WIN32+Clang until CMake ≥4.4. Primary dev tree remains
+   `linux-clang-debug`.
 2. **Benchmark gated on Linux debug** — `ProjectVFrustumCullBenchmark` only
    builds in `linux-clang-debug*` presets (gated by
    `PROJECTV_ENABLE_BENCHMARKS=ON`).

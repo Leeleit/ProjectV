@@ -1,4 +1,5 @@
 #include "render/Cloudscape.hpp"
+#include "core/EnvUtils.hpp"
 
 #include "core/Types.hpp"
 
@@ -19,7 +20,7 @@ struct TestContext {
 
 void TestCloudscapeEnvDefaultOff(TestContext &context)
 {
-	unsetenv("PROJECTV_CLOUDS");
+	projectv::core::UnsetEnvVar("PROJECTV_CLOUDS");
 	if (projectv::render::IsCloudscapeEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_CLOUDS unset -> false");
 	}
@@ -27,20 +28,20 @@ void TestCloudscapeEnvDefaultOff(TestContext &context)
 
 void TestCloudscapeEnvExplicitOn(TestContext &context)
 {
-	setenv("PROJECTV_CLOUDS", "ON", 1);
+	projectv::core::SetEnvVar("PROJECTV_CLOUDS", "ON", 1);
 	if (!projectv::render::IsCloudscapeEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_CLOUDS=ON -> true");
 	}
-	unsetenv("PROJECTV_CLOUDS");
+	projectv::core::UnsetEnvVar("PROJECTV_CLOUDS");
 }
 
 void TestCloudscapeEnvZeroIsOff(TestContext &context)
 {
-	setenv("PROJECTV_CLOUDS", "0", 1);
+	projectv::core::SetEnvVar("PROJECTV_CLOUDS", "0", 1);
 	if (projectv::render::IsCloudscapeEnabled()) {
 		context.Fail(__LINE__, "PROJECTV_CLOUDS=0 -> false");
 	}
-	unsetenv("PROJECTV_CLOUDS");
+	projectv::core::UnsetEnvVar("PROJECTV_CLOUDS");
 }
 
 void TestCloudscapePushConstantsSize(TestContext &context)
@@ -58,7 +59,7 @@ void TestCloudscapeConstants(TestContext &context)
 
 void TestCreateCloudscapeResourcesRejectsNullContext(TestContext &context)
 {
-	unsetenv("PROJECTV_CLOUDS");
+	projectv::core::UnsetEnvVar("PROJECTV_CLOUDS");
 	if (projectv::render::CreateCloudscapeResources(nullptr, nullptr)) {
 		context.Fail(__LINE__, "CreateCloudscapeResources(null) must return false");
 	}
