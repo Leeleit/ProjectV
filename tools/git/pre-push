@@ -1,7 +1,24 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"
 cd "${ROOT_DIR}"
 
+echo "=== pre-push: lint-gate (clang-format + clang-tidy) ==="
+# Preserve pre-push stdin (local/remote SHAs) for lint-gate push mode.
+PUSH_REFS="$(cat || true)"
+printf '%s\n' "${PUSH_REFS}" | "${ROOT_DIR}/tools/git/lint-gate.sh" push
+
+if [[ "${PROJECTV_SKIP_DOCKER_CI:-}" == "1" ]]; then
+	echo "pre-push: Docker CI skipped (PROJECTV_SKIP_DOCKER_CI=1)"
+	exit 0
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+	echo "pre-push: docker not found — lint-gate passed; skipping Docker CI"
+	echo "pre-push: set PROJECTV_SKIP_DOCKER_CI=1 to silence this, or install Docker for full CI"
+	exit 0
+fi
+
+echo "=== pre-push: Docker CI ==="
 exec "${ROOT_DIR}/docker/run-ci.sh"

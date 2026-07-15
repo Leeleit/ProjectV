@@ -1,10 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"
 cd "${ROOT_DIR}"
 
-echo "=== Local pre-commit gate (linux-clang-debug) ==="
-cmake --preset linux-clang-debug
-cmake --build --preset linux-clang-debug-build
-ctest --preset linux-clang-debug-tests
+echo "=== pre-commit: lint-gate (clang-format + clang-tidy) ==="
+exec "${ROOT_DIR}/tools/git/lint-gate.sh" commit

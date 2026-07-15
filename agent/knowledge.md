@@ -80,11 +80,12 @@ Pet-project = pet-project, нет нужды в legacy уступках.
 | `windows-clang-debug-tracy-profiler` | Windows clang-cl | Debug | OFF | OFF | OFF | ON |
 | `windows-clang-release` | Windows clang-cl | Release | ON | OFF | OFF | OFF |
 
-**Build-preset target-list invariant:** все 5 build-presets (кроме smoke-варианта)
+**Build-preset target-list invariant:** все 6 build-presets (кроме smoke-варианта)
 **обязаны** перечислять все ctest-registered executables в `targets[]`. Без этого
 `cmake --build --preset X-build` + `ctest --preset X-tests` ломается на чистом
-clone: 39+ тестов получают «cannot find executable» если build-preset не собрал
-соответствующий бинарь. Benchmark (`ProjectVFrustumCullBenchmark`) — только
+clone: тесты получают «cannot find executable» / Not Run если build-preset не
+собрал соответствующий бинарь. При добавлении `add_test` — сразу добавить target
+во все build-presets. Benchmark (`ProjectVFrustumCullBenchmark`) — только
 linux-clang-debug, linux-clang-debug-ci, linux-clang-debug-tracy-profiler
 (gated by `PROJECTV_ENABLE_BENCHMARKS=ON`).
 
@@ -101,6 +102,27 @@ sync или при риске device-lost/hang.
 **Почему:** без явного target-list чистый clone ломается при первой попытке
 `ctest` после свежей конфигурации. Без smoke harness изменения в bootstrap
 проходят build+tests но ломают runtime.
+
+## 3.1 Local lint gate (clang-format + clang-tidy)
+
+**Решение:** git hooks в `tools/git/` (через `core.hooksPath=tools/git`):
+
+| Hook | Behavior |
+|---|---|
+| `pre-commit` | Auto `clang-format -i` на staged lintable files → re-stage → `clang-tidy --warnings-as-errors=*` на changed TUs. Non-zero = reject commit. |
+| `pre-push` | Тот же lint по push-range, затем Docker CI (`docker/run-ci.sh`) если `docker` доступен. |
+
+**Scope:** `src/`, `tests/`, `tools/` + `*.{c,cc,cxx,cpp,h,hh,hpp,ixx}`. Исключения: `external/`, `build/`, `legacy/`.
+
+**Requires:** `compile_commands.json` из configured preset (`CMAKE_EXPORT_COMPILE_COMMANDS=ON` в presets). Override: `PROJECTV_BUILD_DIR`.
+
+**Install:** `tools/git/install-hooks.sh` или `tools/git/install-hooks.ps1` (перезаписывает `core.hooksPath`, в т.ч. если был `/dev/null`).
+
+**Bypass (operator only):** `PROJECTV_SKIP_LINT=1`, `PROJECTV_SKIP_DOCKER_CI=1`.
+
+**Manual:** `tools/git/lint-gate.sh working` / `.\tools\git\lint-gate.ps1 working`.
+
+**Почему:** агент и ручные правки иначе разъезжаются по стилю; CLion Cleanup ≠ `.clang-format`. Gate держит format+tidy на changed files без полного tree scan.
 
 ## 4. Release preset policy (conservative)
 
@@ -1198,8 +1220,9 @@ Mip0 = NEAREST blit from depth; mips 1..N = compute 2×2 min-reduction (push-des
 - **Submodules:** 14 (SDL, volk, VMA, fmt, imgui, flecs, JoltPhysics, tracy, glm,
   meshoptimizer, fastgltf, draco, miniaudio, benchmark).
 - **Build state (post-reset):** green (`build/linux-clang-debug/bin/ProjectV` exists).
-- **Test state:** 39 ctest-registered executables. ctest `linux-clang-debug-tests`
-  passes (per session 24x record 37/37 + 4 RTX sub-tests in 25x).
+- **Test state:** 44 ctest-registered executables; CI runs 43 via
+  `-E ProjectVRayTracedShadowTests`. Build-presets must list all registered
+  targets in `targets[]` (see Part A §3 invariant).
 
 ## R2. GPU-specific facts (NVIDIA RTX 3060 Ti)
 

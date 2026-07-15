@@ -18,6 +18,17 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-15 Lint gate:** `tools/git/lint-gate.{sh,ps1}` — auto `clang-format`
++ `clang-tidy --warnings-as-errors=*` на changed files; `pre-commit` /
+`pre-push` reject при warnings/errors. Install: `install-hooks.ps1` /
+`install-hooks.sh` → `core.hooksPath=tools/git`. Pre-push Docker CI
+остаётся, но skip'ается если нет docker (`PROJECTV_SKIP_DOCKER_CI=1`).
+
+**2026-07-15 CI Not Run fix:** `ProjectVVulkanBootstrapTests` был в `add_test`,
+но отсутствовал в `targets[]` всех build-presets → CI
+`linux-clang-debug-ci-tests` падал с «Could not find executable» / Not Run.
+Fix: target добавлен во все 6 build-presets в `CMakePresets.json`.
+
 **2026-07-15 Windows clang-cl portability:** clone с Arch → Windows не собирался.
 Root cause: `FILE_SET CXX_MODULES` пропускается на WIN32+Clang, а mainline TU
 делали голый `import projectv.math` / `string_id` в обход шимов `Math.hpp` /
