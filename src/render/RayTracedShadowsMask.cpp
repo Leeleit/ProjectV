@@ -1,11 +1,31 @@
 #include "volk.h"
 #include "render/RayTracedShadows.hpp"
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "SDL3/SDL_log.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdlib>
 
 namespace projectv::render {
+
+VkExtent2D RayTracedShadows::ResolveShadowMaskExtent(const VkExtent2D fullExtent)
+{
+	float scale = 1.0f; // full-res look default; lower only via PROJECTV_RTX_SHADOW_MASK_SCALE for A/B
+	if (const char *const value = projectv::core::GetEnvVar("PROJECTV_RTX_SHADOW_MASK_SCALE");
+		value != nullptr && value[0] != '\0') {
+		char *end = nullptr;
+		const float parsed = std::strtof(value, &end);
+		if (end != value && std::isfinite(parsed) && parsed > 0.0f) {
+			scale = std::clamp(parsed, 0.25f, 1.0f);
+		}
+	}
+	return {
+		std::max(1u, static_cast<uint32_t>(std::lround(static_cast<float>(fullExtent.width) * scale))),
+		std::max(1u, static_cast<uint32_t>(std::lround(static_cast<float>(fullExtent.height) * scale)))};
+}
 
 bool RayTracedShadows::RecreateShadowMaskForExtent(const VulkanContextState &context, const uint32_t width, const uint32_t height)
 {

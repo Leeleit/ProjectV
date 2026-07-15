@@ -6,6 +6,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <functional>
+
 struct SwapchainState;
 struct FrameRenderData;
 struct DebugOverlayBox;
@@ -68,7 +70,8 @@ void RecordGraphicsCommands(
 	const FrameRenderData &frameRenderData,
 	VulkanContextState &context,
 	VkCommandBuffer cmd,
-	uint32_t imageIndex);
+	uint32_t imageIndex,
+	const std::function<void()> &markOpaqueEnd = {});
 
 bool ShouldCaptureScreenshot(const RenderState &render);
 void RecordSwapchainScreenshotCopy(

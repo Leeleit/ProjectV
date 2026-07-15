@@ -18,6 +18,47 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-15 Smooth specular tiers:** roughness budget in `voxel.frag` (no
+temporal — binary voxels). Full-look replay compare under
+`profiler-captures/full-look-baseline/replay-smooth-tiers/`. Prior profile:
+`profiler-captures/full-look-baseline/SUMMARY.md`.
+
+**2026-07-15 Placement material F2 fix:** F2 was unbound in ImGui HUD remap
+(`9721ad89`); FloorWhite/Gray also looked identical because `voxel.frag` overrode
+albedo with a world-position checkerboard and greedy mesh merged 3↔4. Restored
+`F2`→`CyclePlacementMaterial`; materials use SSBO `baseColor`; meshing merges
+only identical IDs. HUD strip shows current mat + F2 hint.
+
+**2026-07-15 AA bottleneck + tick replay:** CPU scopes `aa/post/present` in
+metrics; bench A/B shows MSAA4≈Off, **1.50+SMAA ~2.3×** (fill @ 2880×1620).
+nsys: `vkWaitForFences` dominates (GPU-bound). Input replay = **one sample per
+60 Hz sim tick**, format **v1 only** (no legacy). Re-F5 required. Details:
+`build/windows-clang-debug/profiler-captures/replay-aa-breakdown-v4/SUMMARY.md`.
+
+**2026-07-15 Input replay timeline sync:** superseded by tick-based replay
+(same day). Do not use wall `playbackBudgetSeconds`.
+
+**2026-07-15 Input replay = input only:** removed recorded-`deltaSeconds`
+injection into `lastFrameCounter`. Wall-clock drives sim; tick samples drive
+input.
+
+**2026-07-15 F5 replay profile:** full 1524-frame autoplay under nsys vulkan
+(after Admin layer register). Verdict: GPU ~54% Graphics / ~46% Meshing;
+FPS dips at frames ~480 (gfx) and ~600 (27 dirty rebuilds); cold RTX library
+join ~18 ms. Artifacts + table:
+`build/windows-clang-debug/profiler-captures/replay-f5-metrics/SUMMARY.md`.
+Env: `PROJECTV_INPUT_REPLAY_AUTOPLAY` + `QUIT`. (dt_ms in that capture was
+poisoned by old clock rewrite — re-run after input-only fix.)
+
+**2026-07-15 CLI profiling harness (Windows):** Nsight Systems/Graphics/Compute +
+RenderDoc installed. Added `tools/windows/Resolve-ProjectVProfilerTools.ps1` and
+`Invoke-ProjectVProfile.ps1` — unattended captures with `summary.json`/`SUMMARY.md`
+for agent ingestion (`-Tool Systems|GraphicsCapture|GpuTrace|Compute|RenderDoc`).
+Docs: `docs/Profiling.md` §CLI profiling; contract note in `agent/knowledge.md` R6.
+**Crash fix:** ngfx + compile-time Khronos validation → AV; runtime
+`PROJECTV_ENABLE_VALIDATION=OFF` now honored; GraphicsCapture smoke PASS.
+Systems Vulkan works after `Register-ProjectVNsightVulkanLayer.ps1` (Admin once).
+
 **2026-07-15 Lint gate:** full check restored — tidy all TUs in
 `compile_commands.json` (incl. tests); point `// NOLINT(*-exception-escape)`
 only on the 6 test mains that failed MSVC STL false-positives on push

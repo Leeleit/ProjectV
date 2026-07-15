@@ -88,9 +88,12 @@ void RecordGraphicsCommands(
 	const FrameRenderData &frameRenderData,
 	VulkanContextState &context,
 	const VkCommandBuffer cmd,
-	const uint32_t imageIndex)
+	const uint32_t imageIndex,
+	const std::function<void()> &markOpaqueEnd)
 {
 	ScopedPassTimer passTimer(render.renderPassTimings.graphicsMs);
+	render.renderPassTimings.aaMs = 0.0f;
+	render.renderPassTimings.postFxMs = 0.0f;
 	PV_PROFILE_ZONE_N("RecordGraphicsCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Graphics Pass");
 	const VkExtent2D renderExtent = render.internalRenderExtent.width > 0u &&
@@ -141,7 +144,8 @@ void RecordGraphicsCommands(
 		if (render.msaaSampleCount > 1u && render.sceneColorMsImage != VK_NULL_HANDLE) {
 			TransitionImage(cmd, render.sceneColorMsImage, VK_IMAGE_ASPECT_COLOR_BIT,
 							render.sceneColorMsCurrentLayout, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-							VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+							VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+							VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
 							VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 			render.sceneColorMsCurrentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		}
@@ -174,8 +178,9 @@ void RecordGraphicsCommands(
 		if (render.msaaSampleCount > 1u && render.depthResolveImage != VK_NULL_HANDLE) {
 			TransitionImage(cmd, render.depthResolveImage, VK_IMAGE_ASPECT_DEPTH_BIT,
 							render.depthResolveCurrentLayout, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-							VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
-							VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+							VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+							VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+							VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 			render.depthResolveCurrentLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 		}
 
@@ -512,7 +517,11 @@ void RecordGraphicsCommands(
 		}
 
 		bool postFxActive = projectv::render::IsPostFxEnabled();
+		if (markOpaqueEnd) {
+			markOpaqueEnd(); // GPU ts: end opaque / start AA+post
+		}
 		if (postFxActive) {
+			ScopedPassTimer postFxTimer(render.renderPassTimings.postFxMs);
 			postFxActive = projectv::render::RecordPostFxPass(
 				cmd, context, render, render.currentSceneLighting, frameRenderData, renderExtent, frameRenderData.frameIndex);
 		}
@@ -520,8 +529,11 @@ void RecordGraphicsCommands(
 		VkImageView hdrSourceView = postFxActive ? render.postFxOutputImageView : render.sceneColorImageView;
 		VkImageLayout postFxOutputLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 		VkImageLayout &hdrSourceLayout = postFxActive ? postFxOutputLayout : render.sceneColorCurrentLayout;
-		if (!projectv::render::RecordAaResolvePass(cmd, context, render, hdrSourceImage, hdrSourceView, hdrSourceLayout, renderExtent, frameRenderData.frameIndex)) {
-			return;
+		{
+			ScopedPassTimer aaTimer(render.renderPassTimings.aaMs);
+			if (!projectv::render::RecordAaResolvePass(cmd, context, render, hdrSourceImage, hdrSourceView, hdrSourceLayout, renderExtent, frameRenderData.frameIndex)) {
+				return;
+			}
 		}
 		TransitionImage(cmd, swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
 						VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, 0,
@@ -534,66 +546,89 @@ void RecordGraphicsCommands(
 		};
 		vkCmdBlitImage(cmd, render.aaPresentImage, render.aaPresentLayout, swapchain.images[imageIndex],
 					   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
-		TransitionImage(cmd, swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
-						VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-						VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-						VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+		const bool needUiPass = frameRenderData.debugUiVisible;
+		if (needUiPass) {
+			TransitionImage(cmd, swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
+							VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+							VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+							VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
-		{
-			const VkRenderingAttachmentInfo uiColorAttachment{
-				.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-				.pNext = nullptr,
-				.imageView = swapchain.imageViews[imageIndex],
-				.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				.resolveMode = VK_RESOLVE_MODE_NONE,
-				.resolveImageView = VK_NULL_HANDLE,
-				.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.clearValue = {},
-			};
-			const VkRenderingInfo uiRenderingInfo{
-				.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-				.pNext = nullptr,
-				.flags = 0,
-				.renderArea = {{0, 0}, swapchain.extent},
-				.layerCount = 1,
-				.viewMask = 0,
-				.colorAttachmentCount = 1,
-				.pColorAttachments = &uiColorAttachment,
-				.pDepthAttachment = nullptr,
-				.pStencilAttachment = nullptr,
-			};
-			vkCmdBeginRendering(cmd, &uiRenderingInfo);
-			const VkViewport uiViewport{
-				.x = 0.0f,
-				.y = 0.0f,
-				.width = static_cast<float>(swapchain.extent.width),
-				.height = static_cast<float>(swapchain.extent.height),
-				.minDepth = 0.0f,
-				.maxDepth = 1.0f,
-			};
-			const VkRect2D uiScissor{.offset = {0, 0}, .extent = swapchain.extent};
-			vkCmdSetViewport(cmd, 0, 1, &uiViewport);
-			vkCmdSetScissor(cmd, 0, 1, &uiScissor);
-			RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
-			projectv::ui::ImGuiRenderDrawData(cmd);
-			vkCmdEndRendering(cmd);
-		}
+			{
+				const VkRenderingAttachmentInfo uiColorAttachment{
+					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+					.pNext = nullptr,
+					.imageView = swapchain.imageViews[imageIndex],
+					.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					.resolveMode = VK_RESOLVE_MODE_NONE,
+					.resolveImageView = VK_NULL_HANDLE,
+					.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+					.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+					.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+					.clearValue = {},
+				};
+				const VkRenderingInfo uiRenderingInfo{
+					.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+					.pNext = nullptr,
+					.flags = 0,
+					.renderArea = {{0, 0}, swapchain.extent},
+					.layerCount = 1,
+					.viewMask = 0,
+					.colorAttachmentCount = 1,
+					.pColorAttachments = &uiColorAttachment,
+					.pDepthAttachment = nullptr,
+					.pStencilAttachment = nullptr,
+				};
+				vkCmdBeginRendering(cmd, &uiRenderingInfo);
+				const VkViewport uiViewport{
+					.x = 0.0f,
+					.y = 0.0f,
+					.width = static_cast<float>(swapchain.extent.width),
+					.height = static_cast<float>(swapchain.extent.height),
+					.minDepth = 0.0f,
+					.maxDepth = 1.0f,
+				};
+				const VkRect2D uiScissor{.offset = {0, 0}, .extent = swapchain.extent};
+				vkCmdSetViewport(cmd, 0, 1, &uiViewport);
+				vkCmdSetScissor(cmd, 0, 1, &uiScissor);
+				RecordDebugOverlayCommands(render, swapchain, frameRenderData, cmd);
+				projectv::ui::ImGuiRenderDrawData(cmd);
+				vkCmdEndRendering(cmd);
+			}
 
-		if (ShouldCaptureScreenshot(render)) {
-			RecordSwapchainScreenshotCopy(swapchain, render, cmd, imageIndex);
+			if (ShouldCaptureScreenshot(render)) {
+				RecordSwapchainScreenshotCopy(swapchain, render, cmd, imageIndex);
+			} else {
+				TransitionImage(
+					cmd,
+					swapchain.images[imageIndex],
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+					VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+					VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_PIPELINE_STAGE_2_NONE,
+					0);
+			}
 		} else {
-			TransitionImage(
-				cmd,
-				swapchain.images[imageIndex],
-				VK_IMAGE_ASPECT_COLOR_BIT,
-				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-				VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-				VK_PIPELINE_STAGE_2_NONE,
-				0);
+			projectv::ui::ImGuiEndFrameIfOpen(); // drain ImGui frame without GPU submit
+			if (ShouldCaptureScreenshot(render)) {
+				TransitionImage(cmd, swapchain.images[imageIndex], VK_IMAGE_ASPECT_COLOR_BIT,
+								VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+								VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+								VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
+				RecordSwapchainScreenshotCopy(swapchain, render, cmd, imageIndex);
+			} else {
+				TransitionImage(
+					cmd,
+					swapchain.images[imageIndex],
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
+					VK_ACCESS_2_TRANSFER_WRITE_BIT,
+					VK_PIPELINE_STAGE_2_NONE,
+					0);
+			}
 		}
 	}
 

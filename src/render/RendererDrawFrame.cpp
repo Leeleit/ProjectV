@@ -18,6 +18,8 @@
 #include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstdlib>
 #include <limits>
 
@@ -37,6 +39,48 @@ uint32_t GetPresentWaitMaxLatencyFrames()
 	return parsed > std::numeric_limits<uint32_t>::max()
 			   ? std::numeric_limits<uint32_t>::max()
 			   : static_cast<uint32_t>(parsed);
+}
+
+VkExtent2D ScaleShadowMaskExtent(const VkExtent2D full)
+{
+	return projectv::render::RayTracedShadows::ResolveShadowMaskExtent(full);
+}
+
+bool IsRtxShadowPassEnabled()
+{
+	const char *const value = projectv::core::GetEnvVar("PROJECTV_RTX_SHADOW_PASS");
+	if (value == nullptr || value[0] == '\0') {
+		return true;
+	}
+	return !(value[0] == '0' || value[0] == 'n' || value[0] == 'N' || value[0] == 'f' || value[0] == 'F');
+}
+
+uint32_t GetDdgiUpdatePeriod()
+{
+	const char *const value = projectv::core::GetEnvVar("PROJECTV_DDGI_UPDATE_PERIOD");
+	if (value == nullptr || value[0] == '\0') {
+		return 1u; // every frame (look default); N>1 amortizes; 0 disables update
+	}
+	char *end = nullptr;
+	const unsigned long parsed = std::strtoul(value, &end, 10);
+	if (end == value || *end != '\0') {
+		return 1u;
+	}
+	return static_cast<uint32_t>(parsed);
+}
+
+uint32_t GetMaxBlasBuildsPerFrame()
+{
+	const char *const value = projectv::core::GetEnvVar("PROJECTV_BLAS_BUILDS_PER_FRAME");
+	if (value == nullptr || value[0] == '\0') {
+		return 8u;
+	}
+	char *end = nullptr;
+	const unsigned long parsed = std::strtoul(value, &end, 10);
+	if (end == value || *end != '\0' || parsed == 0u) {
+		return 8u;
+	}
+	return static_cast<uint32_t>(std::min<unsigned long>(parsed, 256ul));
 }
 
 } // namespace
@@ -106,6 +150,30 @@ SDL_AppResult DrawFrame(
 		runtime::LogVkFailure("DrawFrame.vkWaitForFences", waitFencesResult);
 		return SDL_APP_FAILURE;
 	}
+	if (render->gpuTimestampQueryPool != VK_NULL_HANDLE) {
+		const uint32_t base = static_cast<uint32_t>(currentFrameIndex) * render->gpuTimestampQueriesPerFrame;
+		std::array<uint64_t, 10> stamps{};
+		if (vkGetQueryPoolResults(
+				context->device,
+				render->gpuTimestampQueryPool,
+				base,
+				render->gpuTimestampQueriesPerFrame,
+				sizeof(stamps),
+				stamps.data(),
+				sizeof(uint64_t),
+				VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
+			const auto toMs = [period = render->gpuTimestampPeriodNs](const uint64_t a, const uint64_t b) {
+				return static_cast<float>((static_cast<double>(b - a) * static_cast<double>(period)) * 1.0e-6);
+			};
+			render->renderPassTimings.gpuTlasMs = toMs(stamps[0], stamps[1]);
+			render->renderPassTimings.gpuRtxShadowMs = toMs(stamps[2], stamps[3]);
+			render->renderPassTimings.gpuDdgiMs = toMs(stamps[4], stamps[5]);
+			render->renderPassTimings.gpuOpaqueMs = toMs(stamps[6], stamps[7]);
+			render->renderPassTimings.gpuAaPostMs = toMs(stamps[8], stamps[9]);
+			render->renderPassTimings.gpuGraphicsMs =
+				render->renderPassTimings.gpuOpaqueMs + render->renderPassTimings.gpuAaPostMs;
+		}
+	}
 
 	if (platform->windowResized) {
 		if (!RecreateSwapchain(platform, context, swapchain, render)) {
@@ -169,6 +237,16 @@ SDL_AppResult DrawFrame(
 		runtime::LogVkFailure("DrawFrame.vkBeginCommandBuffer", beginCommandBufferResult);
 		return SDL_APP_FAILURE;
 	}
+	const uint32_t gpuTsBase =
+		static_cast<uint32_t>(currentFrameIndex) * render->gpuTimestampQueriesPerFrame;
+	if (render->gpuTimestampQueryPool != VK_NULL_HANDLE) {
+		vkCmdResetQueryPool(cmd, render->gpuTimestampQueryPool, gpuTsBase, render->gpuTimestampQueriesPerFrame);
+	}
+	const auto writeGpuTs = [&](const uint32_t slot) {
+		if (render->gpuTimestampQueryPool != VK_NULL_HANDLE) {
+			vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, render->gpuTimestampQueryPool, gpuTsBase + slot);
+		}
+	};
 
 	if (render->rayTracedShadows != nullptr) {
 		const bool rtxFinishWasPending = render->rayTracedShadows->IsVoxelAwareRtxPending();
@@ -176,10 +254,11 @@ SDL_AppResult DrawFrame(
 			PV_PROFILE_ZONE_N("TryFinishVoxelAwareRtxResources");
 			const bool finished = render->rayTracedShadows->TryFinishVoxelAwareRtxResources(*context);
 			if (finished && render->rayTracedShadows->IsVoxelAwareRtxActive()) {
-				const VkExtent2D shadowExtent = render->internalRenderExtent.width > 0u &&
-														render->internalRenderExtent.height > 0u
-													? render->internalRenderExtent
-													: swapchain->extent;
+				const VkExtent2D fullExtent = render->internalRenderExtent.width > 0u &&
+													  render->internalRenderExtent.height > 0u
+												  ? render->internalRenderExtent
+												  : swapchain->extent;
+				const VkExtent2D shadowExtent = ScaleShadowMaskExtent(fullExtent);
 				if (!render->rayTracedShadows->RecreateShadowMaskForExtent(
 						*context, shadowExtent.width, shadowExtent.height)) {
 					runtime::LogRuntimeFailure(
@@ -250,8 +329,11 @@ SDL_AppResult DrawFrame(
 				}
 			}
 		}
-		render->rayTracedShadows->BuildDirtyBlases(*context, context->commandPool);
+		const uint32_t blasBuilt = render->rayTracedShadows->RecordDirtyBlasBuilds(
+			cmd, *context, GetMaxBlasBuildsPerFrame());
+		(void)blasBuilt;
 
+		bool tlasNeedsBuild = false;
 		if (state->world().voxelWorld != nullptr) { // EVIL: visible chunk list assembled from non-empty chunks with valid BLAS for TLAS population.
 			std::vector<uint32_t> visibleChunkIndices{};
 			std::vector<VkTransformMatrixKHR> visibleChunkTransforms{};
@@ -275,53 +357,78 @@ SDL_AppResult DrawFrame(
 				visibleChunkTransforms.push_back(identityMatrix);
 			}
 			if (!visibleChunkIndices.empty()) {
-				render->rayTracedShadows->UpdateTlas(
+				tlasNeedsBuild = render->rayTracedShadows->UpdateTlas(
 					*context,
 					visibleChunkIndices,
 					visibleChunkTransforms);
 			}
 		}
-	}
 
-	if (render->rayTracedShadows != nullptr) {
-		if (render->rayTracedShadows->IsEnabled()) {
+		if (render->rayTracedShadows->IsEnabled() && tlasNeedsBuild) {
 			PV_PROFILE_GPU_ZONE(render->tracyGraphicsContext, cmd, "TLAS Build");
-			render->rayTracedShadows->RecordTlasBuild(cmd, *context); // EVIL: build TLAS on current frame before RT shadow trace to kill 1-frame latency/shimmer (P1A-3b).
+			ScopedPassTimer tlasTimer(render->renderPassTimings.shadowMs);
+			writeGpuTs(0u);
+			render->rayTracedShadows->RecordTlasBuild(cmd, *context); // EVIL: build TLAS only when instances/BLAS changed (dirty-only).
+			writeGpuTs(1u);
+		} else {
+			writeGpuTs(0u);
+			writeGpuTs(1u);
 		}
-		PV_PROFILE_ZONE_N("RecordVoxelAwareRtxShadowPass");
-		const SceneFrameResources &shadowFrameResources = render->sceneFrameResources[frame->currentFrame];
-		projectv::math::Mat4 inverseViewProjection =
-			projectv::math::inverse(frame->renderData.graphicsPushConstants.viewProjection);
-		std::array<float, 16> inverseViewProjectionFlat{};
-		for (uint32_t i = 0; i < 16u; ++i) {
-			inverseViewProjectionFlat[i] = inverseViewProjection.data()[i];
+		if (IsRtxShadowPassEnabled()) {
+			PV_PROFILE_ZONE_N("RecordVoxelAwareRtxShadowPass");
+			writeGpuTs(2u);
+			const SceneFrameResources &shadowFrameResources = render->sceneFrameResources[frame->currentFrame];
+			projectv::math::Mat4 inverseViewProjection =
+				projectv::math::inverse(frame->renderData.graphicsPushConstants.viewProjection);
+			std::array<float, 16> inverseViewProjectionFlat{};
+			for (uint32_t i = 0; i < 16u; ++i) {
+				inverseViewProjectionFlat[i] = inverseViewProjection.data()[i];
+			}
+			const float cameraPosition[3] = {
+				frame->renderData.graphicsPushConstants.cameraPosition.x,
+				frame->renderData.graphicsPushConstants.cameraPosition.y,
+				frame->renderData.graphicsPushConstants.cameraPosition.z};
+			const float cameraForward[3] = {
+				frame->renderData.graphicsPushConstants.cameraForward.x,
+				frame->renderData.graphicsPushConstants.cameraForward.y,
+				frame->renderData.graphicsPushConstants.cameraForward.z};
+			const VkExtent2D fullExtent = render->internalRenderExtent.width > 0u &&
+												  render->internalRenderExtent.height > 0u
+											  ? render->internalRenderExtent
+											  : swapchain->extent;
+			const VkExtent2D maskExtent = ScaleShadowMaskExtent(fullExtent);
+			render->rayTracedShadows->RecordVoxelAwareRtxShadowPass(
+				cmd,
+				*context,
+				frame->currentFrame,
+				frame->renderData.chunkDescriptorBuffer,
+				shadowFrameResources.sceneLightingBuffer,
+				frame->renderData.chunkVoxelPayloadBuffer,
+				inverseViewProjectionFlat.data(),
+				cameraPosition,
+				cameraForward,
+				maskExtent.width,
+				maskExtent.height);
+			writeGpuTs(3u);
+		} else {
+			writeGpuTs(2u);
+			writeGpuTs(3u);
 		}
-		const float cameraPosition[3] = {
-			frame->renderData.graphicsPushConstants.cameraPosition.x,
-			frame->renderData.graphicsPushConstants.cameraPosition.y,
-			frame->renderData.graphicsPushConstants.cameraPosition.z};
-		const float cameraForward[3] = {
-			frame->renderData.graphicsPushConstants.cameraForward.x,
-			frame->renderData.graphicsPushConstants.cameraForward.y,
-			frame->renderData.graphicsPushConstants.cameraForward.z};
-		render->rayTracedShadows->RecordVoxelAwareRtxShadowPass(
-			cmd,
-			*context,
-			frame->currentFrame,
-			frame->renderData.chunkDescriptorBuffer,
-			shadowFrameResources.sceneLightingBuffer,
-			frame->renderData.chunkVoxelPayloadBuffer,
-			inverseViewProjectionFlat.data(),
-			cameraPosition,
-			cameraForward,
-			render->internalRenderExtent.width > 0u ? render->internalRenderExtent.width : swapchain->extent.width,
-			render->internalRenderExtent.height > 0u ? render->internalRenderExtent.height : swapchain->extent.height);
+	} else {
+		writeGpuTs(0u);
+		writeGpuTs(1u);
+		writeGpuTs(2u);
+		writeGpuTs(3u);
 	}
 
 	if (render->rtxGiProbes != nullptr && render->rtxGiProbes->IsEnabled()) {
+		const uint32_t ddgiPeriod = GetDdgiUpdatePeriod();
+		static uint32_t ddgiFrameCounter = 0u;
+		const bool runDdgi = ddgiPeriod > 0u && (ddgiFrameCounter++ % ddgiPeriod) == 0u;
 		VkAccelerationStructureKHR tlas = render->rayTracedShadows != nullptr ? render->rayTracedShadows->GetTlas() : VK_NULL_HANDLE;
-		if (tlas != VK_NULL_HANDLE) {
+		if (runDdgi && tlas != VK_NULL_HANDLE) {
 			PV_PROFILE_ZONE_N("RecordRtxGiProbeUpdatePass");
+			writeGpuTs(4u);
 			const SceneFrameResources &frameResources = render->sceneFrameResources[frame->currentFrame];
 			projectv::render::RecordRtxGiProbeUpdatePass(
 				cmd,
@@ -334,10 +441,29 @@ SDL_AppResult DrawFrame(
 				render->materialVisualBuffer,
 				tlas,
 				frame->renderData);
+			writeGpuTs(5u);
+		} else {
+			writeGpuTs(4u);
+			writeGpuTs(5u);
 		}
+	} else {
+		writeGpuTs(4u);
+		writeGpuTs(5u);
 	}
 
-	RecordGraphicsCommands(*render, *swapchain, frame->renderData, *context, cmd, imageIndex);
+	writeGpuTs(6u);
+	RecordGraphicsCommands(
+		*render,
+		*swapchain,
+		frame->renderData,
+		*context,
+		cmd,
+		imageIndex,
+		[&] {
+			writeGpuTs(7u); // end opaque
+			writeGpuTs(8u); // start AA/post
+		});
+	writeGpuTs(9u);
 
 	if (render->rayTracedShadows != nullptr) {
 		render->rayTracedShadows->RecordDebugReport();
@@ -551,22 +677,26 @@ SDL_AppResult DrawFrame(
 		presentInfo.pNext = &presentIdInfo;
 	}
 
-	VkResult presentRes = vkQueuePresentKHR(context->queue, &presentInfo);
-	if (presentWaitActive && presentRes == VK_SUCCESS && presentId > presentWaitMaxLatencyFrames) {
-		if (!swapchain->presentWaitLogged) {
-			SDL_Log("Render: present_wait active with max latency %u frame(s)", presentWaitMaxLatencyFrames);
-			swapchain->presentWaitLogged = true;
-		}
-		const VkResult waitPresentResult = vkWaitForPresentKHR(
-			context->device,
-			swapchain->handle,
-			presentId - presentWaitMaxLatencyFrames,
-			UINT64_MAX);
-		if (waitPresentResult == VK_ERROR_OUT_OF_DATE_KHR) {
-			presentRes = waitPresentResult;
-		} else if (waitPresentResult != VK_SUCCESS) {
-			runtime::LogVkFailure("DrawFrame.vkWaitForPresentKHR", waitPresentResult);
-			return SDL_APP_FAILURE;
+	VkResult presentRes = VK_SUCCESS;
+	{
+		ScopedPassTimer presentTimer(render->renderPassTimings.presentMs);
+		presentRes = vkQueuePresentKHR(context->queue, &presentInfo);
+		if (presentWaitActive && presentRes == VK_SUCCESS && presentId > presentWaitMaxLatencyFrames) {
+			if (!swapchain->presentWaitLogged) {
+				SDL_Log("Render: present_wait active with max latency %u frame(s)", presentWaitMaxLatencyFrames);
+				swapchain->presentWaitLogged = true;
+			}
+			const VkResult waitPresentResult = vkWaitForPresentKHR(
+				context->device,
+				swapchain->handle,
+				presentId - presentWaitMaxLatencyFrames,
+				UINT64_MAX);
+			if (waitPresentResult == VK_ERROR_OUT_OF_DATE_KHR) {
+				presentRes = waitPresentResult;
+			} else if (waitPresentResult != VK_SUCCESS) {
+				runtime::LogVkFailure("DrawFrame.vkWaitForPresentKHR", waitPresentResult);
+				return SDL_APP_FAILURE;
+			}
 		}
 	}
 	if (!SaveRequestedScreenshot(*context, *render, inFlightFence, captureExtent, captureFormat)) {

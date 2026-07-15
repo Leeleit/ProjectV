@@ -387,6 +387,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	}
 	ConfigureLookDevCaptureAutomationFromEnvironment(&state->lookDevCapture());
 	ConfigureBenchmarkAutomationFromEnvironment(&state->benchmark());
+	ConfigureInputReplayFromEnvironment(state->input());
 
 	{
 		const std::string configPath = projectv::voxel::GetDefaultSceneConfigPath();
@@ -412,6 +413,12 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 			state->render().msaaMode = loadedMsaa;
 			state->render().smaaEnabled = config.smaaEnabled;
 			state->render().renderScaleMode = loadedScale;
+			std::fprintf(
+				stderr,
+				"[ProjectV][SceneConfig] AA applied: msaa=%s smaa=%s scale=%s\n",
+				std::string{projectv::render::ToString(loadedMsaa)}.c_str(),
+				config.smaaEnabled ? "ON" : "OFF",
+				std::string{projectv::render::ToString(loadedScale)}.c_str());
 			if (msaaChanged) {
 				state->render().aaPipelinesNeedRecreate = true;
 			}
@@ -525,10 +532,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		state->input().replay.playbackRequested = false;
 		state->input().replay.playbackActive = false;
 		// Do not quit the app — missing/corrupt replay is recoverable.
-	}
-	if (state->input().replay.playbackActive &&
-		!PrepareNextInputReplayPlaybackFrame(&state->input(), &state->simulation())) {
-		StopInputReplayPlayback(&state->input());
 	}
 
 	projectv::ui::ImGuiNewFrame();
@@ -677,7 +680,11 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	projectv::ui::ImGuiEndFrameIfOpen();
 	if (state->input().replay.playbackActive &&
 		state->input().replay.playbackFrameIndex >= state->input().replay.capture.frames.size()) {
+		const bool quitAfter = state->input().replay.quitWhenPlaybackDone;
 		StopInputReplayPlayback(&state->input());
+		if (quitAfter) {
+			return SDL_APP_SUCCESS;
+		}
 	}
 
 	PV_PROFILE_FRAME_MARK();

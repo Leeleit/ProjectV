@@ -1,5 +1,6 @@
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanGraphicsPipelineInternal.hpp"
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "core/ShaderIO.hpp"
 #include "debug/Profiling.hpp"
@@ -197,6 +198,24 @@ bool CreateGraphicsPipeline(
 		.pName = "main",
 		.pSpecializationInfo = nullptr,
 	};
+	uint32_t rtxSmoothSpecEnabled = 1u; // look default ON; PROJECTV_RTX_SMOOTH_SPEC=0 for A/B only
+	if (const char *const smoothSpecEnv = projectv::core::GetEnvVar("PROJECTV_RTX_SMOOTH_SPEC");
+		smoothSpecEnv != nullptr && smoothSpecEnv[0] != '\0' &&
+		(smoothSpecEnv[0] == '0' || smoothSpecEnv[0] == 'n' || smoothSpecEnv[0] == 'N' ||
+		 smoothSpecEnv[0] == 'f' || smoothSpecEnv[0] == 'F')) {
+		rtxSmoothSpecEnabled = 0u;
+	}
+	const VkSpecializationMapEntry rtxSmoothSpecEntry{
+		.constantID = 0u,
+		.offset = 0u,
+		.size = sizeof(uint32_t),
+	};
+	const VkSpecializationInfo rtxFragSpecialization{
+		.mapEntryCount = 1u,
+		.pMapEntries = &rtxSmoothSpecEntry,
+		.dataSize = sizeof(uint32_t),
+		.pData = &rtxSmoothSpecEnabled,
+	};
 	const VkPipelineShaderStageCreateInfo fragStageRtx{
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		.pNext = nullptr,
@@ -204,7 +223,7 @@ bool CreateGraphicsPipeline(
 		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.module = fragmentShaderModuleRtx,
 		.pName = "main",
-		.pSpecializationInfo = nullptr,
+		.pSpecializationInfo = rtxProbeAvailable ? &rtxFragSpecialization : nullptr,
 	};
 	const std::array shaderStages{vertexStageInfo, fragStage};
 	const std::array shaderStagesRtx{vertexStageInfo, fragStageRtx};

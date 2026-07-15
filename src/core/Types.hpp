@@ -203,6 +203,9 @@ struct DebugStats {
 	float renderPassShadowMs = 0.0f;
 	float renderPassMeshingMs = 0.0f;
 	float renderPassGraphicsMs = 0.0f;
+	float renderPassAaMs = 0.0f;
+	float renderPassPostFxMs = 0.0f;
+	float renderPassPresentMs = 0.0f;
 	float renderPassDebugOverlayMs = 0.0f;
 	float renderPassOtherMs = 0.0f;
 	uint32_t renderPassDirtyChunkRebuiltCount = 0;
@@ -418,8 +421,17 @@ struct RenderPassTimings {
 	float shadowMs = 0.0f;
 	float meshingMs = 0.0f;
 	float graphicsMs = 0.0f;
+	float aaMs = 0.0f;
+	float postFxMs = 0.0f;
+	float presentMs = 0.0f;
 	float debugOverlayMs = 0.0f;
 	float otherMs = 0.0f;
+	float gpuTlasMs = 0.0f;
+	float gpuRtxShadowMs = 0.0f;
+	float gpuDdgiMs = 0.0f;
+	float gpuGraphicsMs = 0.0f; // opaque+AA total (stamps 6→9)
+	float gpuOpaqueMs = 0.0f;	// scene/opaque through pre-AA (6→7)
+	float gpuAaPostMs = 0.0f;	// postFx+AA+blit (8→9)
 	uint32_t dirtyChunkRebuiltCount = 0;
 };
 
@@ -445,6 +457,10 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	uint64_t sceneMemoryBytes = 0;
 	void *tracyGraphicsContext = nullptr;
 	bool tracyGraphicsContextCalibrated = false;
+	VkQueryPool gpuTimestampQueryPool = VK_NULL_HANDLE;
+	float gpuTimestampPeriodNs = 1.0f;
+	uint32_t gpuTimestampQueriesPerFrame = 10u; // 5 pairs: tlas/rtx/ddgi/opaque/aa-post
+	uint64_t gpuTimestampFrameIndex = 0;
 	VoxelLightingDebugControls lightingDebugControls{};
 	projectv::render::MsaaMode msaaMode = projectv::render::MsaaMode::X4;
 	bool smaaEnabled = true;

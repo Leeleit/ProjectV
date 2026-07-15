@@ -173,6 +173,22 @@ std::expected<void, projectv::vulkan_init::VulkanInitError> InitVulkan(AppState 
 					"InitVulkan.CreateTracyGpuContext", "CreateTracyGpuContext returned false");
 	}
 
+	{
+		RenderState &render = state->render();
+		VulkanContextState &context = state->context();
+		VkPhysicalDeviceProperties props{};
+		vkGetPhysicalDeviceProperties(context.physicalDevice, &props);
+		render.gpuTimestampPeriodNs = props.limits.timestampPeriod;
+		render.gpuTimestampQueriesPerFrame = 10u; // tlas, rtx, ddgi, opaque, aa/post
+		VkQueryPoolCreateInfo queryInfo{.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+		queryInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+		queryInfo.queryCount = render.gpuTimestampQueriesPerFrame * MAX_FRAMES_IN_FLIGHT;
+		if (vkCreateQueryPool(context.device, &queryInfo, nullptr, &render.gpuTimestampQueryPool) != VK_SUCCESS) {
+			render.gpuTimestampQueryPool = VK_NULL_HANDLE;
+			SDL_Log("InitVulkan: GPU timestamp query pool unavailable; GPU pass timings disabled");
+		}
+	}
+
 	if (!RecreateSwapchain(&state->platform(), &state->context(), &state->swapchain(), &state->render())) {
 		return std::unexpected(projectv::vulkan_init::VulkanInitError::SwapchainFailed);
 	}

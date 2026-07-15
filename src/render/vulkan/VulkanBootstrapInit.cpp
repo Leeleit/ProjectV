@@ -12,6 +12,9 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <cctype>
+#include <cstdio>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -20,6 +23,55 @@ namespace {
 inline constexpr char PROJECT_NAME[] = "ProjectV v0.0.1";
 
 inline constexpr uint32_t kDefaultMinVulkanApiVersion = VK_API_VERSION_1_4;
+
+bool EnvTokenEqualsIgnoreCase(const char *value, const char *token)
+{
+	if (value == nullptr || token == nullptr) {
+		return false;
+	}
+	while (*value != '\0' && *token != '\0') {
+		const unsigned char left = static_cast<unsigned char>(*value);
+		const unsigned char right = static_cast<unsigned char>(*token);
+		if (std::tolower(left) != std::tolower(right)) {
+			return false;
+		}
+		++value;
+		++token;
+	}
+	return *value == '\0' && *token == '\0';
+}
+
+bool IsEnvTruthy(const char *value)
+{
+	return EnvTokenEqualsIgnoreCase(value, "1") || EnvTokenEqualsIgnoreCase(value, "true") ||
+		   EnvTokenEqualsIgnoreCase(value, "yes") || EnvTokenEqualsIgnoreCase(value, "on");
+}
+
+bool IsEnvFalsy(const char *value)
+{
+	return EnvTokenEqualsIgnoreCase(value, "0") || EnvTokenEqualsIgnoreCase(value, "false") ||
+		   EnvTokenEqualsIgnoreCase(value, "no") || EnvTokenEqualsIgnoreCase(value, "off");
+}
+
+// Compile-time ON builds still honor PROJECTV_ENABLE_VALIDATION=OFF at runtime (Nsight/RenderDoc).
+bool WantValidationLayers()
+{
+#if !PROJECTV_ENABLE_VALIDATION
+	return false;
+#else
+	const char *const value = projectv::core::GetEnvVar("PROJECTV_ENABLE_VALIDATION");
+	if (value == nullptr || *value == '\0') {
+		return true;
+	}
+	if (IsEnvFalsy(value)) {
+		return false;
+	}
+	if (IsEnvTruthy(value)) {
+		return true;
+	}
+	return true;
+#endif
+}
 
 uint32_t ParseVulkanApiVersionString(const std::string_view raw)
 {
@@ -87,7 +139,10 @@ VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
 
 bool CreateDebugMessenger(VulkanContextState *context)
 {
-#if PROJECTV_ENABLE_VALIDATION
+	if (!WantValidationLayers()) {
+		(void)context;
+		return true;
+	}
 	const VkDebugUtilsMessengerCreateInfoEXT info = MakeDebugMessengerCreateInfo();
 	const VkResult createDebugMessengerResult =
 		vkCreateDebugUtilsMessengerEXT(context->instance, &info, nullptr, &context->debugMessenger);
@@ -96,10 +151,6 @@ bool CreateDebugMessenger(VulkanContextState *context)
 		return false;
 	}
 	return true;
-#else
-	(void)context;
-	return true;
-#endif
 }
 
 bool CheckValidationLayerSupport()
@@ -165,6 +216,16 @@ bool InitializeVulkanInstance(
 		runtime::LogSdlFailure("InitializeVulkanInstance.SDL_CreateWindow");
 		return false;
 	}
+	{
+		const char *const fullscreenEnv = projectv::core::GetEnvVar("PROJECTV_FULLSCREEN");
+		if (IsEnvTruthy(fullscreenEnv)) {
+			if (!SDL_SetWindowFullscreen(platform->window, true)) {
+				runtime::LogSdlFailure("InitializeVulkanInstance.SDL_SetWindowFullscreen");
+			} else {
+				std::fprintf(stderr, "[ProjectV][Window] PROJECTV_FULLSCREEN=1 → borderless desktop fullscreen\n");
+			}
+		}
+	}
 
 	const VkResult volkInitializeResult = volkInitialize();
 	if (volkInitializeResult != VK_SUCCESS) {
@@ -186,8 +247,8 @@ bool InitializeVulkanInstance(
 	}
 #endif
 
-#if PROJECTV_ENABLE_VALIDATION
-	{
+	const bool enableValidation = WantValidationLayers();
+	if (enableValidation) {
 		if (!CheckValidationLayerSupport()) {
 			runtime::LogRuntimeFailure(
 				"Init",
@@ -195,8 +256,9 @@ bool InitializeVulkanInstance(
 				"validation layers requested, but not available");
 			return false;
 		}
+	} else if (projectv::core::GetEnvVar("PROJECTV_ENABLE_VALIDATION") != nullptr) {
+		SDL_Log("[ProjectV] Vulkan validation layers disabled via PROJECTV_ENABLE_VALIDATION");
 	}
-#endif
 
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -209,14 +271,12 @@ bool InitializeVulkanInstance(
 	instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions.data();
 
 	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-#if PROJECTV_ENABLE_VALIDATION
-	{
+	if (enableValidation) {
 		instanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size());
 		instanceCreateInfo.ppEnabledLayerNames = kValidationLayers.data();
 		debugCreateInfo = MakeDebugMessengerCreateInfo();
 		instanceCreateInfo.pNext = &debugCreateInfo;
 	}
-#endif
 
 	const VkResult createInstanceResult = vkCreateInstance(&instanceCreateInfo, nullptr, &context->instance);
 	if (createInstanceResult != VK_SUCCESS) {

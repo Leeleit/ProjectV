@@ -211,10 +211,7 @@ bool ShouldEmitVoxelFace(const uint materialIndex, const uint neighborMaterialIn
 }
 
 bool IsSameMeshingGroup(const uint materialA, const uint materialB) {
-    if (materialA == materialB) { return true; }
-    const bool aIsFloor = materialA == 3u || materialA == 4u;
-    const bool bIsFloor = materialB == 3u || materialB == 4u;
-    return aIsFloor && bIsFloor;
+    return materialA == materialB;
 }
 
 bool IsAmbientOccluder(const uint materialIndex) {

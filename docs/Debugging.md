@@ -41,6 +41,7 @@ Settings (`` ` ``): overlays, lighting, walk, world/editor actions, music, repla
 - `Alt` — speed slow;
 - `Tab` — relative mouse mode;
 - `F1` — hide UI;
+- `F2` — cycle placement material (White → Gray → Glass → Fluid);
 - `` ` `` — Settings;
 - `Esc` — quit.
 

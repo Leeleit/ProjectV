@@ -65,9 +65,24 @@ const float kHugeRayT = 1e20;
 const float kVctCutoffRoughness = 0.3f;
 const float kVctMaxDistanceMeters = 64.0f;
 const uint kVctMaxMipLevel = 4u;
+// Smooth specular cost tiers (no temporal — binary voxels break TAA/history denoise).
+const float kSmoothSpecMirrorRoughness = 0.05f; // full primary + 2nd bounce
+const float kSmoothSpecMidRoughness = 0.15f;	 // primary only, distance * 0.75; above mid → * 0.5 until VCT cutoff
+
+void EvaluateSmoothSpecBudget(const float roughness, out bool allowSecondBounce, out float maxDistanceScale) {
+	allowSecondBounce = roughness <= kSmoothSpecMirrorRoughness;
+	if (roughness <= kSmoothSpecMirrorRoughness) {
+		maxDistanceScale = 1.0;
+	} else if (roughness <= kSmoothSpecMidRoughness) {
+		maxDistanceScale = 0.75;
+	} else {
+		maxDistanceScale = 0.5; // still <= kVctCutoffRoughness for RTX path
+	}
+}
 
 #ifdef VOXEL_RTX_ENABLED
 #extension GL_EXT_ray_query : require
+layout(constant_id = 0) const uint projectvRtxSmoothSpecEnabled = 1u; // PROJECTV_RTX_SMOOTH_SPEC=0 specializes to 0
 // EVIL: binding 13 = RTX top-level acceleration structure (TLAS) for ray-query
 // smooth specular GI per Stage 5.2. Bound to scene TLAS when RTX env-gate ON;
 // otherwise (non-RTX compile) binding slot is unused. Per
@@ -106,7 +121,8 @@ layout(set = 0, binding = 17, std430) readonly buffer RtxGiVolumeDesc {
 // shadow factor (0.0 = in shadow, 1.0 = lit) into this mask. The mask is bound
 // from RayTracedShadows::m_shadowMaskImageView when voxel-aware path is active,
 // otherwise from a 1x1 R8 fallback image so the slot is always valid for shaders
-// compiled with VOXEL_RTX_ENABLED. UV: gl_FragCoord.xy / imageSize(rtxShadowMask).
+// compiled with VOXEL_RTX_ENABLED. UV: gl_FragCoord / packed framebuffer size in chunkGridAndFlags.w
+// (not textureSize — mask may be lower-res via PROJECTV_RTX_SHADOW_MASK_SCALE).
 layout(set = 0, binding = 18) uniform sampler2D rtxShadowMask;
 
 
@@ -131,7 +147,7 @@ vec3 TraceRtxSmoothSpecularRay(const vec3 worldOrigin, const vec3 reflectionDir,
         float roughness = clamp(material.surface.y, 0.045, 1.0);
         float metallic = clamp(material.surface.z, 0.0, 1.0);
         
-        if (allowSecondBounce && !IsGlass(hitMat) && !IsFluid(hitMat) && roughness <= kVctCutoffRoughness && (1.0 - metallic) > 0.01) {
+        if (allowSecondBounce && !IsGlass(hitMat) && !IsFluid(hitMat) && roughness <= kSmoothSpecMirrorRoughness && (1.0 - metallic) > 0.01) {
             vec3 secondReflectionDir = reflect(reflectionDir, hitNormal);
             float secondHitT;
             uint secondHitMat;
@@ -1112,7 +1128,9 @@ vec4 ComputeSunShadowSample(const vec3 worldPosition, const vec3 normal) {
         const vec3 sunDirForRtx = normalize(sceneLighting.sunDirectionAndWrap.xyz);
         const float nDotLRtx = clamp(dot(normal, sunDirForRtx), 0.0, 1.0);
         if (nDotLRtx > 0.02) {
-            const vec2 shadowUv = gl_FragCoord.xy / vec2(textureSize(rtxShadowMask, 0));
+            const uint packedFb = pushConstants.chunkGridAndFlags.w;
+            const vec2 fbSize = max(vec2(float(packedFb & 0xFFFFu), float((packedFb >> 16) & 0xFFFFu)), vec2(1.0));
+            const vec2 shadowUv = clamp(gl_FragCoord.xy / fbSize, vec2(0.0), vec2(1.0));
             const float rtxLit = texture(rtxShadowMask, shadowUv).r;
             const float blendedRtxLit = mix(0.25, 1.0, rtxLit);
             const float anyRtxShadow = rtxLit < 0.999 ? 1.0 : 0.0;
@@ -1154,10 +1172,6 @@ void main() {
     vec3 albedo = material.baseColor.rgb;
     if (albedoTexIndex != 0xffffffffu) {
         albedo = material.baseColor.rgb; // graphics set1 bindlessTextures[] reserved for BindlessHeap
-    }
-    if (inMaterialIndex == 3u || inMaterialIndex == 4u) {
-        const ivec3 voxelCoord = ivec3(floor(inWorldPosition - inNormal * 0.5));
-        albedo = ((voxelCoord.x + voxelCoord.z) & 1) == 0 ? vec3(0.96, 0.96, 0.94) : vec3(0.56, 0.60, 0.66);
     }
     const float ambientOcclusion = mix(0.35, 1.0, ao);
     const float geometryAmbientVisibility = clamp(inAmbientVisibility, 0.0, 1.0);
@@ -1221,10 +1235,13 @@ void main() {
 
 #ifdef VOXEL_RTX_ENABLED
     vec3 rtxSmoothSpecular = vec3(0.0);
-    if (roughness <= kVctCutoffRoughness && (1.0 - metallic) > 0.01) {
+    if (projectvRtxSmoothSpecEnabled != 0u && roughness <= kVctCutoffRoughness && (1.0 - metallic) > 0.01) {
         const vec3 reflectionDir = reflect(-viewDirection, normal);
-        const float smoothSpecMaxDistance = min(vctMaxDistance, kVctMaxDistanceMeters);
-        const bool allowSecondBounce = !IsGlass(inMaterialIndex) && !IsFluid(inMaterialIndex);
+        bool budgetSecondBounce;
+        float budgetDistScale;
+        EvaluateSmoothSpecBudget(roughness, budgetSecondBounce, budgetDistScale);
+        const float smoothSpecMaxDistance = min(vctMaxDistance, kVctMaxDistanceMeters) * budgetDistScale;
+        const bool allowSecondBounce = budgetSecondBounce && !IsGlass(inMaterialIndex) && !IsFluid(inMaterialIndex);
         const vec3 rtxHit = TraceRtxSmoothSpecularRay(inWorldPosition + normal * 0.02, reflectionDir, smoothSpecMaxDistance, allowSecondBounce);
         const float fresnel = pow(1.0 - nDotV, 5.0);
         rtxSmoothSpecular = rtxHit * (0.04 + 0.96 * fresnel) * (1.0 - metallic);

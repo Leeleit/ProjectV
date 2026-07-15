@@ -20,17 +20,27 @@ enum class SwapchainError : std::uint8_t {
 	CreateSemaphoreFailed,
 };
 
-constexpr std::string_view toString(SwapchainError const e) noexcept {
+constexpr std::string_view toString(SwapchainError const e) noexcept
+{
 	switch (e) {
-	case SwapchainError::PreconditionFailed: return "PreconditionFailed";
-	case SwapchainError::QuerySupportFailed: return "QuerySupportFailed";
-	case SwapchainError::SurfaceUsageUnsupported: return "SurfaceUsageUnsupported";
-	case SwapchainError::CreateSwapchainFailed: return "CreateSwapchainFailed";
-	case SwapchainError::GetImageCountFailed: return "GetImageCountFailed";
-	case SwapchainError::ZeroImages: return "ZeroImages";
-	case SwapchainError::GetImageListFailed: return "GetImageListFailed";
-	case SwapchainError::CreateImageViewFailed: return "CreateImageViewFailed";
-	case SwapchainError::CreateSemaphoreFailed: return "CreateSemaphoreFailed";
+	case SwapchainError::PreconditionFailed:
+		return "PreconditionFailed";
+	case SwapchainError::QuerySupportFailed:
+		return "QuerySupportFailed";
+	case SwapchainError::SurfaceUsageUnsupported:
+		return "SurfaceUsageUnsupported";
+	case SwapchainError::CreateSwapchainFailed:
+		return "CreateSwapchainFailed";
+	case SwapchainError::GetImageCountFailed:
+		return "GetImageCountFailed";
+	case SwapchainError::ZeroImages:
+		return "ZeroImages";
+	case SwapchainError::GetImageListFailed:
+		return "GetImageListFailed";
+	case SwapchainError::CreateImageViewFailed:
+		return "CreateImageViewFailed";
+	case SwapchainError::CreateSemaphoreFailed:
+		return "CreateSemaphoreFailed";
 	}
 	return "Unknown";
 }
@@ -48,6 +58,9 @@ bool RecreateSwapchain(
 	RenderState *render);
 
 VkPresentModeKHR CyclePreferredPresentMode();
+
+// PROJECTV_PRESENT_MODE=FIFO|MAILBOX|IMMEDIATE (case-insensitive); no-op if unset/unknown.
+void ApplyPreferredPresentModeFromEnvironment();
 
 std::vector<VkPresentModeKHR> BuildPresentModeCycle(
 	const std::vector<VkPresentModeKHR> &surfacePresentModes);
@@ -92,8 +105,8 @@ inline VkPresentModeKHR CyclePreferredPresentMode()
 	}
 	const auto it = std::find(cycle.begin(), cycle.end(), projectv::present_mode::g_active);
 	const std::size_t currentIndex = it == cycle.end()
-		? 0u
-		: static_cast<std::size_t>(it - cycle.begin());
+										 ? 0u
+										 : static_cast<std::size_t>(it - cycle.begin());
 	const std::size_t nextIndex = (currentIndex + 1u) % cycle.size();
 	projectv::present_mode::g_active = cycle[nextIndex];
 	return projectv::present_mode::g_active;
@@ -112,8 +125,7 @@ inline std::vector<VkPresentModeKHR> BuildPresentModeCycle(
 	cycle.clear();
 	cycle.reserve(kPriority.size());
 	for (const VkPresentModeKHR mode : kPriority) {
-		if (std::find(surfacePresentModes.begin(), surfacePresentModes.end(), mode)
-			!= surfacePresentModes.end()) {
+		if (std::find(surfacePresentModes.begin(), surfacePresentModes.end(), mode) != surfacePresentModes.end()) {
 			cycle.push_back(mode);
 		}
 	}
@@ -130,4 +142,3 @@ inline std::vector<VkPresentModeKHR> BuildPresentModeCycle(
 	}
 	return cycle;
 }
-

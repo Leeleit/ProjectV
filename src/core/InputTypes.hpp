@@ -180,7 +180,14 @@ struct InputReplayState {
 	bool playbackRequested = false;
 	bool playbackActive = false;
 	bool captureAvailable = false;
+	bool quitWhenPlaybackDone = false; // PROJECTV_INPUT_REPLAY_QUIT — exit app after autoplay finishes
 	size_t playbackFrameIndex = 0;
+	float pendingMouseDeltaX = 0.0f; // accumulate render-frame mice until next sim tick record
+	float pendingMouseDeltaY = 0.0f;
+	uint64_t pendingActionPressedMask = 0;
+	bool pendingRemovePressed = false;
+	bool pendingPlacePressed = false;
+	std::vector<float> playbackDtMsSamples; // every render frame during autoplay — for mean / 1% low
 };
 
 struct InputState {

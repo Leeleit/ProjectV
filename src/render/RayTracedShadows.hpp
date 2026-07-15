@@ -87,6 +87,14 @@ class RayTracedShadows {
 		const VulkanContextState &context,
 		VkCommandPool commandPool);
 
+	// Record pending BLAS builds into the frame CB (no mid-frame submit/fence). Returns builds recorded.
+	[[nodiscard]] uint32_t RecordDirtyBlasBuilds(
+		VkCommandBuffer commandBuffer,
+		const VulkanContextState &context,
+		uint32_t maxBuilds);
+
+	void MarkTlasInstancesDirty() noexcept { m_tlasInstancesDirty = true; }
+
 	[[nodiscard]] static VkDeviceSize ComputeBlasBuildScratchSize(
 		uint32_t primitiveCount) noexcept;
 
@@ -96,7 +104,8 @@ class RayTracedShadows {
 		uint32_t chunkIndex,
 		VkAabbPositionsKHR aabb);
 
-	void UpdateTlas(
+	// Returns true when instance buffer changed and TLAS must be rebuilt/refit this frame.
+	[[nodiscard]] bool UpdateTlas(
 		const VulkanContextState &context,
 		const std::vector<uint32_t> &visibleChunkIndices,
 		const std::vector<VkTransformMatrixKHR> &visibleChunkTransforms);
@@ -208,6 +217,12 @@ class RayTracedShadows {
 
 	bool RecreateShadowMaskForExtent(const VulkanContextState &context, uint32_t width, uint32_t height);
 
+	[[nodiscard]] uint32_t GetShadowMaskWidth() const noexcept { return m_shadowMaskWidth; }
+	[[nodiscard]] uint32_t GetShadowMaskHeight() const noexcept { return m_shadowMaskHeight; }
+
+	// PROJECTV_RTX_SHADOW_MASK_SCALE (default 1.0). Full extent in → mask extent out.
+	[[nodiscard]] static VkExtent2D ResolveShadowMaskExtent(VkExtent2D fullExtent);
+
   private:
 	bool AllocateBuffers(
 		const VulkanContextState &context,
@@ -243,6 +258,9 @@ class RayTracedShadows {
 	RtxShadowSBT m_rtxSbt;
 	VkDescriptorPool m_rtxDescriptorPool = VK_NULL_HANDLE;
 	uint32_t m_previousTlasInstanceCount = 0u;
+	bool m_tlasInstancesDirty = true;
+	std::vector<uint32_t> m_cachedVisibleChunkIndices;
+	std::vector<VkDeviceAddress> m_cachedVisibleBlasAddresses;
 	VkImage m_shadowMaskImage = VK_NULL_HANDLE;
 	VkImageView m_shadowMaskImageView = VK_NULL_HANDLE;
 	VmaAllocation m_shadowMaskAllocation = nullptr;

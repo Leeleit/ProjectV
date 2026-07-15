@@ -224,10 +224,10 @@ bool PrepareFrameRenderData(
 		*debug,
 		&frame->renderData.debugOverlayBoxes);
 	frame->renderData.graphicsPushConstants = {};
+	const VkExtent2D renderExtent =
+		render->internalRenderExtent.width > 0u ? render->internalRenderExtent : swapchain->extent;
 	if (swapchain->extent.width > 0 && swapchain->extent.height > 0) {
 		const bool sceneDirty = frame->renderData.dirtyChunkCount > 0u;
-		const VkExtent2D renderExtent =
-			render->internalRenderExtent.width > 0u ? render->internalRenderExtent : swapchain->extent;
 		projectv::render::UpdateProgressiveAccumState(*render, *camera, sceneDirty, renderExtent);
 		frame->renderData.graphicsPushConstants = BuildGraphicsPushConstants(
 			*camera,
@@ -245,7 +245,7 @@ bool PrepareFrameRenderData(
 			static_cast<uint32_t>(world->voxelWorld->chunkCountX),
 			static_cast<uint32_t>(world->voxelWorld->chunkCountY),
 			static_cast<uint32_t>(world->voxelWorld->chunkCountZ),
-			0u,
+			(renderExtent.width & 0xFFFFu) | ((renderExtent.height & 0xFFFFu) << 16), // packed framebuffer size for RTX shadow UV
 		};
 	}
 	frame->renderData.voxelMeshingPushConstants = {};

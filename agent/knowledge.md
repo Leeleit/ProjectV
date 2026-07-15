@@ -234,12 +234,10 @@ GPU representation нужна для fast shader-side consume без per-voxel b
 - 6-axis pass: `X+/X-/Y+/Y-/Z+/Z-`.
 - Per-axis greedy merge up to `kMaxChunkExtentForGreedy=64u` (4096-bit per-axis visited
   bitmask = 3KB local memory); fallback to per-voxel 1×1 quads для oversize.
-- **Floor material group merging:** `IsSameMeshingGroup(a, b)` allows FloorWhite(3) ↔
-  FloorGray(4) to merge into one quad (identical surface properties, differ only in
-  baseColor). Merged quad stores first-encountered material; `voxel.frag` computes the
-  checkerboard albedo procedurally from world position: `ivec3(floor(worldPos - normal*0.5))`
-  then `(voxelCoord.x + voxelCoord.z) & 1`. Mirrors `GreedyPhysicsMerger` which already
-  ignores material type for collision shapes.
+- **Floor materials are distinct:** `IsSameMeshingGroup(a, b)` merges only identical
+  material IDs. FloorWhite(3) and FloorGray(4) keep separate quads and use SSBO
+  `baseColor` in `voxel.frag` (no procedural checkerboard override). Physics merger
+  still ignores floor color for collision boxes.
 - Writes `PackedFace` (16 B, см. §16) в `packedFaces[]`, packs `(width, height)` в
   `packedExtents`. Записывает 2 indirect-draw SSBO (opaque + transparent).
 - Inline camera-frustum cull (`IsChunkVisible`).
@@ -611,7 +609,11 @@ visual regression targets для RTX-driven milestones.
 ## 18. Voxel AA (MSAA + SMAA + Progressive + SSAA) — no TAA
 
 **Решение (2026-07-14):** TAA/DLSS/DLAA не возвращаются в mainline (воксели +
-operator). Пространственный стек:
+operator). Бинарные силуэты вокселей ломают temporal reprojection → то же
+отвергает FidelityFX Reflection Denoiser / specular history. Smooth specular
+cost: roughness tiers в `voxel.frag` (mirror≤0.05 full+2bounce; mid≤0.15 primary
+×0.75 dist; else primary ×0.5 до VCT cutoff 0.3) — без sparse/checkerboard.
+Пространственный стек:
 
 | Setting | Values | Default | Hotkey |
 |---|---|---|---|
@@ -740,6 +742,17 @@ per `BuildPresentModeCycle` / `CyclePreferredPresentMode` / `GetActivePresentMod
 
 **Hotkey `3`:** `CyclePreferredPresentMode` + immediate `RecreateSwapchain` +
 log `CycleVsync: <mode> [cycle idx/size]`.
+
+**Env (profiling):** `PROJECTV_PRESENT_MODE=FIFO|MAILBOX|IMMEDIATE` applied once
+at first swapchain create; `PROJECTV_FULLSCREEN=1` → borderless desktop fullscreen
+at window create. Default remains FIFO + windowed 1280×720.
+`PROJECTV_RTX_SHADOW_MASK_SCALE` default **1.0** (full look); optional lower only via
+explicit env for A/B. Shadow UV = `gl_FragCoord / packed FB size` in
+`chunkGridAndFlags.w`. `PROJECTV_RTX_SMOOTH_SPEC` default **on**; `=0` disables for A/B. Cost tiers by
+roughness (see §18) — not temporal denoise.
+`PROJECTV_DDGI_UPDATE_PERIOD` default **1** (every frame); N>1 only as discussed amortization.
+Do not chase FPS by silently cutting look. Artifacts:
+`profiler-captures/perf-ceiling-500/SUMMARY.md`.
 
 **Почему:** developer needs uncapped FPS для профайлинга + tear-free для visual
 regression. Auto-detect из `vkGetPhysicalDeviceSurfacePresentModes` гарантирует
@@ -913,8 +926,8 @@ quality чем simple majority vote (preserves surface voxels).
 - Stats (checkbox in Settings): detailed telemetry (was detailed bitmap HUD).
 
 **Keyboard (defaults):** movement WASD/Space/Shift/Ctrl/Alt, Tab mouse, Esc quit,
-`F1` hide all UI, `` ` `` Settings (+ free/capture mouse). Rare toggles — Settings UI only
-(hotkeys may return later).
+`F1` hide all UI, `F2` cycle placement material, `` ` `` Settings (+ free/capture mouse).
+Rare debug toggles — Settings UI only (more hotkeys may return later).
 
 **Debug overlays** (`src/debug/DebugOverlays.cpp`): `BuildDebugOverlayBoxes(world,
 interaction, debug, outBoxes)` — chunk bounds, dirty chunks, placement preview,
@@ -954,18 +967,21 @@ hit-normal shaft. Gated by `hudVisible` + `detailedHudVisible` (= `statsOpen`).
 - Fenced via in-flight fence in `SaveRequestedScreenshot` (`Renderer.cpp:183-251`).
 
 **Input replay** (`src/app/InputReplay.{hpp,cpp}`):
-- Capture: `R` toggle recording → write `capture.frames[]` (mouse deltas +
-  `actionDownMask` + `actionPressedMask` + remove/place flags).
-- Replay: `Y` → `playbackRequested=true` → `StartLastInputReplayPlayback` loads
-  snapshot + restores camera/interaction + sets `replay.playbackActive=true`.
-- Per-frame: `PrepareNextInputReplayPlaybackFrame` applies frame to input state.
-- File path: `PROJECTV_INPUT_REPLAY_DIR` env var.
-- 64 actions max (`InputAction::Count ≤ 64` enforced by `static_assert` в
-  `Types.hpp:173-177`).
+- Capture: `F5` → snapshot + per-**sim-tick** samples (60 Hz
+  `fixedSimulationDeltaSeconds`). Render frames accumulate mouse/press into
+  pending; tick records one sample. Format version **1 only** (no legacy).
+- Replay: `F6` / `AUTOPLAY` → each sim tick calls `ApplyNextInputReplaySimTick`
+  then look + walk/creative/camera. Render FPS free (Mailbox ok).
+- Paths: `PROJECTV_INPUT_REPLAY_DIR` / `PROJECTV_INPUT_REPLAY_PATH` (default
+  `%TEMP%/ProjectV/InputReplay/latest.projectv.replay`).
+- Automation: `PROJECTV_INPUT_REPLAY_AUTOPLAY=1` (or a `.replay` path) loads at
+  init; `PROJECTV_INPUT_REPLAY_QUIT=1` exits after playback finishes. Path-valued
+  AUTOPLAY used to be ignored (only `1|true|yes|on`); fixed 2026-07-15.
+- 64 actions max (`InputAction::Count ≤ 64` enforced by `static_assert`).
 
-**Почему:** deterministic capture = visual regression targets. Benchmark = perf
-regression measurement. Replay = bug reproduction sharing. All env-driven для
-CI integration.
+**Почему:** tick-locked input = path matches recording across FPS. Wall-timeline
+and frame-locked replay both desynced ends. No multi-version readers — bleeding
+edge, re-record after format change.
 
 ## 30. Vulkan bootstrap invariants
 
@@ -1287,6 +1303,23 @@ Mip0 = NEAREST blit from depth; mips 1..N = compute 2×2 min-reduction (push-des
   `TRACY_NO_STATISTICS` while csvexport requires statistics support.
 - **NSight Graphics CLI baseline established:** `/opt/nsight-graphics/latest/host/linux-desktop-nomad-x64/ngfx-capture` and `ngfx-replay --perf-report-dir` work. Example baseline for current `main` (frame 45, VoxelLab, validation ON): replayAdjustedFps ≈ 572. Use this as the Phase 3 performance gate for tasks 3.2-3.4.
 - **Tracy CLI capture pipeline automated:** `tools/linux/Invoke-ProjectVTracyCapture.sh` runs ProjectV with `PROJECTV_BENCHMARK_FRAMES` + `PROJECTV_BENCHMARK_QUIT=1` auto-quit, connects `tracy-capture` to the app's Tracy server, and saves the `.tracy` file when the app exits. Capture-to-CSV analysis is still manual via `tracy-csvexport`.
+- **Windows Nsight/RenderDoc CLI harness (2026-07-15):** `tools/windows/Invoke-ProjectVProfile.ps1`
+  (+ `Resolve-ProjectVProfilerTools.ps1`). Tools: `Systems` (nsys + vulkan_marker CSV),
+  `GraphicsCapture` (ngfx-capture/replay perf), `GpuTrace` (ngfx GPU Trace + auto-export),
+  `Compute` (ncu), `RenderDoc` (renderdoccmd; F12 required — no in-app TriggerCapture yet).
+  Host installs: Nsight Systems 2026.3.1, Graphics 2026.2.0, Compute 2026.2.1, RenderDoc 1.45.
+  Default GPU Trace arch: `Ampere GA10x` (RTX 3060 Ti); override `PROJECTV_NSIGHT_GPU_ARCH`.
+  Each run writes `summary.json` + `SUMMARY.md` under `build/*/profiler-captures/<label>/`.
+  See `docs/Profiling.md` §CLI profiling.
+  - **Runtime validation override:** `PROJECTV_ENABLE_VALIDATION=OFF` disables Khronos
+    validation even when the binary was built with compile-time validation ON
+    (`VulkanBootstrapInit.cpp`). Required for Nsight Graphics — validation +
+    `ngfx-capture-interception` caused `EXCEPTION_ACCESS_VIOLATION_READ` in
+    `nvoglv64` / validation / interception. GraphicsCapture/GpuTrace force OFF +
+    `--no-block-on-interfering-application` (Steam Y/n hang) and do **not** use
+    `PROJECTV_BENCHMARK_QUIT` (lifetime = `--terminate-after-capture`).
+  - **Systems without Admin:** Vulkan layer HKLM register fails → auto-fallback to
+    `--trace=nvtx`; one-shot Admin helper: `Register-ProjectVNsightVulkanLayer.ps1`.
 - **Benchmark auto-quit fix:** `UpdateBenchmarkAutomation` must keep returning `quitWhenDone` after `completed` is set, because multiple `flecs::world::progress()` calls per frame would otherwise overwrite the quit request before `SDL_AppIterate` reads it.
 - **Push descriptors (Task 3.1):** implemented with runtime fallback. When
   `context.features14.pushDescriptor == VK_TRUE`, RT shadow and DDGI compute passes use

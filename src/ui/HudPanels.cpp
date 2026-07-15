@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <string>
 
 namespace projectv::ui {
 namespace {
@@ -53,6 +54,23 @@ const char *EditorToolLabel(const DebugEditorTool tool)
 	return "Classic";
 }
 
+const char *PlacementMaterialLabel(const VoxelMaterial material)
+{
+	switch (material) {
+	case VoxelMaterial::Air:
+		return "Air";
+	case VoxelMaterial::Glass:
+		return "Glass";
+	case VoxelMaterial::Fluid:
+		return "Fluid";
+	case VoxelMaterial::FloorWhite:
+		return "White";
+	case VoxelMaterial::FloorGray:
+		return "Gray";
+	}
+	return "White";
+}
+
 const char *PresentModeLabel(const VkPresentModeKHR mode)
 {
 	switch (mode) {
@@ -89,22 +107,23 @@ void DrawStatusStrip(const HudFrameContext &ctx)
 	ImGui::TextDisabled("|");
 	ImGui::SameLine();
 	ImGui::Text(
-		"%s  %s  %s",
+		"%s  %s  %s  %s",
 		ControlModeLabel(stats.controlMode),
 		stats.simulationPaused ? "PAUSE" : "RUN",
-		EditorToolLabel(ctx.interaction->editorTool));
+		EditorToolLabel(ctx.interaction->editorTool),
+		PlacementMaterialLabel(ctx.interaction->placementMaterial));
 	ImGui::SameLine();
 	ImGui::TextDisabled("|");
 	ImGui::SameLine();
 	ImGui::Text(
 		"AA %s  SMAA %s  x%s",
-		projectv::render::ToString(stats.msaaMode).data(),
+		std::string{projectv::render::ToString(stats.msaaMode)}.c_str(),
 		stats.smaaEnabled ? "ON" : "OFF",
-		projectv::render::ToString(stats.renderScaleMode).data());
+		std::string{projectv::render::ToString(stats.renderScaleMode)}.c_str());
 	ImGui::SameLine();
 	ImGui::TextDisabled("|");
 	ImGui::SameLine();
-	ImGui::TextDisabled("` Settings · F1 Hide · Tab Mouse · F5 Rec · F6 Replay");
+	ImGui::TextDisabled("` Settings · F1 Hide · F2 Mat · Tab Mouse · F5 Rec · F6 Replay");
 	ImGui::End();
 }
 
@@ -226,7 +245,7 @@ void DrawSettings(HudFrameContext &ctx)
 		QueueAction(*ctx.input, InputAction::CycleEditorTool);
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Cycle material")) {
+	if (ImGui::Button("Cycle material (F2)")) {
 		QueueAction(*ctx.input, InputAction::CyclePlacementMaterial);
 	}
 	if (ImGui::Button("Toggle mutation anchor")) {
@@ -311,7 +330,7 @@ void DrawStats(const HudFrameContext &ctx)
 		PresentModeLabel(GetActivePresentMode()),
 		GetPresentModeCycleIndex(GetActivePresentMode()) + 1u,
 		GetPresentModeCycleSize());
-	ImGui::Text("Scene %s", VoxelScenePresetToString(stats.scenePreset).data());
+	ImGui::Text("Scene %s", std::string{VoxelScenePresetToString(stats.scenePreset)}.c_str());
 	ImGui::Text(
 		"LGT %s  %s  %.2f",
 		LightingDebugViewToString(stats.lightingDebugView),
@@ -319,9 +338,9 @@ void DrawStats(const HudFrameContext &ctx)
 		stats.sceneExposure);
 	ImGui::Text(
 		"AA %s SMAA %s SCALE %s ACCUM %u/%u",
-		projectv::render::ToString(stats.msaaMode).data(),
+		std::string{projectv::render::ToString(stats.msaaMode)}.c_str(),
 		stats.smaaEnabled ? "ON" : "OFF",
-		projectv::render::ToString(stats.renderScaleMode).data(),
+		std::string{projectv::render::ToString(stats.renderScaleMode)}.c_str(),
 		stats.progressiveAccumFrameIndex,
 		projectv::render::kProgressiveAccumMaxFrames);
 	ImGui::Text(
@@ -337,8 +356,9 @@ void DrawStats(const HudFrameContext &ctx)
 		static_cast<double>(stats.sceneMemoryBytes) / 1024.0,
 		static_cast<unsigned long long>(stats.worldEditVersion));
 	ImGui::Text(
-		"EDIT %s  BND %s  DIRTY %s",
+		"EDIT %s  MAT %s  BND %s  DIRTY %s",
 		EditorToolLabel(interaction.editorTool),
+		PlacementMaterialLabel(interaction.placementMaterial),
 		stats.showChunkBounds ? "ON" : "OFF",
 		stats.showDirtyChunkOverlay ? "ON" : "OFF");
 	ImGui::Text("CAM %.3f %.3f %.3f", camera.position[0], camera.position[1], camera.position[2]);

@@ -122,6 +122,7 @@ void InitializeInputState(InputState &input)
 	BindAction(input, InputAction::SpeedBoost, SDL_SCANCODE_LCTRL, SDL_SCANCODE_RCTRL);
 	BindAction(input, InputAction::SpeedSlow, SDL_SCANCODE_LALT, SDL_SCANCODE_RALT);
 	BindAction(input, InputAction::ToggleHud, SDL_SCANCODE_F1);
+	BindAction(input, InputAction::CyclePlacementMaterial, SDL_SCANCODE_F2);
 	BindAction(input, InputAction::ToggleRelativeMouseMode, SDL_SCANCODE_TAB);
 	BindAction(input, InputAction::OpenHudSettings, SDL_SCANCODE_GRAVE);
 	BindAction(input, InputAction::ToggleInputReplayRecording, SDL_SCANCODE_F5);
@@ -211,7 +212,6 @@ void ApplyInputActionSnapshot(
 	const uint64_t downMask,
 	const uint64_t pressedMask)
 {
-	input.lastMoveUpPressedTimestampNs = 0;
 	for (size_t actionIndex = 0; actionIndex < input.actions.size(); ++actionIndex) {
 		const InputAction action = static_cast<InputAction>(actionIndex);
 		const bool isRecordable = IsInputActionReplayRecordable(action);

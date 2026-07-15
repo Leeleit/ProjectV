@@ -59,6 +59,10 @@ void ShutdownVulkan(AppState *state)
 		profiling::DestroyVulkanGpuContext(state->render().tracyGraphicsContext);
 		state->render().tracyGraphicsContext = nullptr;
 		state->render().tracyGraphicsContextCalibrated = false;
+		if (state->render().gpuTimestampQueryPool != VK_NULL_HANDLE) {
+			vkDestroyQueryPool(state->context().device, state->render().gpuTimestampQueryPool, nullptr);
+			state->render().gpuTimestampQueryPool = VK_NULL_HANDLE;
+		}
 		DestroyVoxelMeshingPipeline(&state->context(), &state->render());
 		projectv::render::DestroyMeshShaderPipelines(&state->context(), &state->render());
 		projectv::render::DestroyFluidCaPipelines(&state->context(), &state->render());

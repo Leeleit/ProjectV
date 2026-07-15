@@ -7,6 +7,11 @@
 #include <array>
 
 namespace projectv::render {
+namespace {
+
+constexpr uint32_t kDefaultMaxBlasBuildsPerFrame = 8u;
+
+} // namespace
 
 void RayTracedShadows::SetBlasDirtyQueue(std::vector<DirtyChunkRebuild> &&dirtyChunks) noexcept // NOLINT(bugprone-exception-escape): mutex/vector operations are bounded
 {
@@ -62,6 +67,7 @@ void RayTracedShadows::BuildDirtyBlases(
 	}
 
 	m_pendingDirtyChunks.clear();
+	m_tlasInstancesDirty = true;
 
 	vkEndCommandBuffer(cmd);
 	VkFenceCreateInfo fenceInfo{};
@@ -82,6 +88,42 @@ void RayTracedShadows::BuildDirtyBlases(
 		vkDestroyFence(context.device, fence, nullptr);
 	}
 	vkFreeCommandBuffers(context.device, submitPool, 1u, &cmd);
+}
+
+uint32_t RayTracedShadows::RecordDirtyBlasBuilds(
+	const VkCommandBuffer commandBuffer,
+	const VulkanContextState &context,
+	const uint32_t maxBuilds)
+{
+	std::lock_guard lock(m_dirtyQueueMutex);
+	if (m_pendingDirtyChunks.empty() || commandBuffer == VK_NULL_HANDLE) {
+		return 0u;
+	}
+	if (!m_config.enabled || context.device == VK_NULL_HANDLE) {
+		m_pendingDirtyChunks.clear();
+		return 0u;
+	}
+	if (m_config.scratchDeviceAddress == 0u || m_config.scratchBuffer == VK_NULL_HANDLE) {
+		m_pendingDirtyChunks.clear();
+		return 0u;
+	}
+
+	const uint32_t budget = maxBuilds == 0u ? kDefaultMaxBlasBuildsPerFrame : maxBuilds;
+	uint32_t built = 0u;
+	while (!m_pendingDirtyChunks.empty() && built < budget) {
+		const DirtyChunkRebuild entry = m_pendingDirtyChunks.front();
+		m_pendingDirtyChunks.erase(m_pendingDirtyChunks.begin());
+		if (!BuildChunkBlas(commandBuffer, context, entry.chunkIndex, entry.aabb)) {
+			runtime::LogRuntimeFailure("RayTracedShadows", "RecordDirtyBlasBuilds", "BuildChunkBlas failed");
+			continue;
+		}
+		++built;
+	}
+	if (built > 0u) {
+		m_tlasInstancesDirty = true;
+		m_config.blasRebuildCount += built;
+	}
+	return built;
 }
 
 VkDeviceSize RayTracedShadows::ComputeBlasBuildScratchSize(
@@ -228,7 +270,6 @@ bool RayTracedShadows::BuildChunkBlas(
 	aabbDep.pBufferMemoryBarriers = &aabbScratchBarrier;
 	vkCmdPipelineBarrier2(commandBuffer, &aabbDep);
 
-	m_config.blasRebuildCount += 1u;
 	return true;
 }
 

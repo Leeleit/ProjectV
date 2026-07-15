@@ -21,10 +21,7 @@ bool ShouldEmitVoxelFaceCPU(const uint8_t materialIndex, const uint8_t neighborM
 
 bool IsSameMeshingGroupCPU(const uint8_t materialA, const uint8_t materialB)
 {
-	if (materialA == materialB) { return true; }
-	const bool aIsFloor = materialA == 3u || materialA == 4u;
-	const bool bIsFloor = materialB == 3u || materialB == 4u;
-	return aIsFloor && bIsFloor;
+	return materialA == materialB;
 }
 
 uint32_t PackLocalVoxelFaceCPU(const uint32_t x, const uint32_t y, const uint32_t z, const uint32_t faceIndex)
@@ -70,8 +67,8 @@ uint8_t ReadVoxelMaterialCPU(const CpuGreedyInput &input, const int32_t worldX, 
 	const int32_t ly = worldY - input.worldMin[1];
 	const int32_t lz = worldZ - input.worldMin[2];
 	const size_t idx = static_cast<size_t>(lx) +
-		static_cast<size_t>(input.worldDim[0]) *
-			(static_cast<size_t>(ly) + static_cast<size_t>(input.worldDim[1]) * static_cast<size_t>(lz));
+					   static_cast<size_t>(input.worldDim[0]) *
+						   (static_cast<size_t>(ly) + static_cast<size_t>(input.worldDim[1]) * static_cast<size_t>(lz));
 	return input.worldVoxels[idx];
 }
 
@@ -255,7 +252,7 @@ void GreedyFacePassCPU(const uint32_t faceIndex, const uint32_t axisN, const uin
 	}
 }
 
-} 
+} // namespace
 
 CpuGreedyMeshResult GenerateCpuGreedyMesh(const CpuGreedyInput &input)
 {
@@ -339,4 +336,4 @@ bool IsChunkVisibleCPU(const CpuGreedyChunkDesc &chunk, const CpuChunkCullingPar
 	return true;
 }
 
-} 
+} // namespace projectv::voxel

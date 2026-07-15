@@ -6,6 +6,7 @@
 #include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -13,7 +14,7 @@
 
 namespace {
 constexpr std::string_view kInputReplayMagic = "PROJECTV_INPUT_REPLAY";
-constexpr int kInputReplayVersion = 3;
+constexpr int kInputReplayVersion = 1; // sim-tick samples only; no legacy readers
 
 std::filesystem::path GetInputReplayDirectoryPath()
 {
@@ -74,6 +75,7 @@ void ResetReplayFrameApplication(InputState &input)
 	input.mouseDeltaY = 0.0f;
 	input.removePressed = false;
 	input.placePressed = false;
+	input.lastMoveUpPressedTimestampNs = 0;
 	ApplyInputActionSnapshot(input, 0ull, 0ull);
 }
 
@@ -130,7 +132,7 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 	int version = 0;
 	if (ok && (!(stream >> magic >> version) ||
 			   magic != kInputReplayMagic ||
-			   (version != 1 && version != 2 && version != kInputReplayVersion))) {
+			   version != kInputReplayVersion)) {
 		runtime::LogRuntimeFailure("InputReplay", "ReadReplayCapture.Header", "invalid replay header");
 		ok = false;
 	}
@@ -161,20 +163,14 @@ bool ReadReplayCapture(std::istream &stream, InputReplayCapture *outCapture)
 				capture.initialInteraction.placementMaterial = static_cast<VoxelMaterial>(placementMaterial);
 				capture.initialInteraction.editorTool = static_cast<DebugEditorTool>(editorTool);
 			} else if (key == "walk") {
-				std::string walkLine;
-				std::getline(stream >> std::ws, walkLine);
-				std::istringstream walkStream(walkLine);
 				int walkAirControlMode = 0;
-				int autoJumpEnabled = version == 1 ? 1 : 0;
-				[[maybe_unused]] int autoJumpDelayEnabled = 0;
-				walkStream >> walkAirControlMode;
-				if (version != 1) {
-					walkStream >> autoJumpEnabled;
-				}
-				walkStream >> autoJumpDelayEnabled; // v1: after airControl; v2+: after autoJump
+				int autoJumpEnabled = 0;
+				int autoJumpDelayEnabled = 0;
+				stream >> walkAirControlMode >> autoJumpEnabled >> autoJumpDelayEnabled;
+				(void)autoJumpDelayEnabled;
 				capture.walkAirControlMode = static_cast<WalkAirControlMode>(walkAirControlMode);
 				capture.walkAutoJumpEnabled = autoJumpEnabled != 0;
-				capture.walkAutoJumpDelayEnabled = false; // delay removed; ignore file value
+				capture.walkAutoJumpDelayEnabled = false;
 			} else if (key == "frame_count") {
 				stream >> expectedFrameCount;
 				capture.frames.reserve(expectedFrameCount);
@@ -299,6 +295,11 @@ bool StartInputReplayRecording(
 	input->replay.playbackActive = false;
 	input->replay.captureAvailable = false;
 	input->replay.playbackFrameIndex = 0;
+	input->replay.pendingMouseDeltaX = 0.0f;
+	input->replay.pendingMouseDeltaY = 0.0f;
+	input->replay.pendingActionPressedMask = 0ull;
+	input->replay.pendingRemovePressed = false;
+	input->replay.pendingPlacePressed = false;
 	SDL_Log(
 		"[ProjectV][InputReplay] recording started replay=%s snapshot=%s",
 		input->replay.replayPath.string().c_str(),
@@ -329,44 +330,127 @@ bool StopInputReplayRecording(InputState *input)
 	return true;
 }
 
-void RecordInputReplayFrame(
-	InputState *input,
-	const float deltaSeconds)
+void AccumulateInputReplayPending(InputState *input)
+{
+	if (!input || !input->replay.recording) {
+		return;
+	}
+	input->replay.pendingMouseDeltaX += input->mouseDeltaX;
+	input->replay.pendingMouseDeltaY += input->mouseDeltaY;
+	input->replay.pendingActionPressedMask |= GetInputActionPressedMask(*input);
+	input->replay.pendingRemovePressed = input->replay.pendingRemovePressed || input->removePressed;
+	input->replay.pendingPlacePressed = input->replay.pendingPlacePressed || input->placePressed;
+}
+
+void RecordInputReplaySimTick(InputState *input, const float fixedDeltaSeconds)
 {
 	if (!input || !input->replay.recording) {
 		return;
 	}
 
 	input->replay.capture.frames.push_back({
-		.deltaSeconds = deltaSeconds,
-		.mouseDeltaX = input->mouseDeltaX,
-		.mouseDeltaY = input->mouseDeltaY,
+		.deltaSeconds = fixedDeltaSeconds,
+		.mouseDeltaX = input->replay.pendingMouseDeltaX,
+		.mouseDeltaY = input->replay.pendingMouseDeltaY,
 		.actionDownMask = GetInputActionDownMask(*input),
-		.actionPressedMask = GetInputActionPressedMask(*input),
-		.removePressed = input->removePressed,
-		.placePressed = input->placePressed,
+		.actionPressedMask = input->replay.pendingActionPressedMask,
+		.removePressed = input->replay.pendingRemovePressed,
+		.placePressed = input->replay.pendingPlacePressed,
 	});
+	input->mouseDeltaX = input->replay.pendingMouseDeltaX; // feed look for this tick only
+	input->mouseDeltaY = input->replay.pendingMouseDeltaY;
+	input->replay.pendingMouseDeltaX = 0.0f;
+	input->replay.pendingMouseDeltaY = 0.0f;
+	input->replay.pendingActionPressedMask = 0ull;
+	input->replay.pendingRemovePressed = false;
+	input->replay.pendingPlacePressed = false;
 }
+
+bool ArmInputReplayCapture(InputState &input, const std::string &replayPath); // defined below
 
 bool LoadLatestInputReplay(InputState &input)
 {
-	InputReplayCapture capture{};
 	const std::string replayPath = GetInputReplayPath();
-	const bool loaded = LoadInputReplayCapture(replayPath, &capture);
-	if (!loaded) {
-		runtime::LogRuntimeFailure(
-			"InputReplay",
-			"LoadLatestInputReplay.Load",
-			replayPath);
-	} else {
-		input.replay.capture = std::move(capture);
-		input.replay.replayPath = std::filesystem::path(replayPath);
-		input.replay.captureAvailable = true;
-		input.replay.playbackRequested = true;
-		input.replay.playbackActive = false;
-		input.replay.playbackFrameIndex = 0;
+	if (!ArmInputReplayCapture(input, replayPath)) {
+		runtime::LogRuntimeFailure("InputReplay", "LoadLatestInputReplay.Load", replayPath);
+		return false;
 	}
-	return loaded;
+	return true;
+}
+
+bool EnvTokenIsTruthy(const char *value)
+{
+	if (value == nullptr || *value == '\0') {
+		return false;
+	}
+	return std::strcmp(value, "1") == 0 || std::strcmp(value, "true") == 0 ||
+		   std::strcmp(value, "TRUE") == 0 || std::strcmp(value, "yes") == 0 ||
+		   std::strcmp(value, "YES") == 0 || std::strcmp(value, "on") == 0 ||
+		   std::strcmp(value, "ON") == 0;
+}
+
+bool EnvTokenIsFalsy(const char *value)
+{
+	if (value == nullptr || *value == '\0') {
+		return true;
+	}
+	return std::strcmp(value, "0") == 0 || std::strcmp(value, "false") == 0 ||
+		   std::strcmp(value, "FALSE") == 0 || std::strcmp(value, "no") == 0 ||
+		   std::strcmp(value, "NO") == 0 || std::strcmp(value, "off") == 0 ||
+		   std::strcmp(value, "OFF") == 0;
+}
+
+bool LooksLikeReplayPath(const char *value)
+{
+	if (value == nullptr || *value == '\0') {
+		return false;
+	}
+	return std::strchr(value, '\\') != nullptr || std::strchr(value, '/') != nullptr ||
+		   std::strstr(value, ".replay") != nullptr;
+}
+
+bool ArmInputReplayCapture(InputState &input, const std::string &replayPath)
+{
+	InputReplayCapture capture{};
+	if (!LoadInputReplayCapture(replayPath, &capture)) {
+		return false;
+	}
+	input.replay.capture = std::move(capture);
+	input.replay.replayPath = std::filesystem::path(replayPath);
+	input.replay.captureAvailable = true;
+	input.replay.playbackRequested = true;
+	input.replay.playbackActive = false;
+	input.replay.playbackFrameIndex = 0;
+	input.replay.pendingMouseDeltaX = 0.0f;
+	input.replay.pendingMouseDeltaY = 0.0f;
+	input.replay.pendingActionPressedMask = 0ull;
+	input.replay.pendingRemovePressed = false;
+	input.replay.pendingPlacePressed = false;
+	return true;
+}
+
+void ConfigureInputReplayFromEnvironment(InputState &input)
+{
+	const char *const quitValue = projectv::core::GetEnvVar("PROJECTV_INPUT_REPLAY_QUIT");
+	input.replay.quitWhenPlaybackDone = EnvTokenIsTruthy(quitValue);
+
+	const char *const autoplayValue = projectv::core::GetEnvVar("PROJECTV_INPUT_REPLAY_AUTOPLAY");
+	if (EnvTokenIsFalsy(autoplayValue)) {
+		return; // unset / 0 / false / off — no autoplay
+	}
+
+	// AUTOPLAY=1|true|on OR a filesystem path to a .replay (path was previously ignored).
+	const std::string replayPath =
+		LooksLikeReplayPath(autoplayValue) ? std::string{autoplayValue} : GetInputReplayPath();
+	if (!ArmInputReplayCapture(input, replayPath)) {
+		SDL_Log("[ProjectV][InputReplay] AUTOPLAY requested but failed to load %s", replayPath.c_str());
+		return;
+	}
+	SDL_Log(
+		"[ProjectV][InputReplay] AUTOPLAY armed replay=%s frames=%zu quit=%s",
+		input.replay.replayPath.string().c_str(),
+		input.replay.capture.frames.size(),
+		input.replay.quitWhenPlaybackDone ? "true" : "false");
 }
 
 void ApplyInputReplayFrame(
@@ -384,25 +468,26 @@ void ApplyInputReplayFrame(
 	ApplyInputActionSnapshot(*input, frame.actionDownMask, frame.actionPressedMask);
 }
 
-bool PrepareNextInputReplayPlaybackFrame(
-	InputState *input,
-	SimulationState *simulation)
+bool ApplyNextInputReplaySimTick(InputState *input)
 {
-	if (!input || !simulation || !input->replay.playbackActive) {
+	if (!input || !input->replay.playbackActive) {
 		return false;
 	}
-	if (input->replay.playbackFrameIndex >= input->replay.capture.frames.size()) {
+	auto &replay = input->replay;
+	if (replay.playbackFrameIndex >= replay.capture.frames.size()) {
 		return false;
 	}
 
-	const InputReplayFrame &frame = input->replay.capture.frames[input->replay.playbackFrameIndex++];
+	const InputReplayFrame &frame = replay.capture.frames[replay.playbackFrameIndex++];
 	ApplyInputReplayFrame(input, frame);
-
-	const Uint64 frequency = SDL_GetPerformanceFrequency();
-	const Uint64 deltaCounter = std::max<Uint64>(
-		1,
-		static_cast<Uint64>(static_cast<double>(std::max(frame.deltaSeconds, 0.0f)) * static_cast<double>(frequency)));
-	simulation->lastFrameCounter = SDL_GetPerformanceCounter() - deltaCounter;
+	if (replay.playbackFrameIndex == 1u ||
+		replay.playbackFrameIndex == replay.capture.frames.size() ||
+		(replay.playbackFrameIndex % 120u) == 0u) {
+		SDL_Log(
+			"[ProjectV][InputReplay] progress %zu/%zu",
+			replay.playbackFrameIndex,
+			replay.capture.frames.size());
+	}
 	return true;
 }
 
@@ -416,6 +501,11 @@ void StopInputReplayPlayback(InputState *input)
 	input->replay.playbackRequested = false;
 	input->replay.playbackActive = false;
 	input->replay.playbackFrameIndex = 0;
+	input->replay.pendingMouseDeltaX = 0.0f;
+	input->replay.pendingMouseDeltaY = 0.0f;
+	input->replay.pendingActionPressedMask = 0ull;
+	input->replay.pendingRemovePressed = false;
+	input->replay.pendingPlacePressed = false;
 	ResetReplayFrameApplication(*input);
 	if (wasPlaying) {
 		SDL_Log("[ProjectV][InputReplay] playback finished");

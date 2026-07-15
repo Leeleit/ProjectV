@@ -1,9 +1,66 @@
 # ProjectV Profiling
 
-Дата фиксации: `2026-04-07` (Обновлено: `2026-07-12`)
+Дата фиксации: `2026-04-07` (Обновлено: `2026-07-15`)
 
 Этот документ фиксирует текущий practical profiling path в `ProjectV`: какие baseline-сцены использовать, какие Tracy
 plot'ы считаются основным metrics pack и как воспроизводить perf-замеры без «магии в голове».
+
+## CLI profiling (Windows — Nsight + RenderDoc)
+
+Unattended harness: `tools/windows/Invoke-ProjectVProfile.ps1`  
+Tool discovery: `tools/windows/Resolve-ProjectVProfilerTools.ps1`
+
+Installed on this host (override via `PROJECTV_NSYS` / `PROJECTV_NCU` / `PROJECTV_NGFX*` / `PROJECTV_RENDERDOC_CMD`):
+
+| Tool | CLI | Role |
+|---|---|---|
+| Nsight Systems | `nsys` | First-pass CPU/GPU timeline + Vulkan debug-label totals |
+| Nsight Graphics | `ngfx-capture` / `ngfx-replay` / `ngfx` GPU Trace | Frame capture + replay FPS gate + unit-level GPU Trace |
+| Nsight Compute | `ncu` | Deep kernel metrics (high overhead; after Systems/GpuTrace) |
+| RenderDoc | `renderdoccmd` | Frame contents / resource debug (F12 mid-run; no in-app TriggerCapture yet) |
+
+Every run writes `summary.json` + `SUMMARY.md` under
+`build/windows-clang-debug/profiler-captures/<label>/` for agent ingestion.
+
+**Windows privileges:** full `Systems` Vulkan GPU timeline needs a one-time Admin
+register of the Nsight Systems Vulkan layer (`Register-ProjectVNsightVulkanLayer.ps1`).
+Without Admin the harness auto-falls back to `--trace=nvtx` and notes it in
+`summary.json`. Prefer `GraphicsCapture` / `GpuTrace` for GPU bottlenecks until
+that register is done. Harness always passes `--no-block-on-interfering-application`
+(Steam/RTSS otherwise hang on an interactive Y/n prompt).
+
+**Nsight Graphics + validation:** `windows-clang-debug` compiles with validation ON,
+but `PROJECTV_ENABLE_VALIDATION=OFF` is now honored at runtime. GraphicsCapture/GpuTrace
+force it OFF — Khronos validation + `ngfx-capture-interception` has crashed with
+`EXCEPTION_ACCESS_VIOLATION_READ` in `nvoglv64` / validation / interception stack.
+
+```powershell
+# Fast smoke (Systems; may fall back to nvtx without Admin)
+.\tools\windows\Invoke-ProjectVProfile.ps1 -Tool Systems -Smoke
+
+# One-time Admin (UAC): enable full nsys Vulkan traces
+.\tools\windows\Register-ProjectVNsightVulkanLayer.ps1
+
+# Steady-state timeline (default VoxelLab, validation OFF)
+.\tools\windows\Invoke-ProjectVProfile.ps1 -Tool Systems -Frames 120 -Warmup 30
+
+# Frame capture + replayAdjustedFps gate (same idea as Linux Phase 3)
+.\tools\windows\Invoke-ProjectVProfile.ps1 -Tool GraphicsCapture -CaptureFrame 45
+
+# GPU Trace (Ampere GA10x = RTX 3060 Ti; override -GpuArchitecture if needed)
+.\tools\windows\Invoke-ProjectVProfile.ps1 -Tool GpuTrace -StartAfterFrames 60 -LimitFrames 2
+
+# Kernel deep-dive (slow)
+.\tools\windows\Invoke-ProjectVProfile.ps1 -Tool Compute -LaunchCount 3 -Frames 40
+
+# RenderDoc inject — press F12 during the run to write .rdc
+.\tools\windows\Invoke-ProjectVProfile.ps1 -Tool RenderDoc -Frames 90
+```
+
+Binary contract: argv ignored (`SDL_MAIN_USE_CALLBACKS`); harness sets
+`PROJECTV_BENCHMARK_*`, `PROJECTV_SCENE_PRESET`, `PROJECTV_ENABLE_VALIDATION`.
+
+Linux Tracy CLI remains: `tools/linux/Invoke-ProjectVTracyCapture.sh`.
 
 ## Что считать текущим profiling baseline
 
@@ -11,6 +68,7 @@ plot'ы считаются основным metrics pack и как воспро�
 
 - builtin benchmark scene presets в `VoxelWorld`;
 - Tracy CPU/GPU instrumentation;
+- Nsight Systems / Graphics / Compute + RenderDoc CLI (Windows harness above);
 - HUD counters для quick sanity-check;
 - ручную, но воспроизводимую methodology.
 

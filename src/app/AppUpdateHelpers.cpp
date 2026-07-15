@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "app/Camera.hpp"
+#include "app/InputReplay.hpp"
 #include "physics/PhysicsWorld.hpp"
 #include "voxel/VoxelWorld.hpp"
 
@@ -63,6 +64,16 @@ bool RunSimulationTickLoop(
 	while (simulation.simulationAccumulatorSeconds >= simulation.fixedSimulationDeltaSeconds &&
 		   simulation.simulationStepsLastFrame < kMaxSimulationStepsPerFrame &&
 		   !effectivePaused) {
+		if (input->replay.playbackActive) {
+			if (!ApplyNextInputReplaySimTick(input)) {
+				break; // samples exhausted; SDL_AppIterate stops playback / quits
+			}
+		} else if (input->replay.recording) {
+			RecordInputReplaySimTick(input, simulation.fixedSimulationDeltaSeconds);
+		}
+
+		ConsumeCameraLookInput(camera, input);
+
 		if (walkMode) {
 			if (!physics || !world.voxelWorld) {
 				return false;

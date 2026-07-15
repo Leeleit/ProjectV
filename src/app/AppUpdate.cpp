@@ -16,9 +16,12 @@
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
 
+#include "SDL3/SDL.h"
+
 #include <algorithm>
 #include <array>
 #include <string>
+#include <vector>
 
 void PersistAaSettingsToSceneConfig(const RenderState &render)
 {
@@ -242,11 +245,16 @@ void MirrorRenderPassTimingsToDebugStats(
 	stats.renderPassShadowMs = render.renderPassTimings.shadowMs;
 	stats.renderPassMeshingMs = render.renderPassTimings.meshingMs;
 	stats.renderPassGraphicsMs = render.renderPassTimings.graphicsMs;
+	stats.renderPassAaMs = render.renderPassTimings.aaMs;
+	stats.renderPassPostFxMs = render.renderPassTimings.postFxMs;
+	stats.renderPassPresentMs = render.renderPassTimings.presentMs;
 	stats.renderPassDebugOverlayMs = render.renderPassTimings.debugOverlayMs;
 	stats.renderPassDirtyChunkRebuiltCount = render.renderPassTimings.dirtyChunkRebuiltCount;
 	stats.renderPassOtherMs = std::max(
 		0.0f,
-		stats.frameTimeMilliseconds - render.renderPassTimings.graphicsMs);
+		stats.frameTimeMilliseconds -
+			(render.renderPassTimings.meshingMs + render.renderPassTimings.graphicsMs +
+			 render.renderPassTimings.presentMs));
 }
 
 void MirrorAudioStatsToDebugStats(
@@ -626,7 +634,9 @@ bool RunFrameSimulation(
 	}
 
 	if (cameraCanUpdate) {
-		ConsumeCameraLookInput(camera, input);
+		if (!input->replay.playbackActive && !input->replay.recording) {
+			ConsumeCameraLookInput(camera, input);
+		}
 	} else {
 		input->mouseDeltaX = 0.0f;
 		input->mouseDeltaY = 0.0f;
@@ -688,6 +698,73 @@ void MirrorAllFrameStats(
 	}
 	MirrorRenderPassTimingsToDebugStats(*render, debug->stats);
 	MirrorAudioStatsToDebugStats(audio, debug->stats);
+	if (input.replay.playbackActive) {
+		input.replay.playbackDtMsSamples.push_back(debug->stats.frameTimeMilliseconds);
+	}
+	if (input.replay.playbackActive && !input.replay.capture.frames.empty()) {
+		const size_t idx = input.replay.playbackFrameIndex;
+		const size_t total = input.replay.capture.frames.size();
+		static size_t lastLoggedReplayIndex = SIZE_MAX;
+		if (idx == 1u) {
+			lastLoggedReplayIndex = SIZE_MAX;
+			input.replay.playbackDtMsSamples.clear();
+		}
+		const bool boundary = idx == 1u || idx == total || (idx % 120u) == 0u;
+		if (boundary && idx != lastLoggedReplayIndex) {
+			lastLoggedReplayIndex = idx;
+			SDL_Log(
+				"[ProjectV][InputReplay][metrics] frame=%zu/%zu dt_ms=%.3f fps=%.1f shadow_ms=%.3f mesh_ms=%.3f gfx_ms=%.3f aa_ms=%.3f post_ms=%.3f present_ms=%.3f other_ms=%.3f gpu_tlas=%.3f gpu_rtx=%.3f gpu_ddgi=%.3f gpu_opaque=%.3f gpu_aa=%.3f gpu_gfx=%.3f dirtyRebuild=%u dirtyChunks=%u tris=%u nonair=%u",
+				idx,
+				total,
+				debug->stats.frameTimeMilliseconds,
+				debug->stats.framesPerSecond,
+				debug->stats.renderPassShadowMs,
+				debug->stats.renderPassMeshingMs,
+				debug->stats.renderPassGraphicsMs,
+				debug->stats.renderPassAaMs,
+				debug->stats.renderPassPostFxMs,
+				debug->stats.renderPassPresentMs,
+				debug->stats.renderPassOtherMs,
+				render->renderPassTimings.gpuTlasMs,
+				render->renderPassTimings.gpuRtxShadowMs,
+				render->renderPassTimings.gpuDdgiMs,
+				render->renderPassTimings.gpuOpaqueMs,
+				render->renderPassTimings.gpuAaPostMs,
+				render->renderPassTimings.gpuGraphicsMs,
+				debug->stats.renderPassDirtyChunkRebuiltCount,
+				debug->stats.dirtyChunkCount,
+				debug->stats.sceneTriangleCount,
+				debug->stats.nonAirVoxelCount);
+		}
+		if (idx == total && !input.replay.playbackDtMsSamples.empty()) {
+			std::vector<float> sorted = input.replay.playbackDtMsSamples;
+			const size_t warmup = sorted.size() / 10u; // drop first 10% (init / RTX join / hitch)
+			if (warmup + 16u < sorted.size()) {
+				sorted.erase(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(warmup));
+			}
+			std::ranges::sort(sorted);
+			const size_t n = sorted.size();
+			const size_t onePctIndex = n > 100u ? (n - 1u) - (n / 100u) : n - 1u;
+			double sum = 0.0;
+			for (const float dt : sorted) {
+				sum += static_cast<double>(dt);
+			}
+			const float meanDt = static_cast<float>(sum / static_cast<double>(n));
+			const float p1Dt = sorted[onePctIndex];
+			const float minDt = sorted.front();
+			const float maxDt = sorted.back();
+			SDL_Log(
+				"[ProjectV][InputReplay][summary] samples=%zu mean_dt_ms=%.3f mean_fps=%.1f p1_low_dt_ms=%.3f p1_low_fps=%.1f min_dt_ms=%.3f min_fps=%.1f max_dt_ms=%.3f",
+				n,
+				meanDt,
+				meanDt > 0.0f ? 1000.0f / meanDt : 0.0f,
+				p1Dt,
+				p1Dt > 0.0f ? 1000.0f / p1Dt : 0.0f,
+				minDt,
+				minDt > 0.0f ? 1000.0f / minDt : 0.0f,
+				maxDt);
+		}
+	}
 	debug->stats.controlMode = camera->controlMode;
 	debug->stats.walkAirControlMode = GetPhysicsWalkAirControlMode(physics);
 	debug->stats.detailedHudVisible = debug->detailedHudVisible;
@@ -723,7 +800,7 @@ bool UpdateApp(
 	projectv::app::UpdateFrameStatistics(*simulation, *debug, *render);
 
 	if (input->replay.recording) {
-		RecordInputReplayFrame(input, simulation->frameDeltaSeconds);
+		AccumulateInputReplayPending(input);
 	}
 
 	if (!ProcessInputActions(

@@ -3,21 +3,45 @@
 #include "SDL3/SDL_log.h"
 
 #include <algorithm>
+#include <cstring>
 
 namespace projectv::render {
 
-void RayTracedShadows::UpdateTlas(
+bool RayTracedShadows::UpdateTlas(
 	const VulkanContextState &context,
 	const std::vector<uint32_t> &visibleChunkIndices,
 	const std::vector<VkTransformMatrixKHR> &visibleChunkTransforms)
 {
 	if (m_config.tlasInstanceMappedData == nullptr) {
-		return;
+		return false;
 	}
 	const size_t count = std::min(visibleChunkIndices.size(), visibleChunkTransforms.size());
 	const size_t capacity = m_config.tlasInstanceCapacityBytes / sizeof(VkAccelerationStructureInstanceKHR);
 	const size_t clamped = std::min(count, capacity);
+
+	bool contentMatches = !m_tlasInstancesDirty && clamped == m_cachedVisibleChunkIndices.size();
+	if (contentMatches) {
+		for (size_t i = 0; i < clamped; ++i) {
+			const uint32_t chunkIndex = visibleChunkIndices[i];
+			if (m_cachedVisibleChunkIndices[i] != chunkIndex) {
+				contentMatches = false;
+				break;
+			}
+			const VkDeviceAddress addr =
+				chunkIndex < m_config.blasDeviceAddresses.size() ? m_config.blasDeviceAddresses[chunkIndex] : 0u;
+			if (m_cachedVisibleBlasAddresses[i] != addr) {
+				contentMatches = false;
+				break;
+			}
+		}
+	}
+	if (contentMatches) {
+		return false;
+	}
+
 	auto *const instances = static_cast<VkAccelerationStructureInstanceKHR *>(m_config.tlasInstanceMappedData);
+	m_cachedVisibleChunkIndices.resize(clamped);
+	m_cachedVisibleBlasAddresses.resize(clamped);
 	for (size_t i = 0; i < clamped; ++i) {
 		const uint32_t chunkIndex = visibleChunkIndices[i];
 		instances[i].transform = visibleChunkTransforms[i];
@@ -30,6 +54,8 @@ void RayTracedShadows::UpdateTlas(
 		} else {
 			instances[i].accelerationStructureReference = 0u;
 		}
+		m_cachedVisibleChunkIndices[i] = chunkIndex;
+		m_cachedVisibleBlasAddresses[i] = instances[i].accelerationStructureReference;
 	}
 	std::memset(
 		instances + clamped,
@@ -37,6 +63,7 @@ void RayTracedShadows::UpdateTlas(
 		m_config.tlasInstanceCapacityBytes - clamped * sizeof(VkAccelerationStructureInstanceKHR));
 	m_config.tlasInstanceCount = static_cast<uint32_t>(clamped);
 	m_config.tlasRebuildCount += 1u;
+	m_tlasInstancesDirty = false;
 
 	static int capWarnCount = 0;
 	if (count > capacity && capWarnCount < 5) {
@@ -64,6 +91,7 @@ void RayTracedShadows::UpdateTlas(
 			0u,
 			m_config.tlasInstanceCapacityBytes);
 	}
+	return true;
 }
 
 void RayTracedShadows::RecordTlasBuild(

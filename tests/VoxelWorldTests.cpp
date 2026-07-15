@@ -328,16 +328,46 @@ void TestWorldBoundsAndChunkIndexing(TestContext &context)
 void TestVoxelScenePresetParsingAcceptsCanonicalAndFlexibleNames(TestContext &context)
 {
 	VoxelScenePreset preset = VoxelScenePreset::VoxelLab;
-	preset = ParseVoxelScenePreset("VoxelLab").value();
-	EXPECT_EQ(context, VoxelScenePreset::VoxelLab, preset);
-	preset = ParseVoxelScenePreset("flat_benchmark").value();
-	EXPECT_EQ(context, VoxelScenePreset::FlatBenchmark, preset);
-	preset = ParseVoxelScenePreset("TRANSPARENCY-STRESS").value();
-	EXPECT_EQ(context, VoxelScenePreset::TransparencyStress, preset);
-	preset = ParseVoxelScenePreset("chunk grid").value();
-	EXPECT_EQ(context, VoxelScenePreset::ChunkGrid, preset);
-	preset = ParseVoxelScenePreset("meshingstress").value();
-	EXPECT_EQ(context, VoxelScenePreset::MeshingStress, preset);
+	{
+		const auto parsed = ParseVoxelScenePreset("VoxelLab");
+		EXPECT_TRUE(context, parsed.has_value());
+		if (parsed.has_value()) {
+			preset = *parsed;
+		}
+		EXPECT_EQ(context, VoxelScenePreset::VoxelLab, preset);
+	}
+	{
+		const auto parsed = ParseVoxelScenePreset("flat_benchmark");
+		EXPECT_TRUE(context, parsed.has_value());
+		if (parsed.has_value()) {
+			preset = *parsed;
+		}
+		EXPECT_EQ(context, VoxelScenePreset::FlatBenchmark, preset);
+	}
+	{
+		const auto parsed = ParseVoxelScenePreset("TRANSPARENCY-STRESS");
+		EXPECT_TRUE(context, parsed.has_value());
+		if (parsed.has_value()) {
+			preset = *parsed;
+		}
+		EXPECT_EQ(context, VoxelScenePreset::TransparencyStress, preset);
+	}
+	{
+		const auto parsed = ParseVoxelScenePreset("chunk grid");
+		EXPECT_TRUE(context, parsed.has_value());
+		if (parsed.has_value()) {
+			preset = *parsed;
+		}
+		EXPECT_EQ(context, VoxelScenePreset::ChunkGrid, preset);
+	}
+	{
+		const auto parsed = ParseVoxelScenePreset("meshingstress");
+		EXPECT_TRUE(context, parsed.has_value());
+		if (parsed.has_value()) {
+			preset = *parsed;
+		}
+		EXPECT_EQ(context, VoxelScenePreset::MeshingStress, preset);
+	}
 	EXPECT_TRUE(context, !ParseVoxelScenePreset("not_a_scene").has_value());
 	EXPECT_TRUE(context, VoxelScenePresetToString(VoxelScenePreset::MeshingStress) == "MeshingStress");
 }
@@ -1657,6 +1687,8 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F1);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::ToggleHud));
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F2);
+	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::CyclePlacementMaterial));
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_GRAVE);
 	EXPECT_TRUE(context, ConsumeInputActionPressed(input, InputAction::OpenHudSettings));
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_TAB);
@@ -1666,6 +1698,10 @@ void TestInputActionBindingsTrackPressedAndReleasedKeys(TestContext &context)
 		context,
 		SDL_SCANCODE_UNKNOWN,
 		input.bindings[static_cast<size_t>(InputAction::CycleScenePreset)].scancodes[0]);
+	EXPECT_EQ(
+		context,
+		SDL_SCANCODE_F2,
+		input.bindings[static_cast<size_t>(InputAction::CyclePlacementMaterial)].scancodes[0]);
 	EXPECT_EQ(
 		context,
 		SDL_SCANCODE_UNKNOWN,
@@ -1854,7 +1890,7 @@ void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 	DebugState debug{};
 
 	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F1);
-	PressInputAction(input, InputAction::CyclePlacementMaterial);
+	SendKeyEvent(&input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_F2);
 	PressInputAction(input, InputAction::ResetCamera);
 	PressInputAction(input, InputAction::TogglePause);
 	PressInputAction(input, InputAction::ToggleControlMode);

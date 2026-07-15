@@ -16,15 +16,12 @@ bool StartInputReplayRecording(
 	WalkAirControlMode walkAirControlMode,
 	bool walkAutoJumpEnabled);
 bool StopInputReplayRecording(InputState *input);
-void RecordInputReplayFrame(
-	InputState *input,
-	float deltaSeconds);
+void AccumulateInputReplayPending(InputState *input);					   // call once per render frame while recording
+void RecordInputReplaySimTick(InputState *input, float fixedDeltaSeconds); // one sample per sim tick
 bool LoadLatestInputReplay(InputState &input);
+void ConfigureInputReplayFromEnvironment(InputState &input);
 void ApplyInputReplayFrame(
 	InputState *input,
 	const InputReplayFrame &frame);
-bool PrepareNextInputReplayPlaybackFrame(
-	InputState *input,
-	SimulationState *simulation);
+bool ApplyNextInputReplaySimTick(InputState *input); // one sample per sim tick during playback
 void StopInputReplayPlayback(InputState *input);
-

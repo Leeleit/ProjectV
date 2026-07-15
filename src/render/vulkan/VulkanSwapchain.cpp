@@ -1,5 +1,6 @@
 #include "render/vulkan/VulkanSwapchain.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
+#include "core/EnvUtils.hpp"
 #include "core/RuntimeDiagnostics.hpp"
 #include "debug/Profiling.hpp"
 #include "render/AaPass.hpp"
@@ -11,6 +12,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <cstdio>
+#include <cstring>
 #include <vector>
 
 namespace {
@@ -99,6 +103,20 @@ VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &fo
 
 using projectv::present_mode::g_active;
 
+const char *PresentModeName(const VkPresentModeKHR mode)
+{
+	switch (mode) {
+	case VK_PRESENT_MODE_IMMEDIATE_KHR:
+		return "IMMEDIATE";
+	case VK_PRESENT_MODE_MAILBOX_KHR:
+		return "MAILBOX";
+	case VK_PRESENT_MODE_FIFO_KHR:
+		return "FIFO";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 VkPresentModeKHR PickBestAvailablePresentMode(
 	const std::vector<VkPresentModeKHR> &presentModes,
 	const VkPresentModeKHR preferred)
@@ -157,6 +175,55 @@ VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR &caps, SDL_Window *window
 }
 } // namespace
 
+void ApplyPreferredPresentModeFromEnvironment()
+{
+	static bool applied = false;
+	if (applied) {
+		return;
+	}
+	applied = true;
+	const char *const value = projectv::core::GetEnvVar("PROJECTV_PRESENT_MODE");
+	if (value == nullptr || value[0] == '\0') {
+		return;
+	}
+	using projectv::present_mode::g_active;
+	VkPresentModeKHR preferred = VK_PRESENT_MODE_FIFO_KHR;
+	const char *label = "FIFO";
+	auto equals = [](const char *lhs, const char *rhs) {
+		if (lhs == nullptr || rhs == nullptr) {
+			return false;
+		}
+		while (*lhs != '\0' && *rhs != '\0') {
+			const unsigned char left = static_cast<unsigned char>(*lhs);
+			const unsigned char right = static_cast<unsigned char>(*rhs);
+			if (std::tolower(left) != std::tolower(right)) {
+				return false;
+			}
+			++lhs;
+			++rhs;
+		}
+		return *lhs == '\0' && *rhs == '\0';
+	};
+	if (equals(value, "MAILBOX")) {
+		preferred = VK_PRESENT_MODE_MAILBOX_KHR;
+		label = "MAILBOX";
+	} else if (equals(value, "IMMEDIATE")) {
+		preferred = VK_PRESENT_MODE_IMMEDIATE_KHR;
+		label = "IMMEDIATE";
+	} else if (equals(value, "FIFO")) {
+		preferred = VK_PRESENT_MODE_FIFO_KHR;
+		label = "FIFO";
+	} else {
+		std::fprintf(
+			stderr,
+			"[ProjectV][Present] ignoring unknown PROJECTV_PRESENT_MODE='%s' (use FIFO|MAILBOX|IMMEDIATE)\n",
+			value);
+		return;
+	}
+	g_active = preferred;
+	std::fprintf(stderr, "[ProjectV][Present] preferred mode from env: %s\n", label);
+}
+
 bool CreateOrRecreateSwapchain(
 	PlatformState *platform,
 	VulkanContextState *context,
@@ -183,8 +250,14 @@ bool CreateOrRecreateSwapchain(
 		(support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0;
 
 	const auto [format, colorSpace] = ChooseSurfaceFormat(support.formats);
+	ApplyPreferredPresentModeFromEnvironment();
 	(void)BuildPresentModeCycle(support.presentModes);
 	const VkPresentModeKHR chosenPresentMode = ChoosePresentMode(support.presentModes);
+	std::fprintf(
+		stderr,
+		"[ProjectV][Present] swapchain presentMode=%s (preferred=%s)\n",
+		PresentModeName(chosenPresentMode),
+		PresentModeName(g_active));
 	const VkExtent2D chosenExtent = ChooseExtent(support.capabilities, platform->window);
 
 	if (chosenExtent.width == 0 || chosenExtent.height == 0) {
@@ -319,7 +392,6 @@ bool CreateOrRecreateSwapchain(
 	swapchain->imageViews = std::move(newViews);
 	swapchain->nextPresentId = 1u;
 	swapchain->presentWaitLogged = false;
-
 
 	{
 		PV_PROFILE_ZONE_N("CreateOrRecreateSwapchain.CreatePerImageSemaphores");
@@ -499,7 +571,7 @@ bool RecreateSwapchain(
 	}
 
 	if (render->graphicsPipeline != VK_NULL_HANDLE) {
-PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
+		PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
 		if (!RefreshGraphicsResourceBindings(context, render)) {
 			runtime::LogRuntimeFailure(
 				"Graphics",
@@ -507,12 +579,13 @@ PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
 				"RefreshGraphicsResourceBindings returned false after swapchain recreation");
 		}
 
-		if (render->rayTracedShadows != nullptr
-				&& render->rayTracedShadows->IsVoxelAwareRtxActive()) {
+		if (render->rayTracedShadows != nullptr && render->rayTracedShadows->IsVoxelAwareRtxActive()) {
+			const VkExtent2D maskExtent =
+				projectv::render::RayTracedShadows::ResolveShadowMaskExtent(internalExtent);
 			if (!render->rayTracedShadows->RecreateShadowMaskForExtent(
 					*context,
-					internalExtent.width,
-					internalExtent.height)) {
+					maskExtent.width,
+					maskExtent.height)) {
 				runtime::LogRuntimeFailure(
 					"Graphics",
 					"RecreateSwapchain.RecreateShadowMaskForExtent",
@@ -531,4 +604,3 @@ PV_PROFILE_ZONE_N("RecreateSwapchain.RefreshBindings");
 
 	return true;
 }
-
