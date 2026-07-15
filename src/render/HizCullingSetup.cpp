@@ -16,6 +16,74 @@
 namespace {
 constexpr uint32_t kHizCullingDescriptorSetCount = MAX_FRAMES_IN_FLIGHT;
 constexpr char kHizCullingShaderFilename[] = "hzb_cull.comp.spv";
+constexpr char kHizApplyShaderFilename[] = "hzb_apply_visibility.comp.spv";
+
+constexpr std::array kHizApplyDescriptorBindings{
+	VkDescriptorSetLayoutBinding{
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 2,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 3,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 4,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 5,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+	VkDescriptorSetLayoutBinding{
+		.binding = 6,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		.pImmutableSamplers = nullptr,
+	},
+};
+
+constexpr VkDescriptorSetLayoutCreateInfo kHizApplyDescriptorSetLayoutInfo{
+	.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+	.pNext = nullptr,
+	.flags = 0,
+	.bindingCount = static_cast<uint32_t>(kHizApplyDescriptorBindings.size()),
+	.pBindings = kHizApplyDescriptorBindings.data(),
+};
+
+constexpr std::array kHizApplyDescriptorPoolSizes{
+	VkDescriptorPoolSize{
+		.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		.descriptorCount = kHizCullingDescriptorSetCount * 7u,
+	},
+};
 
 constexpr std::array kHizCullingDescriptorBindings{
 	VkDescriptorSetLayoutBinding{
@@ -82,10 +150,6 @@ constexpr std::array kHizCullingDescriptorPoolSizes{
 	VkDescriptorPoolSize{
 		.type = VK_DESCRIPTOR_TYPE_SAMPLER,
 		.descriptorCount = kHizCullingDescriptorSetCount,
-	},
-	VkDescriptorPoolSize{
-		.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-		.descriptorCount = 0u,
 	},
 };
 } // namespace
@@ -156,9 +220,9 @@ uint32_t ComputeBlendWidthForChunkMip(
 
 uint32_t ComputeHzbMipLevelCount(const uint32_t baseWidth, const uint32_t baseHeight)
 {
-	const uint32_t minExtent = std::max(1u, std::min(baseWidth, baseHeight));
+	const uint32_t maxExtent = std::max(1u, std::max(baseWidth, baseHeight));
 	uint32_t levels = 1u;
-	uint32_t currentExtent = minExtent;
+	uint32_t currentExtent = maxExtent;
 	while (currentExtent > 1u) {
 		currentExtent = std::max(1u, currentExtent >> 1u);
 		++levels;
@@ -517,9 +581,112 @@ bool CreateHizCullingPipeline(
 
 	render->hizCullingEnabled = true;
 
-	// HZB min-reduction compute (Task 4.0). Optional; blit LINEAR path remains if this fails.
+	// Apply-visibility pipeline (Pass A / Pass B / force-all).
+	const std::vector<char> applyShaderCode = ReadShaderFile(kHizApplyShaderFilename);
+	if (applyShaderCode.empty()) {
+		runtime::LogRuntimeFailure(
+			"Render",
+			"CreateHizCullingPipeline.ReadApplyShader",
+			"failed to read hzb_apply_visibility.comp.spv");
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	VkShaderModuleCreateInfo applyModuleInfo{};
+	applyModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	applyModuleInfo.codeSize = applyShaderCode.size();
+	applyModuleInfo.pCode = reinterpret_cast<const uint32_t *>(applyShaderCode.data());
+	if (vkCreateShaderModule(
+			context->device,
+			&applyModuleInfo,
+			nullptr,
+			&render->hizApplyShaderModule) != VK_SUCCESS) {
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	if (vkCreateDescriptorSetLayout(
+			context->device,
+			&kHizApplyDescriptorSetLayoutInfo,
+			nullptr,
+			&render->hizApplyDescriptorSetLayout) != VK_SUCCESS) {
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	VkPushConstantRange applyPushRange{};
+	applyPushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	applyPushRange.offset = 0;
+	applyPushRange.size = sizeof(HzbApplyPushConstants);
+	VkPipelineLayoutCreateInfo applyLayoutInfo{};
+	applyLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	applyLayoutInfo.setLayoutCount = 1;
+	applyLayoutInfo.pSetLayouts = &render->hizApplyDescriptorSetLayout;
+	applyLayoutInfo.pushConstantRangeCount = 1;
+	applyLayoutInfo.pPushConstantRanges = &applyPushRange;
+	if (vkCreatePipelineLayout(
+			context->device,
+			&applyLayoutInfo,
+			nullptr,
+			&render->hizApplyPipelineLayout) != VK_SUCCESS) {
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	const VkPipelineShaderStageCreateInfo applyStage{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		.module = render->hizApplyShaderModule,
+		.pName = "main",
+	};
+	VkComputePipelineCreateInfo applyPipelineInfo{
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.stage = applyStage,
+		.layout = render->hizApplyPipelineLayout,
+	};
+	if (vkCreateComputePipelines(
+			context->device,
+			context->pipelineCache,
+			1u,
+			&applyPipelineInfo,
+			nullptr,
+			&render->hizApplyPipeline) != VK_SUCCESS) {
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	VkDescriptorPoolCreateInfo applyPoolInfo{};
+	applyPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	applyPoolInfo.maxSets = kHizCullingDescriptorSetCount;
+	applyPoolInfo.poolSizeCount = static_cast<uint32_t>(kHizApplyDescriptorPoolSizes.size());
+	applyPoolInfo.pPoolSizes = kHizApplyDescriptorPoolSizes.data();
+	if (vkCreateDescriptorPool(
+			context->device,
+			&applyPoolInfo,
+			nullptr,
+			&render->hizApplyDescriptorPool) != VK_SUCCESS) {
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	std::array<VkDescriptorSetLayout, kHizCullingDescriptorSetCount> applyLayouts{};
+	for (uint32_t i = 0; i < kHizCullingDescriptorSetCount; ++i) {
+		applyLayouts[i] = render->hizApplyDescriptorSetLayout;
+	}
+	VkDescriptorSetAllocateInfo applyAllocInfo{};
+	applyAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	applyAllocInfo.descriptorPool = render->hizApplyDescriptorPool;
+	applyAllocInfo.descriptorSetCount = kHizCullingDescriptorSetCount;
+	applyAllocInfo.pSetLayouts = applyLayouts.data();
+	std::array<VkDescriptorSet, kHizCullingDescriptorSetCount> applySets{};
+	if (vkAllocateDescriptorSets(context->device, &applyAllocInfo, applySets.data()) != VK_SUCCESS) {
+		DestroyHizCullingPipeline(context, render);
+		return false;
+	}
+	for (uint32_t i = 0; i < kHizCullingDescriptorSetCount && i < render->sceneFrameResources.size(); ++i) {
+		render->sceneFrameResources[i].hizApplyDescriptorSet = applySets[i];
+		render->sceneFrameResources[i].hizApplyDescriptorSetInitialized = false;
+	}
+
 	render->hizMinifyEnabled = false;
 	render->hizMinifyUsesPushDescriptors = false;
+	render->hizMinifyDescriptorSets = {};
+	render->hizMinifyDescriptorSetCount = 0u;
+	render->hizMinifyDescriptorsInitialized = false;
 	if (IsHzbMinMipEnabled()) {
 		const std::vector<char> minifyCode = ReadShaderFile("hiz_minify.comp.spv");
 		if (!minifyCode.empty()) {
@@ -527,12 +694,18 @@ bool CreateHizCullingPipeline(
 			std::array minifyBindings = {
 				VkDescriptorSetLayoutBinding{
 					.binding = 0,
-					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+					.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
 					.descriptorCount = 1u,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 					.pImmutableSamplers = nullptr},
 				VkDescriptorSetLayoutBinding{
 					.binding = 1,
+					.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+					.descriptorCount = 1u,
+					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+					.pImmutableSamplers = nullptr},
+				VkDescriptorSetLayoutBinding{
+					.binding = 2,
 					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 					.descriptorCount = 1u,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -552,6 +725,12 @@ bool CreateHizCullingPipeline(
 				minifyPipeLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 				minifyPipeLayoutInfo.setLayoutCount = 1u;
 				minifyPipeLayoutInfo.pSetLayouts = &render->hizMinifyDescriptorSetLayout;
+				VkPushConstantRange minifyPushRange{};
+				minifyPushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+				minifyPushRange.offset = 0u;
+				minifyPushRange.size = sizeof(HizMinifyPushConstants);
+				minifyPipeLayoutInfo.pushConstantRangeCount = 1u;
+				minifyPipeLayoutInfo.pPushConstantRanges = &minifyPushRange;
 				if (vkCreatePipelineLayout(
 						context->device,
 						&minifyPipeLayoutInfo,
@@ -566,13 +745,15 @@ bool CreateHizCullingPipeline(
 							&minifyModuleInfo,
 							nullptr,
 							&render->hizMinifyShaderModule) == VK_SUCCESS) {
-						VkComputePipelineCreateInfo minifyPipelineInfo{};
-						minifyPipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-						minifyPipelineInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-						minifyPipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-						minifyPipelineInfo.stage.module = render->hizMinifyShaderModule;
-						minifyPipelineInfo.stage.pName = "main";
-						minifyPipelineInfo.layout = render->hizMinifyPipelineLayout;
+						VkComputePipelineCreateInfo minifyPipelineInfo{
+							.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+							.stage =
+								{
+									.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+									.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+									.module = render->hizMinifyShaderModule,
+									.pName = "main"},
+							.layout = render->hizMinifyPipelineLayout};
 						if (vkCreateComputePipelines(
 								context->device,
 								context->pipelineCache,
@@ -582,35 +763,54 @@ bool CreateHizCullingPipeline(
 								&render->hizMinifyPipeline) == VK_SUCCESS) {
 							bool descriptorsReady = usePushDescriptors;
 							if (!usePushDescriptors) {
-								VkDescriptorPoolSize minifyPoolSize{
-									.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-									.descriptorCount = 2u};
-								VkDescriptorPoolCreateInfo minifyPoolInfo{};
-								minifyPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-								minifyPoolInfo.maxSets = 1u;
-								minifyPoolInfo.poolSizeCount = 1u;
-								minifyPoolInfo.pPoolSizes = &minifyPoolSize;
-								if (vkCreateDescriptorPool(
-										context->device,
-										&minifyPoolInfo,
-										nullptr,
-										&render->hizMinifyDescriptorPool) == VK_SUCCESS) {
-									VkDescriptorSetAllocateInfo minifyAlloc{};
-									minifyAlloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-									minifyAlloc.descriptorPool = render->hizMinifyDescriptorPool;
-									minifyAlloc.descriptorSetCount = 1u;
-									minifyAlloc.pSetLayouts = &render->hizMinifyDescriptorSetLayout;
-									descriptorsReady = vkAllocateDescriptorSets(
-														   context->device,
-														   &minifyAlloc,
-														   &render->hizMinifyDescriptorSet) == VK_SUCCESS;
+								const uint32_t minifySetCount = render->hizBuffer.mipLevelCount;
+								if (minifySetCount > 0u &&
+									minifySetCount <= render->hizMinifyDescriptorSets.size()) {
+									const std::array minifyPoolSizes{
+										VkDescriptorPoolSize{
+											.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+											.descriptorCount = minifySetCount},
+										VkDescriptorPoolSize{
+											.type = VK_DESCRIPTOR_TYPE_SAMPLER,
+											.descriptorCount = minifySetCount},
+										VkDescriptorPoolSize{
+											.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+											.descriptorCount = minifySetCount}};
+									VkDescriptorPoolCreateInfo minifyPoolInfo{};
+									minifyPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+									minifyPoolInfo.maxSets = minifySetCount;
+									minifyPoolInfo.poolSizeCount = static_cast<uint32_t>(minifyPoolSizes.size());
+									minifyPoolInfo.pPoolSizes = minifyPoolSizes.data();
+									if (vkCreateDescriptorPool(
+											context->device,
+											&minifyPoolInfo,
+											nullptr,
+											&render->hizMinifyDescriptorPool) == VK_SUCCESS) {
+										std::array<VkDescriptorSetLayout, 16> minifyLayouts{};
+										std::fill_n(
+											minifyLayouts.begin(),
+											minifySetCount,
+											render->hizMinifyDescriptorSetLayout);
+										VkDescriptorSetAllocateInfo minifyAlloc{};
+										minifyAlloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+										minifyAlloc.descriptorPool = render->hizMinifyDescriptorPool;
+										minifyAlloc.descriptorSetCount = minifySetCount;
+										minifyAlloc.pSetLayouts = minifyLayouts.data();
+										descriptorsReady = vkAllocateDescriptorSets(
+															   context->device,
+															   &minifyAlloc,
+															   render->hizMinifyDescriptorSets.data()) == VK_SUCCESS;
+										if (descriptorsReady) {
+											render->hizMinifyDescriptorSetCount = minifySetCount;
+										}
+									}
 								}
 							}
 							if (descriptorsReady) {
 								render->hizMinifyUsesPushDescriptors = usePushDescriptors;
 								render->hizMinifyEnabled = true;
 								SDL_Log(
-									"Render: HZB min-reduction mip pipeline ready (pushDescriptors=%d)",
+									"Render: HZB depth-reduction mip pipeline ready (pushDescriptors=%d)",
 									usePushDescriptors ? 1 : 0);
 							}
 						}
@@ -619,7 +819,7 @@ bool CreateHizCullingPipeline(
 			}
 		}
 		if (!render->hizMinifyEnabled) {
-			SDL_Log("Render: HZB min-reduction pipeline unavailable; using LINEAR blit mips");
+			SDL_Log("Render: HZB depth-reduction pipeline unavailable; HZB draw gating disabled");
 		}
 	}
 
@@ -636,9 +836,31 @@ void DestroyHizCullingPipeline(
 
 	for (SceneFrameResources &frameResources : render->sceneFrameResources) {
 		frameResources.hizCullingDescriptorSet = VK_NULL_HANDLE;
+		frameResources.hizApplyDescriptorSet = VK_NULL_HANDLE;
+		frameResources.hizApplyDescriptorSetInitialized = false;
 	}
 
 	if (context->device != VK_NULL_HANDLE) {
+		if (render->hizApplyPipeline != VK_NULL_HANDLE) {
+			vkDestroyPipeline(context->device, render->hizApplyPipeline, nullptr);
+			render->hizApplyPipeline = VK_NULL_HANDLE;
+		}
+		if (render->hizApplyPipelineLayout != VK_NULL_HANDLE) {
+			vkDestroyPipelineLayout(context->device, render->hizApplyPipelineLayout, nullptr);
+			render->hizApplyPipelineLayout = VK_NULL_HANDLE;
+		}
+		if (render->hizApplyDescriptorSetLayout != VK_NULL_HANDLE) {
+			vkDestroyDescriptorSetLayout(context->device, render->hizApplyDescriptorSetLayout, nullptr);
+			render->hizApplyDescriptorSetLayout = VK_NULL_HANDLE;
+		}
+		if (render->hizApplyShaderModule != VK_NULL_HANDLE) {
+			vkDestroyShaderModule(context->device, render->hizApplyShaderModule, nullptr);
+			render->hizApplyShaderModule = VK_NULL_HANDLE;
+		}
+		if (render->hizApplyDescriptorPool != VK_NULL_HANDLE) {
+			vkDestroyDescriptorPool(context->device, render->hizApplyDescriptorPool, nullptr);
+			render->hizApplyDescriptorPool = VK_NULL_HANDLE;
+		}
 		if (render->hizCullingPipeline != VK_NULL_HANDLE) {
 			vkDestroyPipeline(context->device, render->hizCullingPipeline, nullptr);
 			render->hizCullingPipeline = VK_NULL_HANDLE;
@@ -671,7 +893,9 @@ void DestroyHizCullingPipeline(
 			vkDestroyDescriptorPool(context->device, render->hizMinifyDescriptorPool, nullptr);
 			render->hizMinifyDescriptorPool = VK_NULL_HANDLE;
 		}
-		render->hizMinifyDescriptorSet = VK_NULL_HANDLE;
+		render->hizMinifyDescriptorSets = {};
+		render->hizMinifyDescriptorSetCount = 0u;
+		render->hizMinifyDescriptorsInitialized = false;
 		if (render->hizMinifyDescriptorSetLayout != VK_NULL_HANDLE) {
 			vkDestroyDescriptorSetLayout(context->device, render->hizMinifyDescriptorSetLayout, nullptr);
 			render->hizMinifyDescriptorSetLayout = VK_NULL_HANDLE;
@@ -685,5 +909,8 @@ void DestroyHizCullingPipeline(
 	render->hizCullingEnabled = false;
 	render->hizMinifyEnabled = false;
 	render->hizMinifyUsesPushDescriptors = false;
+	render->hizMinifyDescriptorSets = {};
+	render->hizMinifyDescriptorSetCount = 0u;
+	render->hizMinifyDescriptorsInitialized = false;
 }
 } // namespace projectv::render

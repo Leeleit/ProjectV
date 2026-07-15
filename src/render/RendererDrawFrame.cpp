@@ -150,7 +150,9 @@ SDL_AppResult DrawFrame(
 		runtime::LogVkFailure("DrawFrame.vkWaitForFences", waitFencesResult);
 		return SDL_APP_FAILURE;
 	}
-	if (render->gpuTimestampQueryPool != VK_NULL_HANDLE) {
+	projectv::render::SyncHzbUnifiedVisibilityAfterFence(context, *render, currentFrameIndex);
+	if (render->gpuTimestampQueryPool != VK_NULL_HANDLE &&
+		render->gpuTimestampQueriesReady[currentFrameIndex]) {
 		const uint32_t base = static_cast<uint32_t>(currentFrameIndex) * render->gpuTimestampQueriesPerFrame;
 		std::array<uint64_t, 10> stamps{};
 		if (vkGetQueryPoolResults(
@@ -469,37 +471,6 @@ SDL_AppResult DrawFrame(
 		render->rayTracedShadows->RecordDebugReport();
 	}
 
-	if (projectv::render::IsHzbCullingEnabled() &&
-		render->hizBuffer.image != VK_NULL_HANDLE) {
-		const bool useDepthResolve = render->msaaSampleCount > 1u && render->depthResolveImage != VK_NULL_HANDLE;
-		const VkImageLayout hizDepthLayout =
-			useDepthResolve ? render->depthResolveCurrentLayout : render->depthImageCurrentLayout;
-		projectv::render::BuildHizMipChain(
-			cmd,
-			useDepthResolve ? render->depthResolveImage : render->depthImage,
-			hizDepthLayout,
-			render->hizBuffer,
-			render,
-			context);
-		if (render->hizBuffer.imageView != VK_NULL_HANDLE &&
-			render->hizBuffer.sampler != VK_NULL_HANDLE &&
-			frame->renderData.hizCullingDescriptorSet != VK_NULL_HANDLE) {
-			projectv::math::Mat4 inverseViewProjection =
-				projectv::math::inverse(frame->renderData.graphicsPushConstants.viewProjection);
-			std::array<float, 16> inverseViewProjectionFlat{};
-			for (uint32_t i = 0; i < 16u; ++i) {
-				inverseViewProjectionFlat[i] = inverseViewProjection.data()[i];
-			}
-			projectv::render::RecordHzbCullingDispatch(
-				cmd,
-				context,
-				*render,
-				render->sceneFrameResources[frame->currentFrame],
-				*reinterpret_cast<const float (*)[16]>(inverseViewProjectionFlat.data()),
-				frame->renderData.chunkDescriptorCount);
-		}
-	}
-
 	const bool asyncComputePathActive =
 		projectv::render::IsAsyncComputeEnabled() &&
 		projectv::render::IsAsyncComputeResourcesAllocated(*context) &&
@@ -656,6 +627,7 @@ SDL_AppResult DrawFrame(
 		runtime::LogVkFailure("DrawFrame.vkQueueSubmit2", submitResult);
 		return SDL_APP_FAILURE;
 	}
+	render->gpuTimestampQueriesReady[currentFrameIndex] = true;
 
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;

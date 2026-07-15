@@ -5,7 +5,6 @@
 #include "render/vulkan/VulkanDebug.hpp"
 
 #include <algorithm>
-#include <cstring>
 
 namespace projectv::render {
 namespace {
@@ -61,6 +60,7 @@ MeshCullPushConstants BuildMeshCullPushConstants(
 {
 	MeshCullPushConstants result{};
 	result.dispatchParams = {dispatchCapacity, 0u, 0u, 0u};
+	result.visibilityMaskMode = {2u, 0u, 0u, 0u};
 
 	const math::Vec3 cameraPos{
 		parameters.cameraPositionAndMaxDistance.x,
@@ -199,12 +199,36 @@ bool RecordMeshShaderPreCull(
 	}
 	if (frameResources.meshShaderDescriptorSet == VK_NULL_HANDLE ||
 		frameResources.visibleChunkIdBuffer == VK_NULL_HANDLE ||
-		frameResources.meshClusters.meshDrawIndirectMappedData == nullptr) {
+		frameResources.visibilityMaskBuffer == VK_NULL_HANDLE ||
+		frameResources.prevVisibilityMaskBuffer == VK_NULL_HANDLE ||
+		frameResources.meshClusters.meshDrawIndirectBuffer == VK_NULL_HANDLE) {
 		return false;
 	}
 
-	VkDrawMeshTasksIndirectCommandEXT zeroIndirect{};
-	std::memcpy(frameResources.meshClusters.meshDrawIndirectMappedData, &zeroIndirect, sizeof(zeroIndirect));
+	CmdBufferBarrier(
+		commandBuffer,
+		frameResources.meshClusters.meshDrawIndirectBuffer,
+		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+			VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
+			VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT,
+		VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+			VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+			VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+		VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		VK_ACCESS_2_TRANSFER_WRITE_BIT);
+	vkCmdFillBuffer(
+		commandBuffer,
+		frameResources.meshClusters.meshDrawIndirectBuffer,
+		0u,
+		sizeof(VkDrawMeshTasksIndirectCommandEXT),
+		0u);
+	CmdBufferBarrier(
+		commandBuffer,
+		frameResources.meshClusters.meshDrawIndirectBuffer,
+		VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 
 	CmdBufferBarrier(
 		commandBuffer,

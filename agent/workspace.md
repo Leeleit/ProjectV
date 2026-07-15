@@ -18,6 +18,9 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-16 HZB fix:** Pass A/B + MSAA STORE/LOAD; host-unified visibility
+after fence (kills FIF even/odd flicker). Draw gating ON.
+
 **2026-07-15 Smooth specular tiers:** roughness budget in `voxel.frag` (no
 temporal — binary voxels). Full-look replay compare under
 `profiler-captures/full-look-baseline/replay-smooth-tiers/`. Prior profile:

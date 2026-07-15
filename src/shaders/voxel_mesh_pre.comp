@@ -8,6 +8,7 @@ struct FaceCluster {
     uint chunkIndex;
     uint flags;
     vec4 aabbCenterHalfExtent;
+    vec4 aabbHalfExtentXYZ;
 };
 
 layout(set = 0, binding = 0, std430) readonly buffer FaceClusterBuffer {
@@ -28,21 +29,46 @@ layout(set = 0, binding = 3, std430) buffer MeshDrawIndirect {
     uint groupCountZ;
 };
 
+layout(set = 0, binding = 4, std430) readonly buffer VisibilityMask {
+    uint visibilityWords[];
+};
+
+layout(set = 0, binding = 5, std430) readonly buffer PreviousVisibilityMask {
+    uint previousVisibilityWords[];
+};
+
 layout(push_constant) uniform CullPushConstants {
     uvec4 dispatchParams; // x=maxClustersCapacity (dispatch domain); clusterCount read from SSBO
     vec4 frustumPlanes[6];
+    uvec4 visibilityMaskMode;
 } pushConstants;
 
-bool AabbOutsideFrustum(const vec3 origin, const float halfExtent)
+bool AabbOutsideFrustum(const vec3 origin, const vec3 halfExtent)
 {
     for (int i = 0; i < 6; ++i) {
         const vec3 absN = abs(pushConstants.frustumPlanes[i].xyz);
-        const float r = halfExtent * (absN.x + absN.y + absN.z);
+        const float r = dot(absN, halfExtent);
         if (dot(pushConstants.frustumPlanes[i].xyz, origin) + pushConstants.frustumPlanes[i].w < -r) {
             return true;
         }
     }
     return false;
+}
+
+bool ClusterVisibleInHzb(const uint chunkIndex)
+{
+    const uint mode = pushConstants.visibilityMaskMode.x;
+    if (mode == 2u) {
+        return true;
+    }
+    const uint wordIndex = chunkIndex >> 5u;
+    const uint bit = 1u << (chunkIndex & 31u);
+    const bool nowVisible = (visibilityWords[wordIndex] & bit) != 0u;
+    if (mode == 0u) {
+        return nowVisible;
+    }
+    const bool previouslyVisible = (previousVisibilityWords[wordIndex] & bit) != 0u;
+    return !previouslyVisible && nowVisible;
 }
 
 void main()
@@ -58,8 +84,13 @@ void main()
     }
 
     const vec3 origin = cluster.aabbCenterHalfExtent.xyz;
-    const float halfExtent = cluster.aabbCenterHalfExtent.w;
+    const vec3 halfExtent = (length(cluster.aabbHalfExtentXYZ.xyz) > 0.0)
+        ? cluster.aabbHalfExtentXYZ.xyz
+        : vec3(cluster.aabbCenterHalfExtent.w);
     if (AabbOutsideFrustum(origin, halfExtent)) {
+        return;
+    }
+    if (!ClusterVisibleInHzb(cluster.chunkIndex)) {
         return;
     }
 

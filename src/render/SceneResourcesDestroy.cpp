@@ -22,7 +22,7 @@ void DestroySceneResources(
 		}
 	}
 
-	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, hzbPerChunkMipMappedData, hzbPerChunkMipBuffer, hzbPerChunkMipAllocation, hzbPerChunkMipCapacityBytes, lodDownsampledVoxelPayloadMappedData, lodDownsampledVoxelPayloadBuffer, lodDownsampledVoxelPayloadAllocation, lodDownsampledVoxelPayloadCapacityBytes, chunkLodLevelsMappedData, chunkLodLevelsBuffer, chunkLodLevelsAllocation, chunkLodLevelsCapacity, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, nanovdbUpperMappedData, nanovdbUpperBuffer, nanovdbUpperAllocation, nanovdbUpperCapacityBytes, nanovdbLowerMappedData, nanovdbLowerBuffer, nanovdbLowerAllocation, nanovdbLowerCapacityBytes, nanovdbLeafMappedData, nanovdbLeafBuffer, nanovdbLeafAllocation, nanovdbLeafCapacityBytes, nanovdbMaterialMappedData, nanovdbMaterialBuffer, nanovdbMaterialAllocation, nanovdbMaterialCapacityBytes, worldGenVoxelMappedData, worldGenVoxelBuffer, worldGenVoxelAllocation, worldGenVoxelCapacityBytes, meshClusters, worldGenDescriptorSet, graphicsDescriptorSet, meshShaderDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, vctVoxelizeDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, uploadedNanoVdbVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount] : render->sceneFrameResources) {
+	for (auto &[packedFaceMappedData, packedFaceBuffer, packedFaceAllocation, chunkDescriptorMappedData, chunkDescriptorBuffer, chunkDescriptorAllocation, chunkVoxelPayloadMappedData, chunkVoxelPayloadBuffer, chunkVoxelPayloadAllocation, opaqueIndirectMappedData, opaqueIndirectBuffer, opaqueIndirectAllocation, transparentIndirectMappedData, transparentIndirectBuffer, transparentIndirectAllocation, dirtyChunkIndexMappedData, dirtyChunkIndexBuffer, dirtyChunkIndexAllocation, chunkCullingMappedData, chunkCullingBuffer, chunkCullingAllocation, sceneLightingMappedData, sceneLightingBuffer, sceneLightingAllocation, chunkAabbMappedData, chunkAabbBuffer, chunkAabbAllocation, visibilityMaskMappedData, visibilityMaskBuffer, visibilityMaskAllocation, hzbVisibleCountMappedData, hzbVisibleCountBuffer, hzbVisibleCountAllocation, hzbPerChunkMipMappedData, hzbPerChunkMipBuffer, hzbPerChunkMipAllocation, hzbPerChunkMipCapacityBytes, prevVisibilityMaskMappedData, prevVisibilityMaskBuffer, prevVisibilityMaskAllocation, opaqueHzbDrawIndirectMappedData, opaqueHzbDrawIndirectBuffer, opaqueHzbDrawIndirectAllocation, transparentHzbDrawIndirectMappedData, transparentHzbDrawIndirectBuffer, transparentHzbDrawIndirectAllocation, hizApplyDescriptorSet, hizApplyDescriptorSetInitialized, lodDownsampledVoxelPayloadMappedData, lodDownsampledVoxelPayloadBuffer, lodDownsampledVoxelPayloadAllocation, lodDownsampledVoxelPayloadCapacityBytes, chunkLodLevelsMappedData, chunkLodLevelsBuffer, chunkLodLevelsAllocation, chunkLodLevelsCapacity, visibleChunkIdMappedData, visibleChunkIdBuffer, visibleChunkIdAllocation, visibilityCounterMappedData, visibilityCounterBuffer, visibilityCounterAllocation, fluidCaSourceMappedData, fluidCaSourceBuffer, fluidCaSourceAllocation, fluidCaDestinationMappedData, fluidCaDestinationBuffer, fluidCaDestinationAllocation, fluidCaActiveChunkIdMappedData, fluidCaActiveChunkIdBuffer, fluidCaActiveChunkIdAllocation, fluidCaStatsMappedData, fluidCaStatsBuffer, fluidCaStatsAllocation, nanovdbUpperMappedData, nanovdbUpperBuffer, nanovdbUpperAllocation, nanovdbUpperCapacityBytes, nanovdbLowerMappedData, nanovdbLowerBuffer, nanovdbLowerAllocation, nanovdbLowerCapacityBytes, nanovdbLeafMappedData, nanovdbLeafBuffer, nanovdbLeafAllocation, nanovdbLeafCapacityBytes, nanovdbMaterialMappedData, nanovdbMaterialBuffer, nanovdbMaterialAllocation, nanovdbMaterialCapacityBytes, worldGenVoxelMappedData, worldGenVoxelBuffer, worldGenVoxelAllocation, worldGenVoxelCapacityBytes, meshClusters, worldGenDescriptorSet, graphicsDescriptorSet, meshShaderDescriptorSet, voxelMeshingDescriptorSet, hizCullingDescriptorSet, fluidCaDescriptorSet, vctVoxelizeDescriptorSet, uploadedSceneVersion, uploadedVoxelPayloadVersion, meshedSceneVersion, uploadedNanoVdbVersion, chunkDescriptorCount, dirtyChunkCount, opaqueFaceCount, transparentFaceCount] : render->sceneFrameResources) {
 		if (packedFaceBuffer && packedFaceAllocation) {
 			profiling::RecordFree(packedFaceAllocation, "ScenePackedFaceBufferAllocation");
 			vmaDestroyBuffer(context->allocator, packedFaceBuffer, packedFaceAllocation);
@@ -62,6 +62,18 @@ void DestroySceneResources(
 		if (visibilityMaskBuffer && visibilityMaskAllocation) {
 			profiling::RecordFree(visibilityMaskAllocation, "SceneVisibilityMaskBufferAllocation");
 			vmaDestroyBuffer(context->allocator, visibilityMaskBuffer, visibilityMaskAllocation);
+		}
+		if (prevVisibilityMaskBuffer && prevVisibilityMaskAllocation) {
+			profiling::RecordFree(prevVisibilityMaskAllocation, "ScenePrevVisibilityMaskBufferAllocation");
+			vmaDestroyBuffer(context->allocator, prevVisibilityMaskBuffer, prevVisibilityMaskAllocation);
+		}
+		if (opaqueHzbDrawIndirectBuffer && opaqueHzbDrawIndirectAllocation) {
+			profiling::RecordFree(opaqueHzbDrawIndirectAllocation, "SceneOpaqueHzbDrawIndirectBufferAllocation");
+			vmaDestroyBuffer(context->allocator, opaqueHzbDrawIndirectBuffer, opaqueHzbDrawIndirectAllocation);
+		}
+		if (transparentHzbDrawIndirectBuffer && transparentHzbDrawIndirectAllocation) {
+			profiling::RecordFree(transparentHzbDrawIndirectAllocation, "SceneTransparentHzbDrawIndirectBufferAllocation");
+			vmaDestroyBuffer(context->allocator, transparentHzbDrawIndirectBuffer, transparentHzbDrawIndirectAllocation);
 		}
 		if (visibleChunkIdBuffer && visibleChunkIdAllocation) {
 			profiling::RecordFree(visibleChunkIdAllocation, "SceneVisibleChunkIdBufferAllocation");
@@ -167,6 +179,17 @@ void DestroySceneResources(
 		visibilityMaskMappedData = nullptr;
 		visibilityMaskBuffer = VK_NULL_HANDLE;
 		visibilityMaskAllocation = nullptr;
+		prevVisibilityMaskMappedData = nullptr;
+		prevVisibilityMaskBuffer = VK_NULL_HANDLE;
+		prevVisibilityMaskAllocation = nullptr;
+		opaqueHzbDrawIndirectMappedData = nullptr;
+		opaqueHzbDrawIndirectBuffer = VK_NULL_HANDLE;
+		opaqueHzbDrawIndirectAllocation = nullptr;
+		transparentHzbDrawIndirectMappedData = nullptr;
+		transparentHzbDrawIndirectBuffer = VK_NULL_HANDLE;
+		transparentHzbDrawIndirectAllocation = nullptr;
+		hizApplyDescriptorSet = VK_NULL_HANDLE;
+		hizApplyDescriptorSetInitialized = false;
 		visibleChunkIdMappedData = nullptr;
 		visibleChunkIdBuffer = VK_NULL_HANDLE;
 		visibleChunkIdAllocation = nullptr;

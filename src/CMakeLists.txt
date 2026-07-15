@@ -34,6 +34,7 @@ set(SHADERS
         ${SHADER_DIR}/voxel_mesh_pre.comp
         ${SHADER_DIR}/voxel_mesh.mesh
         ${SHADER_DIR}/hzb_cull.comp
+        ${SHADER_DIR}/hzb_apply_visibility.comp
         ${SHADER_DIR}/hiz_minify.comp
         ${SHADER_DIR}/fluid_ca.comp
         ${SHADER_DIR}/world_gen.comp
@@ -146,6 +147,7 @@ target_sources(ProjectV PRIVATE
         render/HizCullingSetup.cpp
         render/HizCullingBuild.cpp
         render/HizCullingDispatch.cpp
+        render/HizCullingApply.cpp
         render/LodDownsampleGpuConsume.cpp
         render/RayTracedShadows.cpp
         render/RayTracedShadowsBlas.cpp

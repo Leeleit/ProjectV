@@ -167,6 +167,10 @@ struct FrameRenderData {
 	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
 	VkBuffer opaqueIndirectBuffer = VK_NULL_HANDLE;
 	VkBuffer transparentIndirectBuffer = VK_NULL_HANDLE;
+	VkBuffer opaqueHzbDrawIndirectBuffer = VK_NULL_HANDLE;
+	VkBuffer transparentHzbDrawIndirectBuffer = VK_NULL_HANDLE;
+	VkBuffer prevVisibilityMaskBuffer = VK_NULL_HANDLE;
+	VkDescriptorSet hizApplyDescriptorSet = VK_NULL_HANDLE;
 	uint32_t chunkDescriptorCount = 0;
 	uint32_t dirtyChunkCount = 0;
 	uint32_t opaqueFaceCount = 0;
@@ -209,6 +213,10 @@ struct DebugStats {
 	float renderPassDebugOverlayMs = 0.0f;
 	float renderPassOtherMs = 0.0f;
 	uint32_t renderPassDirtyChunkRebuiltCount = 0;
+	uint32_t hzbVisibleChunkCount = 0;
+	uint32_t hzbCulledChunkCount = 0;
+	uint32_t hzbChunkCount = 0;
+	bool hzbCameraCut = false;
 	uint8_t audioMusicState = 0;
 	float audioMusicVolume = 0.8f;
 	bool audioMusicInitialized = false;
@@ -314,6 +322,17 @@ struct SceneFrameResources {
 	VkBuffer hzbPerChunkMipBuffer = VK_NULL_HANDLE;
 	VmaAllocation hzbPerChunkMipAllocation = nullptr;
 	VkDeviceSize hzbPerChunkMipCapacityBytes = 0u;
+	void *prevVisibilityMaskMappedData = nullptr;
+	VkBuffer prevVisibilityMaskBuffer = VK_NULL_HANDLE;
+	VmaAllocation prevVisibilityMaskAllocation = nullptr;
+	void *opaqueHzbDrawIndirectMappedData = nullptr;
+	VkBuffer opaqueHzbDrawIndirectBuffer = VK_NULL_HANDLE;
+	VmaAllocation opaqueHzbDrawIndirectAllocation = nullptr;
+	void *transparentHzbDrawIndirectMappedData = nullptr;
+	VkBuffer transparentHzbDrawIndirectBuffer = VK_NULL_HANDLE;
+	VmaAllocation transparentHzbDrawIndirectAllocation = nullptr;
+	VkDescriptorSet hizApplyDescriptorSet = VK_NULL_HANDLE;
+	bool hizApplyDescriptorSetInitialized = false;
 	void *lodDownsampledVoxelPayloadMappedData = nullptr;
 	VkBuffer lodDownsampledVoxelPayloadBuffer = VK_NULL_HANDLE;
 	VmaAllocation lodDownsampledVoxelPayloadAllocation = nullptr;
@@ -460,7 +479,7 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkQueryPool gpuTimestampQueryPool = VK_NULL_HANDLE;
 	float gpuTimestampPeriodNs = 1.0f;
 	uint32_t gpuTimestampQueriesPerFrame = 10u; // 5 pairs: tlas/rtx/ddgi/opaque/aa-post
-	uint64_t gpuTimestampFrameIndex = 0;
+	std::array<bool, MAX_FRAMES_IN_FLIGHT> gpuTimestampQueriesReady{};
 	VoxelLightingDebugControls lightingDebugControls{};
 	projectv::render::MsaaMode msaaMode = projectv::render::MsaaMode::X4;
 	bool smaaEnabled = true;
@@ -593,11 +612,31 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkShaderModule hizMinifyShaderModule = VK_NULL_HANDLE;
 	VkDescriptorSetLayout hizMinifyDescriptorSetLayout = VK_NULL_HANDLE;
 	VkDescriptorPool hizMinifyDescriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSet hizMinifyDescriptorSet = VK_NULL_HANDLE;
+	std::array<VkDescriptorSet, 16> hizMinifyDescriptorSets{};
+	uint32_t hizMinifyDescriptorSetCount = 0u;
+	bool hizMinifyDescriptorsInitialized = false;
 	bool hizBufferNeedsInit = false;
 	bool hizCullingEnabled = false;
 	bool hizMinifyEnabled = false;
 	bool hizMinifyUsesPushDescriptors = false;
+	VkPipelineLayout hizApplyPipelineLayout = VK_NULL_HANDLE;
+	VkPipeline hizApplyPipeline = VK_NULL_HANDLE;
+	VkShaderModule hizApplyShaderModule = VK_NULL_HANDLE;
+	VkDescriptorSetLayout hizApplyDescriptorSetLayout = VK_NULL_HANDLE;
+	VkDescriptorPool hizApplyDescriptorPool = VK_NULL_HANDLE;
+	bool hzbMaskValid = false;
+	bool hzbCameraCutThisFrame = false;
+	projectv::math::Vec3 hzbPrevCameraForward{};
+	bool hzbPrevCameraForwardValid = false;
+	uint32_t hzbLastVisibleChunkCount = 0;
+	uint32_t hzbLastCulledChunkCount = 0;
+	// Host-unified visibility: after fence on slot i, pull that slot's completed cull into
+	// hzbUnifiedVisibilityWords; before Pass A, seed the current slot from unified so even/odd
+	// FIF slots don't disagree (whole-chunk flicker).
+	std::vector<uint32_t> hzbUnifiedVisibilityWords{};
+	uint64_t hzbCullSerialCounter = 0;
+	uint64_t hzbUnifiedCullSerial = 0;
+	std::array<uint64_t, MAX_FRAMES_IN_FLIGHT> hzbSlotCullSerial{};
 
 	VkImageLayout depthImageCurrentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	VkPipeline skyAtmospherePipeline = VK_NULL_HANDLE;

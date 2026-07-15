@@ -1,5 +1,6 @@
 #include "render/RendererInternal.hpp"
 
+#include "core/Math.hpp"
 #include "debug/Profiling.hpp"
 #include "debug/ProfilingGpu.hpp"
 #include "render/Cloudscape.hpp"
@@ -65,8 +66,10 @@ void RecordVoxelMeshingCommands(
 	bufferBarriers[0].size = VK_WHOLE_SIZE;
 
 	bufferBarriers[1] = bufferBarriers[0];
-	bufferBarriers[1].dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
-	bufferBarriers[1].dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+	bufferBarriers[1].dstStageMask =
+		VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	bufferBarriers[1].dstAccessMask =
+		VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
 	bufferBarriers[1].buffer = frameRenderData.opaqueIndirectBuffer;
 
 	bufferBarriers[2] = bufferBarriers[1];
@@ -96,6 +99,15 @@ void RecordGraphicsCommands(
 	render.renderPassTimings.postFxMs = 0.0f;
 	PV_PROFILE_ZONE_N("RecordGraphicsCommands");
 	PV_PROFILE_GPU_LABEL(cmd, "Graphics Pass");
+
+	const bool hzbCullingActive =
+		projectv::render::IsHzbCullingEnabled() &&
+		render.hizCullingEnabled &&
+		render.hizMinifyEnabled &&
+		frameRenderData.opaqueHzbDrawIndirectBuffer != VK_NULL_HANDLE &&
+		frameRenderData.chunkDescriptorCount > 0u;
+	// Pass A apply runs after meshing (below) so HZB draw buffers see this frame's indirect.
+
 	const VkExtent2D renderExtent = render.internalRenderExtent.width > 0u &&
 											render.internalRenderExtent.height > 0u
 										? render.internalRenderExtent
@@ -104,25 +116,68 @@ void RecordGraphicsCommands(
 		PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Graphics Frame");
 
 		RecordVoxelMeshingCommands(render, frameRenderData, cmd);
+		SceneFrameResources *meshFrameResources = nullptr;
+		projectv::render::MeshCullPushConstants meshCullPush{};
 		if (render.meshShaderEnabled && frameRenderData.chunkDescriptorCount > 0) {
-			SceneFrameResources &frameResources = render.sceneFrameResources[frameRenderData.frameIndex];
+			meshFrameResources = &render.sceneFrameResources[frameRenderData.frameIndex];
 			projectv::render::RecordMeshShaderClusterize(
 				cmd,
 				&context,
 				render,
-				frameResources,
+				*meshFrameResources,
 				frameRenderData.chunkDescriptorCount);
-			const projectv::render::MeshCullPushConstants cullPush =
-				projectv::render::BuildMeshCullPushConstants(
-					frameRenderData.chunkCullingParameters,
-					render.faceClusterCapacity);
-			projectv::render::RecordMeshShaderPreCull(
+			meshCullPush = projectv::render::BuildMeshCullPushConstants(
+				frameRenderData.chunkCullingParameters,
+				render.faceClusterCapacity);
+			if (!hzbCullingActive) {
+				projectv::render::RecordMeshShaderPreCull(
+					cmd,
+					&context,
+					render,
+					*meshFrameResources,
+					meshCullPush);
+			}
+		}
+
+		if (hzbCullingActive) {
+			const projectv::math::Vec3 cameraForward{
+				frameRenderData.graphicsPushConstants.cameraForward.x,
+				frameRenderData.graphicsPushConstants.cameraForward.y,
+				frameRenderData.graphicsPushConstants.cameraForward.z,
+			};
+			const bool cameraCut = projectv::render::DetectHzbCameraCut(render, cameraForward);
+			projectv::render::SeedHzbSlotVisibilityFromUnified(
+				&context,
+				render,
+				frameRenderData.frameIndex);
+			// Unified host mask → all FIF slots Pass-A the same completed cull (no even/odd flicker).
+			const projectv::render::HzbApplyMode passAMode =
+				(cameraCut || !render.hzbMaskValid)
+					? projectv::render::HzbApplyMode::ForceAll
+					: projectv::render::HzbApplyMode::PassA;
+			const bool passAApplied = projectv::render::RecordHzbApplyVisibility(
 				cmd,
 				&context,
 				render,
-				frameResources,
-				cullPush);
+				render.sceneFrameResources[frameRenderData.frameIndex],
+				frameRenderData.chunkDescriptorCount,
+				passAMode);
+			if (meshFrameResources != nullptr) {
+				meshCullPush.visibilityMaskMode = {
+					static_cast<uint32_t>(
+						passAApplied ? passAMode : projectv::render::HzbApplyMode::ForceAll),
+					0u,
+					0u,
+					0u};
+				projectv::render::RecordMeshShaderPreCull(
+					cmd,
+					&context,
+					render,
+					*meshFrameResources,
+					meshCullPush);
+			}
 		}
+
 		RecordShadowCommands(render, frameRenderData, cmd);
 
 		TransitionImage(
@@ -200,16 +255,23 @@ void RecordGraphicsCommands(
 								   render.skyAtmospherePipelineEnabled &&
 								   render.sceneColorImageView != VK_NULL_HANDLE;
 
+		const bool msaaColor =
+			render.msaaSampleCount > 1u && render.sceneColorMsImageView != VK_NULL_HANDLE;
+		const bool msaaDepth =
+			render.msaaSampleCount > 1u && render.depthResolveImageView != VK_NULL_HANDLE;
+		// HZB Pass B LOADs MS attachments — must STORE them on pass A (DONT_CARE → psychedelia).
+		const bool storeMsaaForHzbPassB = hzbCullingActive && msaaColor;
 		const VkRenderingAttachmentInfo colorAttachment0{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.pNext = nullptr,
-			.imageView = render.msaaSampleCount > 1u && render.sceneColorMsImageView != VK_NULL_HANDLE ? render.sceneColorMsImageView : render.sceneColorImageView,
+			.imageView = msaaColor ? render.sceneColorMsImageView : render.sceneColorImageView,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.resolveMode = render.msaaSampleCount > 1u && render.sceneColorMsImageView != VK_NULL_HANDLE ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE,
-			.resolveImageView = render.msaaSampleCount > 1u && render.sceneColorMsImageView != VK_NULL_HANDLE ? render.sceneColorImageView : VK_NULL_HANDLE,
-			.resolveImageLayout = render.msaaSampleCount > 1u && render.sceneColorMsImageView != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+			.resolveMode = msaaColor ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE,
+			.resolveImageView = msaaColor ? render.sceneColorImageView : VK_NULL_HANDLE,
+			.resolveImageLayout = msaaColor ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = render.msaaSampleCount > 1u && render.sceneColorMsImageView != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+			.storeOp = (!msaaColor || storeMsaaForHzbPassB) ? VK_ATTACHMENT_STORE_OP_STORE
+															: VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearColorValue,
 		};
 		const VkRenderingAttachmentInfo colorAttachments[1] = {colorAttachment0};
@@ -218,11 +280,12 @@ void RecordGraphicsCommands(
 			.pNext = nullptr,
 			.imageView = render.depthImageView,
 			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-			.resolveMode = render.msaaSampleCount > 1u && render.depthResolveImageView != VK_NULL_HANDLE ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT : VK_RESOLVE_MODE_NONE,
-			.resolveImageView = render.msaaSampleCount > 1u && render.depthResolveImageView != VK_NULL_HANDLE ? render.depthResolveImageView : VK_NULL_HANDLE,
-			.resolveImageLayout = render.msaaSampleCount > 1u && render.depthResolveImageView != VK_NULL_HANDLE ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+			.resolveMode = msaaDepth ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT : VK_RESOLVE_MODE_NONE,
+			.resolveImageView = msaaDepth ? render.depthResolveImageView : VK_NULL_HANDLE,
+			.resolveImageLayout = msaaDepth ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = render.msaaSampleCount > 1u && render.depthResolveImageView != VK_NULL_HANDLE ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+			.storeOp = (!msaaDepth || storeMsaaForHzbPassB) ? VK_ATTACHMENT_STORE_OP_STORE
+															: VK_ATTACHMENT_STORE_OP_DONT_CARE,
 			.clearValue = clearDepthValue,
 		};
 		const VkRenderingInfo renderingInfo{
@@ -330,44 +393,15 @@ void RecordGraphicsCommands(
 					0,
 					sizeof(frameRenderData.graphicsPushConstants),
 					&frameRenderData.graphicsPushConstants);
-				const bool hzbCullingActive =
-					projectv::render::IsHzbCullingEnabled() &&
-					frameRenderData.hzbVisibleCountBuffer != VK_NULL_HANDLE;
-				if (hzbCullingActive) {
-					VkBufferMemoryBarrier2 indirectBarrier{};
-					indirectBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-					indirectBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-					indirectBarrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-					indirectBarrier.dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
-					indirectBarrier.dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
-					indirectBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-					indirectBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-					indirectBarrier.buffer = frameRenderData.hzbVisibleCountBuffer;
-					indirectBarrier.offset = 0u;
-					indirectBarrier.size = sizeof(uint32_t);
-
-					VkDependencyInfo indirectDepInfo{};
-					indirectDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-					indirectDepInfo.bufferMemoryBarrierCount = 1u;
-					indirectDepInfo.pBufferMemoryBarriers = &indirectBarrier;
-					vkCmdPipelineBarrier2(cmd, &indirectDepInfo);
-
-					vkCmdDrawIndirectCountKHR(
-						cmd,
-						frameRenderData.opaqueIndirectBuffer,
-						0u,
-						frameRenderData.hzbVisibleCountBuffer,
-						0u,
-						frameRenderData.chunkDescriptorCount,
-						sizeof(VkDrawIndirectCommand));
-				} else {
-					vkCmdDrawIndirect(
-						cmd,
-						frameRenderData.opaqueIndirectBuffer,
-						0,
-						frameRenderData.chunkDescriptorCount,
-						sizeof(VkDrawIndirectCommand));
-				}
+				const VkBuffer opaqueDrawBuffer =
+					hzbCullingActive ? frameRenderData.opaqueHzbDrawIndirectBuffer
+									 : frameRenderData.opaqueIndirectBuffer;
+				vkCmdDrawIndirect(
+					cmd,
+					opaqueDrawBuffer,
+					0,
+					frameRenderData.chunkDescriptorCount,
+					sizeof(VkDrawIndirectCommand));
 			}
 		}
 
@@ -422,6 +456,15 @@ void RecordGraphicsCommands(
 			const VkPipeline transparentPipeline = greedyDebug && render.transparentDebugGraphicsPipeline
 													   ? render.transparentDebugGraphicsPipeline
 													   : render.transparentGraphicsPipeline;
+			vkCmdBindDescriptorSets(
+				cmd,
+				VK_PIPELINE_BIND_POINT_GRAPHICS,
+				render.graphicsPipelineLayout,
+				0u,
+				1u,
+				&frameRenderData.graphicsDescriptorSet,
+				0u,
+				nullptr);
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, transparentPipeline);
 			vkCmdPushConstants(
 				cmd,
@@ -430,9 +473,12 @@ void RecordGraphicsCommands(
 				0,
 				sizeof(frameRenderData.graphicsPushConstants),
 				&frameRenderData.graphicsPushConstants);
+			const VkBuffer transparentDrawBuffer =
+				hzbCullingActive ? frameRenderData.transparentHzbDrawIndirectBuffer
+								 : frameRenderData.transparentIndirectBuffer;
 			vkCmdDrawIndirect(
 				cmd,
-				frameRenderData.transparentIndirectBuffer,
+				transparentDrawBuffer,
 				0,
 				frameRenderData.chunkDescriptorCount,
 				sizeof(VkDrawIndirectCommand));
@@ -459,6 +505,144 @@ void RecordGraphicsCommands(
 		}
 
 		vkCmdEndRendering(cmd);
+
+		if (hzbCullingActive && render.hizBuffer.image != VK_NULL_HANDLE) {
+			const bool useDepthResolve =
+				render.msaaSampleCount > 1u && render.depthResolveImage != VK_NULL_HANDLE;
+			const VkImageLayout hizDepthLayout =
+				useDepthResolve ? render.depthResolveCurrentLayout : render.depthImageCurrentLayout;
+			projectv::render::BuildHizMipChain(
+				cmd,
+				useDepthResolve ? render.depthResolveImage : render.depthImage,
+				hizDepthLayout,
+				render.hizBuffer,
+				&render,
+				&context);
+			if (render.hizBuffer.imageView != VK_NULL_HANDLE &&
+				render.hizBuffer.sampler != VK_NULL_HANDLE &&
+				frameRenderData.hizCullingDescriptorSet != VK_NULL_HANDLE) {
+				projectv::math::Mat4 viewProjectionMat = frameRenderData.graphicsPushConstants.viewProjection;
+				std::array<float, 16> viewProjectionFlat{};
+				for (uint32_t i = 0; i < 16u; ++i) {
+					viewProjectionFlat[i] = viewProjectionMat.data()[i];
+				}
+				projectv::render::RecordHzbCullingDispatch(
+					cmd,
+					&context,
+					render,
+					render.sceneFrameResources[frameRenderData.frameIndex],
+					*reinterpret_cast<const float (*)[16]>(viewProjectionFlat.data()),
+					frameRenderData.chunkDescriptorCount);
+				// Pass B: same-frame disocclusion (!prev && now). MS attachments STOREd above.
+				const bool passBSafe = !render.hzbCameraCutThisFrame && render.hzbMaskValid;
+				if (passBSafe) {
+					const bool passBApplied = projectv::render::RecordHzbApplyVisibility(
+						cmd,
+						&context,
+						render,
+						render.sceneFrameResources[frameRenderData.frameIndex],
+						frameRenderData.chunkDescriptorCount,
+						projectv::render::HzbApplyMode::PassB);
+					if (meshFrameResources != nullptr && passBApplied) {
+						meshCullPush.visibilityMaskMode = {
+							static_cast<uint32_t>(projectv::render::HzbApplyMode::PassB),
+							0u,
+							0u,
+							0u};
+						projectv::render::RecordMeshShaderPreCull(
+							cmd,
+							&context,
+							render,
+							*meshFrameResources,
+							meshCullPush);
+					}
+					const bool passBMsaa =
+						render.msaaSampleCount > 1u && render.sceneColorMsImageView != VK_NULL_HANDLE;
+					const VkRenderingAttachmentInfo passBColor{
+						.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+						.imageView = passBMsaa ? render.sceneColorMsImageView : render.sceneColorImageView,
+						.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+						.resolveMode = passBMsaa ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE,
+						.resolveImageView = passBMsaa ? render.sceneColorImageView : VK_NULL_HANDLE,
+						.resolveImageLayout =
+							passBMsaa ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+						.storeOp = passBMsaa ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+					};
+					const bool passBMsaaDepth =
+						render.msaaSampleCount > 1u && render.depthResolveImageView != VK_NULL_HANDLE;
+					const VkRenderingAttachmentInfo passBDepth{
+						.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+						.imageView = render.depthImageView,
+						.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+						.resolveMode = passBMsaaDepth ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT : VK_RESOLVE_MODE_NONE,
+						.resolveImageView = passBMsaaDepth ? render.depthResolveImageView : VK_NULL_HANDLE,
+						.resolveImageLayout =
+							passBMsaaDepth ? VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+						.storeOp = passBMsaaDepth ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+					};
+					const VkRenderingAttachmentInfo passBColors[1] = {passBColor};
+					const VkRenderingInfo passBInfo{
+						.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+						.renderArea = {{0, 0}, renderExtent},
+						.layerCount = 1,
+						.colorAttachmentCount = 1,
+						.pColorAttachments = passBColors,
+						.pDepthAttachment = &passBDepth,
+					};
+					vkCmdBeginRendering(cmd, &passBInfo);
+					vkCmdSetViewport(cmd, 0, 1, &viewport);
+					vkCmdSetScissor(cmd, 0, 1, &scissor);
+					if (frameRenderData.graphicsDescriptorSet != VK_NULL_HANDLE) {
+						vkCmdBindDescriptorSets(
+							cmd,
+							VK_PIPELINE_BIND_POINT_GRAPHICS,
+							render.graphicsPipelineLayout,
+							0,
+							1,
+							&frameRenderData.graphicsDescriptorSet,
+							0,
+							nullptr);
+					}
+					if (render.meshShaderEnabled && passBApplied) {
+						projectv::render::RecordMeshShaderDraw(
+							cmd,
+							render,
+							render.sceneFrameResources[frameRenderData.frameIndex],
+							frameRenderData.graphicsPushConstants,
+							render.faceClusterCapacity);
+					} else {
+						const bool rtxPathActive =
+							render.rayTracedShadows != nullptr &&
+							render.rayTracedShadows->IsEnabled() &&
+							render.rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
+						VkPipeline opaquePipeline = rtxPathActive ? render.graphicsPipelineRtx : VK_NULL_HANDLE;
+						if (opaquePipeline == VK_NULL_HANDLE) {
+							opaquePipeline = render.graphicsPipeline;
+						}
+						if (opaquePipeline != VK_NULL_HANDLE &&
+							frameRenderData.opaqueHzbDrawIndirectBuffer != VK_NULL_HANDLE) {
+							vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
+							vkCmdPushConstants(
+								cmd,
+								render.graphicsPipelineLayout,
+								VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+								0,
+								sizeof(frameRenderData.graphicsPushConstants),
+								&frameRenderData.graphicsPushConstants);
+							vkCmdDrawIndirect(
+								cmd,
+								frameRenderData.opaqueHzbDrawIndirectBuffer,
+								0,
+								frameRenderData.chunkDescriptorCount,
+								sizeof(VkDrawIndirectCommand));
+						}
+					}
+					vkCmdEndRendering(cmd);
+				}
+			}
+		}
 
 		const bool cloudscapePassActive = projectv::render::IsCloudscapeEnabled() &&
 										  render.cloudscapePipelineEnabled;

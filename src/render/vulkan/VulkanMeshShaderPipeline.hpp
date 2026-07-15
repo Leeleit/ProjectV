@@ -3,6 +3,7 @@
 #include "core/Types.hpp" // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 
 #include <array>
+#include <cstddef>
 
 #include <vulkan/vulkan.h>
 
@@ -13,8 +14,10 @@ constexpr uint32_t kFacesPerCluster = 64u;
 struct MeshCullPushConstants {
 	std::array<uint32_t, 4> dispatchParams{};
 	std::array<std::array<float, 4>, 6> frustumPlanes{};
+	std::array<uint32_t, 4> visibilityMaskMode{};
 };
-static_assert(sizeof(MeshCullPushConstants) == 112);
+static_assert(offsetof(MeshCullPushConstants, visibilityMaskMode) == 112);
+static_assert(sizeof(MeshCullPushConstants) == 128);
 
 struct MeshClusterizePushConstants {
 	std::array<uint32_t, 4> params{}; // x=chunkCount, y=maxClusters, z=facesPerCluster, w=unused

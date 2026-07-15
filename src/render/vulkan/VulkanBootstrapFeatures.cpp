@@ -431,6 +431,7 @@ VkPhysicalDeviceVulkan13Features BuildEnabledFeatures13(const PhysicalDeviceCand
 	enabled.dynamicRendering = selected.features13.dynamicRendering ? VK_TRUE : VK_FALSE;
 	enabled.synchronization2 = selected.features13.synchronization2 ? VK_TRUE : VK_FALSE;
 	enabled.shaderDemoteToHelperInvocation = selected.features13.shaderDemoteToHelperInvocation ? VK_TRUE : VK_FALSE;
+	enabled.maintenance4 = selected.features13.maintenance4 ? VK_TRUE : VK_FALSE;
 	return enabled;
 }
 

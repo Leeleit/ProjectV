@@ -14,7 +14,8 @@ struct FaceCluster {
     uint faceCount;
     uint chunkIndex;
     uint flags;
-    vec4 aabbCenterHalfExtent;
+    vec4 aabbCenterHalfExtent; // xyz=center, w=max(half) fallback
+    vec4 aabbHalfExtentXYZ;	   // xyz=anisotropic half extents, w unused
 };
 
 layout(set = 0, binding = 0, std430) readonly buffer PackedChunkDescriptors {
@@ -51,7 +52,8 @@ void main()
     const uint clusterSpan = (faceCount + facesPerCluster - 1u) / facesPerCluster;
     const vec3 extent = vec3(chunk.chunkExtentAndNonAir.xyz);
     const vec3 center = vec3(chunk.chunkOrigin.xyz) + extent * 0.5;
-    const float halfExtent = 0.5 * max(max(extent.x, extent.y), extent.z);
+    const vec3 halfExtentXYZ = extent * 0.5;
+    const float halfExtent = max(max(halfExtentXYZ.x, halfExtentXYZ.y), halfExtentXYZ.z);
 
     for (uint i = 0u; i < clusterSpan; ++i) {
         const uint slot = atomicAdd(clusterCount, 1u);
@@ -65,5 +67,6 @@ void main()
         faceClusters[slot].chunkIndex = chunkIndex;
         faceClusters[slot].flags = 0u;
         faceClusters[slot].aabbCenterHalfExtent = vec4(center, halfExtent);
+        faceClusters[slot].aabbHalfExtentXYZ = vec4(halfExtentXYZ, 0.0);
     }
 }

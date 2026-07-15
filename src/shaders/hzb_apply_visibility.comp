@@ -1,0 +1,86 @@
+#version 460
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct DrawCommand {
+    uint vertexCount;
+    uint instanceCount;
+    uint firstVertex;
+    uint firstInstance;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer VisibilityMask {
+    uint visibilityWords[];
+};
+
+layout(set = 0, binding = 1, std430) readonly buffer PrevVisibilityMask {
+    uint prevVisibilityWords[];
+};
+
+layout(set = 0, binding = 2, std430) readonly buffer SourceOpaqueIndirect {
+    DrawCommand sourceOpaque[];
+};
+
+layout(set = 0, binding = 3, std430) writeonly buffer DestOpaqueIndirect {
+    DrawCommand destOpaque[];
+};
+
+layout(set = 0, binding = 4, std430) readonly buffer SourceTransparentIndirect {
+    DrawCommand sourceTransparent[];
+};
+
+layout(set = 0, binding = 5, std430) writeonly buffer DestTransparentIndirect {
+    DrawCommand destTransparent[];
+};
+
+layout(set = 0, binding = 6, std430) buffer VisibleCount {
+    uint visibleCount;
+};
+
+layout(push_constant) uniform ApplyPush {
+    uvec4 chunkCountAndMode; // x=chunkCount, y=mode (0=passA prev-mask, 1=passB disocclusion, 2=forceAll), z/w unused
+} pushConstants;
+
+const uint kBitsPerWord = 32u;
+const uint kModePassA = 0u;
+const uint kModePassB = 1u;
+const uint kModeForceAll = 2u;
+
+void main()
+{
+    const uint chunkIndex = gl_GlobalInvocationID.x;
+    const uint chunkCount = pushConstants.chunkCountAndMode.x;
+    const uint mode = pushConstants.chunkCountAndMode.y;
+    if (chunkIndex >= chunkCount) {
+        return;
+    }
+
+    const uint wordIndex = chunkIndex / kBitsPerWord;
+    const uint bitIndex = chunkIndex % kBitsPerWord;
+    const uint bit = 1u << bitIndex;
+
+    bool drawChunk = true;
+    if (mode == kModePassA) {
+        // Previously-visible on this FIF slot (written by last cull on this slot).
+        drawChunk = (visibilityWords[wordIndex] & bit) != 0u;
+    } else if (mode == kModePassB) {
+        const bool wasCulled = (prevVisibilityWords[wordIndex] & bit) == 0u;
+        const bool nowVisible = (visibilityWords[wordIndex] & bit) != 0u;
+        drawChunk = wasCulled && nowVisible;
+    } else {
+        drawChunk = true; // forceAll
+    }
+
+    DrawCommand opaque = sourceOpaque[chunkIndex];
+    DrawCommand transparent = sourceTransparent[chunkIndex];
+    if (!drawChunk) {
+        opaque.instanceCount = 0u;
+        transparent.instanceCount = 0u;
+    }
+    destOpaque[chunkIndex] = opaque;
+    destTransparent[chunkIndex] = transparent;
+
+    if (drawChunk && opaque.instanceCount > 0u) {
+        atomicAdd(visibleCount, 1u);
+    }
+}

@@ -9,6 +9,7 @@
 #include "debug/DebugOverlays.hpp"
 #include "debug/Profiling.hpp"
 #include "render/AaPass.hpp"
+#include "render/HizCulling.hpp"
 #include "render/SceneResources.hpp"
 #include "render/LodDownsampleGpuConsume.hpp"
 #include "voxel/ChunkStreamer.hpp"
@@ -194,7 +195,7 @@ bool PrepareFrameRenderData(
 	SceneFrameResources &sceneFrameResources = render->sceneFrameResources[frameIndex];
 	if (world->voxelWorld && sceneFrameResources.chunkAabbMappedData) {
 		RefreshChunkAabbBuffer(
-			std::span<const VoxelChunk>(world->voxelWorld->chunks.data(), world->voxelWorld->chunks.size()),
+			*world->voxelWorld,
 			std::span<const PackedSceneChunkDescriptor>(render->sceneChunkDescriptors.data(), render->sceneChunkDescriptors.size()),
 			sceneFrameResources);
 	}
@@ -205,6 +206,10 @@ bool PrepareFrameRenderData(
 	frame->renderData.chunkAabbBuffer = sceneFrameResources.chunkAabbBuffer;
 	frame->renderData.visibilityMaskBuffer = sceneFrameResources.visibilityMaskBuffer;
 	frame->renderData.hzbVisibleCountBuffer = sceneFrameResources.hzbVisibleCountBuffer;
+	frame->renderData.prevVisibilityMaskBuffer = sceneFrameResources.prevVisibilityMaskBuffer;
+	frame->renderData.opaqueHzbDrawIndirectBuffer = sceneFrameResources.opaqueHzbDrawIndirectBuffer;
+	frame->renderData.transparentHzbDrawIndirectBuffer = sceneFrameResources.transparentHzbDrawIndirectBuffer;
+	frame->renderData.hizApplyDescriptorSet = sceneFrameResources.hizApplyDescriptorSet;
 	frame->renderData.graphicsDescriptorSet = sceneFrameResources.graphicsDescriptorSet;
 	frame->renderData.voxelMeshingDescriptorSet = sceneFrameResources.voxelMeshingDescriptorSet;
 	frame->renderData.hizCullingDescriptorSet = sceneFrameResources.hizCullingDescriptorSet;
@@ -212,6 +217,13 @@ bool PrepareFrameRenderData(
 	frame->renderData.opaqueIndirectBuffer = sceneFrameResources.opaqueIndirectBuffer;
 	frame->renderData.transparentIndirectBuffer = sceneFrameResources.transparentIndirectBuffer;
 	frame->renderData.chunkDescriptorCount = sceneFrameResources.chunkDescriptorCount;
+	if (sceneFrameResources.hzbVisibleCountMappedData != nullptr &&
+		projectv::render::IsHzbCullingEnabled()) {
+		const uint32_t visible = *static_cast<const uint32_t *>(sceneFrameResources.hzbVisibleCountMappedData);
+		render->hzbLastVisibleChunkCount = visible;
+		const uint32_t total = sceneFrameResources.chunkDescriptorCount;
+		render->hzbLastCulledChunkCount = total > visible ? total - visible : 0u;
+	}
 	frame->renderData.chunkCullingParameters = chunkCullingParameters;
 	frame->renderData.dirtyChunkCount = sceneFrameResources.dirtyChunkCount;
 	frame->renderData.opaqueFaceCount = sceneFrameResources.opaqueFaceCount;

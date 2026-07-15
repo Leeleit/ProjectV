@@ -3,6 +3,7 @@
 #include "core/Math.hpp"
 #include "core/Types.hpp"
 #include "voxel/NanoVdb.hpp"
+#include "voxel/VoxelWorld.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -196,7 +197,7 @@ bool UpdateSceneFrameChunkVisibility(
 	uint32_t frameIndex,
 	const ChunkCullingParameters &parameters);
 bool RefreshChunkAabbBuffer(
-	std::span<const VoxelChunk> chunks,
+	const VoxelWorld &world,
 	std::span<const PackedSceneChunkDescriptor> descriptors,
 	SceneFrameResources &frameResources);
 bool RefreshNanoVdbFlattenBuffers(

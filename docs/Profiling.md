@@ -5,6 +5,9 @@
 Этот документ фиксирует текущий practical profiling path в `ProjectV`: какие baseline-сцены использовать, какие Tracy
 plot'ы считаются основным metrics pack и как воспроизводить perf-замеры без «магии в голове».
 
+Пошаговый GPU/replay tracing (InputReplay, Nsight Systems/GraphicsCapture/GpuTrace,
+ловушки Qt/AUTOPLAY, `gpu_*` timestamps): **[Tracing.md](Tracing.md)**.
+
 ## CLI profiling (Windows — Nsight + RenderDoc)
 
 Unattended harness: `tools/windows/Invoke-ProjectVProfile.ps1`  
@@ -285,6 +288,7 @@ pressure, upload sizes, live `walk` state drift и отдельные render fea
 - [Physics & Movement Guide](Physics_And_Movement_Guide.md)
 - [BuildAndRun (Windows)](BuildAndRun.md)
 - [Debugging](Debugging.md)
+- [Tracing](Tracing.md) — InputReplay + Nsight operational playbook
 - [VoxelWorld (Historical)](VoxelWorld.md)
 - [Documentation Index](README.md)
 - [TODO](../TODO.md)

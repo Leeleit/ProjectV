@@ -86,7 +86,9 @@ bool RefreshMeshShaderResourceBindings(
 		SceneFrameResources &frameResources = render->sceneFrameResources[frameIndex];
 		frameResources.meshShaderDescriptorSet = descriptorSets[frameIndex];
 		frameResources.meshClusters.clusterizeDescriptorSet = descriptorSets[frameCount + frameIndex];
-		if (frameResources.meshClusters.faceClusterBuffer == VK_NULL_HANDLE) {
+		if (frameResources.meshClusters.faceClusterBuffer == VK_NULL_HANDLE ||
+			frameResources.visibilityMaskBuffer == VK_NULL_HANDLE ||
+			frameResources.prevVisibilityMaskBuffer == VK_NULL_HANDLE) {
 			continue;
 		}
 
@@ -94,6 +96,8 @@ bool RefreshMeshShaderResourceBindings(
 		const VkDescriptorBufferInfo visibleClusterIdInfo{.buffer = frameResources.visibleChunkIdBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
 		const VkDescriptorBufferInfo faceClusterCountInfo{.buffer = frameResources.meshClusters.faceClusterCountBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
 		const VkDescriptorBufferInfo meshDrawIndirectInfo{.buffer = frameResources.meshClusters.meshDrawIndirectBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
+		const VkDescriptorBufferInfo visibilityMaskInfo{.buffer = frameResources.visibilityMaskBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
+		const VkDescriptorBufferInfo prevVisibilityMaskInfo{.buffer = frameResources.prevVisibilityMaskBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
 		const VkDescriptorBufferInfo chunkDescriptorInfo{.buffer = frameResources.chunkDescriptorBuffer, .offset = 0, .range = VK_WHOLE_SIZE};
 
 		const std::array visibilityWrites{
@@ -101,6 +105,8 @@ bool RefreshMeshShaderResourceBindings(
 			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshShaderDescriptorSet, .dstBinding = 1, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &visibleClusterIdInfo},
 			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshShaderDescriptorSet, .dstBinding = 2, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &faceClusterCountInfo},
 			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshShaderDescriptorSet, .dstBinding = 3, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &meshDrawIndirectInfo},
+			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshShaderDescriptorSet, .dstBinding = 4, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &visibilityMaskInfo},
+			VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = frameResources.meshShaderDescriptorSet, .dstBinding = 5, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .pBufferInfo = &prevVisibilityMaskInfo},
 		};
 		vkUpdateDescriptorSets(context->device, static_cast<uint32_t>(visibilityWrites.size()), visibilityWrites.data(), 0u, nullptr);
 

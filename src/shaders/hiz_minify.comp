@@ -2,8 +2,13 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-layout(set = 0, binding = 0, r32f) readonly uniform image2D srcMip;
-layout(set = 0, binding = 1, r32f) writeonly uniform image2D dstMip;
+layout(set = 0, binding = 0) uniform texture2D srcTexture;
+layout(set = 0, binding = 1) uniform sampler srcSampler;
+layout(set = 0, binding = 2, r32f) writeonly uniform image2D dstMip;
+
+layout(push_constant) uniform HizMinifyPushConstants {
+    uvec4 copySourceAndPadding;
+} pushConstants;
 
 void main()
 {
@@ -13,16 +18,22 @@ void main()
 		return;
 	}
 
-	const ivec2 srcSize = imageSize(srcMip);
+	if (pushConstants.copySourceAndPadding.x != 0u) {
+		const float depth = texelFetch(sampler2D(srcTexture, srcSampler), dstCoord, 0).r;
+		imageStore(dstMip, dstCoord, vec4(depth));
+		return;
+	}
+
+	const ivec2 srcSize = textureSize(sampler2D(srcTexture, srcSampler), 0);
 	const ivec2 srcBase = dstCoord * 2;
 	const ivec2 c00 = min(srcBase, srcSize - ivec2(1));
 	const ivec2 c10 = min(srcBase + ivec2(1, 0), srcSize - ivec2(1));
 	const ivec2 c01 = min(srcBase + ivec2(0, 1), srcSize - ivec2(1));
 	const ivec2 c11 = min(srcBase + ivec2(1, 1), srcSize - ivec2(1));
 
-	const float d00 = imageLoad(srcMip, c00).r;
-	const float d10 = imageLoad(srcMip, c10).r;
-	const float d01 = imageLoad(srcMip, c01).r;
-	const float d11 = imageLoad(srcMip, c11).r;
-	imageStore(dstMip, dstCoord, vec4(min(min(d00, d10), min(d01, d11))));
+	const float d00 = texelFetch(sampler2D(srcTexture, srcSampler), c00, 0).r;
+	const float d10 = texelFetch(sampler2D(srcTexture, srcSampler), c10, 0).r;
+	const float d01 = texelFetch(sampler2D(srcTexture, srcSampler), c01, 0).r;
+	const float d11 = texelFetch(sampler2D(srcTexture, srcSampler), c11, 0).r;
+	imageStore(dstMip, dstCoord, vec4(max(max(d00, d10), max(d01, d11)))); // Normal-Z needs farthest depth for conservative occlusion.
 }

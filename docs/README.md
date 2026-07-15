@@ -27,6 +27,7 @@
 | Понять физику, перемещение и greedy merging    | [Physics & Movement Guide](Physics_And_Movement_Guide.md) |
 | Найти горячие клавиши и отладочные инструменты | [Debugging Guide](Debugging.md)                           |
 | Провести perf-замеры и использовать Tracy      | [Profiling Guide](Profiling.md)                           |
+| Снять GPU/replay трассировку (Nsight, InputReplay) | [Tracing Guide](Tracing.md)                           |
 | Понять раскладку `src/` и include boundaries   | [Source Layout Guide](source_layout.md)                   |
 
 ---
@@ -63,6 +64,7 @@
 |:-----------------------------|:-----------------------|:-----------------------------------------------------------------------------------------------------|
 | [Debugging.md](Debugging.md) | `[Current][Debugging]` | Основные инструменты актуальны, но отдельные разделы могут содержать упоминания удалённых подсистем. |
 | [Profiling.md](Profiling.md) | `[Current][Profiling]` | Scene presets и Tracy plots актуальны; некоторые Windows-специфичные примеры превалируют.            |
+| [Tracing.md](Tracing.md) | `[Current][Profiling]` | Windows InputReplay + Nsight CLI playbook (GpuTrace Qt caveats, AUTOPLAY, gpu_* timestamps). |
 
 ---
 

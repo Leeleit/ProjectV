@@ -418,23 +418,23 @@ semaphore. Симметричный pattern для HZB даёт independent asyn
 **Решение:** `projectv::render::HizBuffer` (`src/render/HizCulling.hpp`) — mip
 chain of depth image, reduces full-res depth → ½ → ¼ → … → 1×1.
 
-**Pipeline:** `BuildHizMipChain` (compute shader downsamples) →
-`RecordHzbCullingDispatch` (per-chunk AABB vs HZB, writes 64-bit visibility bitmask
-via `atomicOr`).
+**Pipeline (2026-07-16):** Nanite-style two-pass, MSAA-safe.
+1. Meshing → **Pass A** apply (prev-slot visibility / ForceAll on cut) → draw
+   `opaqueHzbDrawIndirect`.
+2. Opaque (+ resolve). With HZB+MSAA: **STORE** MS color/depth (Pass B must LOAD).
+3. BuildHiz → cull (copy vis→prev, clear, write). **No cross-FIF mask copy.**
+4. **Pass B** apply (`!prev && now`) → second draw with LOAD on same MS/1x
+   attachments + resolve. Skipped on camera cut.
+5. HUD: `HZB vis N / total cull M`.
 
-**Bindings:** `set=0 binding=0` `ChunkAabbBuffer` + `binding=1` `VisibilityMask`
-(WO) + `binding=2` `hizTexture` (sampler2D) + `binding=3` `hizSampler` (sampler) +
-`binding=4` `VisibleCount` + `binding=5` `PerChunkMip` (`kHizMipAndBlendWidthWordsPerChunk=2u`).
+**Cull:** 4-corner Hi-Z, mip=`floor(log2(footprint))`, nearest vs min-Z.
+Recreate → `hzbMaskValid=false`. Shutdown destroys Hi-Z before VMA.
 
-**Smart mip + blend width** per-chunk selection (`ComputePerChunkMipLevelCpu`,
-`ComputePerChunkMipAndBlendWidthsFromAabbs`).
+**Env:** `PROJECTV_HZB_CULLING`, `PROJECTV_HZB_SMART_MIP`,
+`PROJECTV_HZB_SMART_BLEND_WIDTH`, `PROJECTV_HZB_MIN_MIP`.
 
-**Async compute path:** `RecordHzbAsyncCullPass` separate from main async compute
-(Fluid CA + WorldGen). Default = sync (inline) path; async gated by
-`IsAsyncComputeEnabled() && IsAsyncComputeResourcesAllocated()`.
-
-**Почему:** HZB даёт conservative occlusion culling → сокращает vertex work на
-~50% для типичных сцен. Async path разгружает graphics queue.
+**Почему:** temporal gate + same-frame disocclusion; MSAA STORE/LOAD replaces
+DONT_CARE LOAD psychedelia; per-slot masks avoid FIF races.
 
 ## 14. RTX shadows (BLAS + TLAS + voxel-aware intersection)
 

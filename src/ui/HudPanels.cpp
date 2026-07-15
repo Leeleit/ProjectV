@@ -372,6 +372,14 @@ void DrawStats(const HudFrameContext &ctx)
 		stats.renderPassShadowMs,
 		stats.renderPassMeshingMs,
 		stats.renderPassDebugOverlayMs);
+	if (stats.hzbChunkCount > 0u) {
+		ImGui::Text(
+			"HZB vis %u / %u  cull %u%s",
+			stats.hzbVisibleChunkCount,
+			stats.hzbChunkCount,
+			stats.hzbCulledChunkCount,
+			stats.hzbCameraCut ? "  CUT" : "");
+	}
 	ImGui::Text(
 		"SUN %.2f %.2f %.2f  I %.2f",
 		stats.sunDirection[0],

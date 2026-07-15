@@ -15,7 +15,7 @@ bool RecordHzbCullingDispatch(
 	VulkanContextState *context,
 	RenderState &render,
 	SceneFrameResources &frameResources,
-	const float (&inverseViewProjection)[16],
+	const float (&viewProjection)[16],
 	const uint32_t chunkDescriptorCount)
 {
 	if (!IsHzbCullingEnabled()) {
@@ -42,6 +42,40 @@ bool RecordHzbCullingDispatch(
 
 	const uint32_t visibilityMaskWordCount =
 		(chunkDescriptorCount + 31u) / 32u;
+
+	if (visibilityMaskWordCount > 0u &&
+		frameResources.prevVisibilityMaskBuffer != VK_NULL_HANDLE &&
+		frameResources.visibilityMaskBuffer != VK_NULL_HANDLE) {
+		VkBufferCopy maskCopy{};
+		maskCopy.srcOffset = 0u;
+		maskCopy.dstOffset = 0u;
+		maskCopy.size = static_cast<VkDeviceSize>(visibilityMaskWordCount) * sizeof(uint32_t);
+		vkCmdCopyBuffer(
+			commandBuffer,
+			frameResources.visibilityMaskBuffer,
+			frameResources.prevVisibilityMaskBuffer,
+			1u,
+			&maskCopy);
+
+		VkBufferMemoryBarrier2 copyBarrier{};
+		copyBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+		copyBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+		copyBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+		copyBarrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+		copyBarrier.dstAccessMask =
+			VK_ACCESS_2_TRANSFER_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+		copyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		copyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		copyBarrier.buffer = frameResources.prevVisibilityMaskBuffer;
+		copyBarrier.offset = 0u;
+		copyBarrier.size = maskCopy.size;
+
+		VkDependencyInfo copyDepInfo{};
+		copyDepInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		copyDepInfo.bufferMemoryBarrierCount = 1u;
+		copyDepInfo.pBufferMemoryBarriers = &copyBarrier;
+		vkCmdPipelineBarrier2(commandBuffer, &copyDepInfo);
+	}
 
 	if (visibilityMaskWordCount > 0u) {
 		vkCmdFillBuffer(
@@ -168,13 +202,15 @@ bool RecordHzbCullingDispatch(
 
 	HizCullingPushConstants pushConstants{};
 	for (uint32_t i = 0; i < 16u; ++i) {
-		pushConstants.inverseViewProjection[i] = inverseViewProjection[i];
+		pushConstants.viewProjection[i] = viewProjection[i];
 	}
+	const uint32_t maxMipInclusive =
+		render.hizBuffer.mipLevelCount > 0u ? render.hizBuffer.mipLevelCount - 1u : 0u;
 	pushConstants.hizExtentAndMipCount = {
 		render.hizBuffer.baseWidth,
 		render.hizBuffer.baseHeight,
 		chunkDescriptorCount,
-		0u,
+		maxMipInclusive,
 	};
 	pushConstants.depthUnpackParams = {1.0f, 0.0f, 0.0f, 0.0f};
 
@@ -202,6 +238,32 @@ bool RecordHzbCullingDispatch(
 	const uint32_t workgroupCount = (chunkDescriptorCount + 63u) / 64u;
 	if (workgroupCount > 0u) {
 		vkCmdDispatch(commandBuffer, workgroupCount, 1u, 1u);
+	}
+	VkBufferMemoryBarrier2 cullToApplyBarrier{};
+	cullToApplyBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+	cullToApplyBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	cullToApplyBarrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+	cullToApplyBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	cullToApplyBarrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+	cullToApplyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	cullToApplyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	cullToApplyBarrier.buffer = frameResources.visibilityMaskBuffer;
+	cullToApplyBarrier.offset = 0u;
+	cullToApplyBarrier.size = static_cast<VkDeviceSize>(visibilityMaskWordCount) * sizeof(uint32_t);
+	VkDependencyInfo cullToApplyDep{};
+	cullToApplyDep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	cullToApplyDep.bufferMemoryBarrierCount = 1u;
+	cullToApplyDep.pBufferMemoryBarriers = &cullToApplyBarrier;
+	vkCmdPipelineBarrier2(commandBuffer, &cullToApplyDep);
+	// Do not copy visibility into other FIF slots — those buffers may still be in-flight (race → flicker).
+	render.hzbMaskValid = true;
+	if (frameResources.visibilityMaskMappedData != nullptr) {
+		render.hzbCullSerialCounter += 1u;
+		const uint32_t frameIndex = static_cast<uint32_t>(
+			&frameResources - render.sceneFrameResources.data());
+		if (frameIndex < render.hzbSlotCullSerial.size()) {
+			render.hzbSlotCullSerial[frameIndex] = render.hzbCullSerialCounter;
+		}
 	}
 	return true;
 }

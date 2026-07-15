@@ -19,6 +19,7 @@
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
 #include "render/Cloudscape.hpp"
 #include "render/AaPass.hpp"
+#include "render/HizCulling.hpp"
 #include "render/PostFx.hpp"
 #include "render/SkyAtmosphere.hpp"
 #include "render/VolumetricFog.hpp"
@@ -93,6 +94,8 @@ void ShutdownVulkan(AppState *state)
 		projectv::render::DestroyAaSceneTargets(&state->context(), &state->render());
 		DestroyShadowResources(&state->context(), &state->render());
 		DestroyScreenshotReadbackResources(&state->context(), &state->render());
+		projectv::render::DestroyHizCullingPipeline(&state->context(), &state->render());
+		projectv::render::DestroyHizBuffer(&state->context(), state->render().hizBuffer);
 		DestroySceneResources(&state->context(), &state->render());
 		projectv::asset::UnloadAllModels(&state->context(), &state->render());
 		projectv::asset::DestroyModelPipeline(&state->context(), &state->render());

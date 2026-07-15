@@ -215,16 +215,16 @@ bool UploadSceneFrameResources(
 	if (frameResources.uploadedNanoVdbVersion != render.sceneNanoVdbVersion) {
 		const VkDeviceSize upperRequired =
 			render.sceneNanoVdbFlatten.uppers.size() *
-				sizeof(projectv::voxel::nanovdb::NanoVdbUpper);
+			sizeof(projectv::voxel::nanovdb::NanoVdbUpper);
 		const VkDeviceSize lowerRequired =
 			render.sceneNanoVdbFlatten.lowers.size() *
-				sizeof(projectv::voxel::nanovdb::NanoVdbLower);
+			sizeof(projectv::voxel::nanovdb::NanoVdbLower);
 		const VkDeviceSize leafRequired =
 			render.sceneNanoVdbFlatten.leaves.size() *
-				sizeof(projectv::voxel::nanovdb::NanoVdbLeaf);
+			sizeof(projectv::voxel::nanovdb::NanoVdbLeaf);
 		const VkDeviceSize materialRequired =
 			render.sceneNanoVdbFlatten.materials.size() *
-				sizeof(uint8_t);
+			sizeof(uint8_t);
 		const bool flattenedWithinCapacity =
 			frameResources.nanovdbUpperCapacityBytes >= upperRequired &&
 			frameResources.nanovdbLowerCapacityBytes >= lowerRequired &&
@@ -234,53 +234,53 @@ bool UploadSceneFrameResources(
 			(void)RefreshNanoVdbFlattenBuffers(render.sceneNanoVdbFlatten, frameResources);
 		} else {
 			const bool grewUpper = upperRequired > frameResources.nanovdbUpperCapacityBytes
-				? GrowNanoVdbBuffer(
-					context,
-					render,
-					frameIndex,
-					frameResources.nanovdbUpperBuffer,
-					frameResources.nanovdbUpperAllocation,
-					frameResources.nanovdbUpperMappedData,
-					frameResources.nanovdbUpperCapacityBytes,
-					ComputeGrownNanoVdbCapacity(frameResources.nanovdbUpperCapacityBytes, upperRequired),
-					"SceneNanoVdbUpperBufferAllocation")
-				: true;
+									   ? GrowNanoVdbBuffer(
+											 context,
+											 render,
+											 frameIndex,
+											 frameResources.nanovdbUpperBuffer,
+											 frameResources.nanovdbUpperAllocation,
+											 frameResources.nanovdbUpperMappedData,
+											 frameResources.nanovdbUpperCapacityBytes,
+											 ComputeGrownNanoVdbCapacity(frameResources.nanovdbUpperCapacityBytes, upperRequired),
+											 "SceneNanoVdbUpperBufferAllocation")
+									   : true;
 			const bool grewLower = lowerRequired > frameResources.nanovdbLowerCapacityBytes
-				? GrowNanoVdbBuffer(
-					context,
-					render,
-					frameIndex,
-					frameResources.nanovdbLowerBuffer,
-					frameResources.nanovdbLowerAllocation,
-					frameResources.nanovdbLowerMappedData,
-					frameResources.nanovdbLowerCapacityBytes,
-					ComputeGrownNanoVdbCapacity(frameResources.nanovdbLowerCapacityBytes, lowerRequired),
-					"SceneNanoVdbLowerBufferAllocation")
-				: true;
+									   ? GrowNanoVdbBuffer(
+											 context,
+											 render,
+											 frameIndex,
+											 frameResources.nanovdbLowerBuffer,
+											 frameResources.nanovdbLowerAllocation,
+											 frameResources.nanovdbLowerMappedData,
+											 frameResources.nanovdbLowerCapacityBytes,
+											 ComputeGrownNanoVdbCapacity(frameResources.nanovdbLowerCapacityBytes, lowerRequired),
+											 "SceneNanoVdbLowerBufferAllocation")
+									   : true;
 			const bool grewLeaf = leafRequired > frameResources.nanovdbLeafCapacityBytes
-				? GrowNanoVdbBuffer(
-					context,
-					render,
-					frameIndex,
-					frameResources.nanovdbLeafBuffer,
-					frameResources.nanovdbLeafAllocation,
-					frameResources.nanovdbLeafMappedData,
-					frameResources.nanovdbLeafCapacityBytes,
-					ComputeGrownNanoVdbCapacity(frameResources.nanovdbLeafCapacityBytes, leafRequired),
-					"SceneNanoVdbLeafBufferAllocation")
-				: true;
+									  ? GrowNanoVdbBuffer(
+											context,
+											render,
+											frameIndex,
+											frameResources.nanovdbLeafBuffer,
+											frameResources.nanovdbLeafAllocation,
+											frameResources.nanovdbLeafMappedData,
+											frameResources.nanovdbLeafCapacityBytes,
+											ComputeGrownNanoVdbCapacity(frameResources.nanovdbLeafCapacityBytes, leafRequired),
+											"SceneNanoVdbLeafBufferAllocation")
+									  : true;
 			const bool grewMaterial = materialRequired > frameResources.nanovdbMaterialCapacityBytes
-				? GrowNanoVdbBuffer(
-					context,
-					render,
-					frameIndex,
-					frameResources.nanovdbMaterialBuffer,
-					frameResources.nanovdbMaterialAllocation,
-					frameResources.nanovdbMaterialMappedData,
-					frameResources.nanovdbMaterialCapacityBytes,
-					ComputeGrownNanoVdbCapacity(frameResources.nanovdbMaterialCapacityBytes, materialRequired),
-					"SceneNanoVdbMaterialBufferAllocation")
-				: true;
+										  ? GrowNanoVdbBuffer(
+												context,
+												render,
+												frameIndex,
+												frameResources.nanovdbMaterialBuffer,
+												frameResources.nanovdbMaterialAllocation,
+												frameResources.nanovdbMaterialMappedData,
+												frameResources.nanovdbMaterialCapacityBytes,
+												ComputeGrownNanoVdbCapacity(frameResources.nanovdbMaterialCapacityBytes, materialRequired),
+												"SceneNanoVdbMaterialBufferAllocation")
+										  : true;
 			if (grewUpper && grewLower && grewLeaf && grewMaterial) {
 				(void)RefreshNanoVdbFlattenBuffers(render.sceneNanoVdbFlatten, frameResources);
 			} else {
@@ -317,7 +317,7 @@ bool UploadSceneFrameResources(
 }
 
 bool RefreshChunkAabbBuffer(
-	const std::span<const VoxelChunk> chunks,
+	const VoxelWorld &world,
 	const std::span<const PackedSceneChunkDescriptor> descriptors,
 	SceneFrameResources &frameResources)
 {
@@ -325,46 +325,73 @@ bool RefreshChunkAabbBuffer(
 	if (!frameResources.chunkAabbMappedData) {
 		return false;
 	}
-	const size_t chunkCount = std::min(chunks.size(), descriptors.size());
+	const size_t chunkCount = std::min(world.chunks.size(), descriptors.size());
 	auto *packedAabbs = static_cast<PackedSceneChunkAabb *>(frameResources.chunkAabbMappedData);
 	for (size_t chunkIndex = 0; chunkIndex < chunkCount; ++chunkIndex) {
-		const VoxelChunk &chunk = chunks[chunkIndex];
-		const float minX = static_cast<float>(chunk.min.x);
-		const float minY = static_cast<float>(chunk.min.y);
-		const float minZ = static_cast<float>(chunk.min.z);
-		const float maxX = static_cast<float>(chunk.maxExclusive.x);
-		const float maxY = static_cast<float>(chunk.maxExclusive.y);
-		const float maxZ = static_cast<float>(chunk.maxExclusive.z);
-		const float centerX = (minX + maxX) * 0.5f;
-		const float centerY = (minY + maxY) * 0.5f;
-		const float centerZ = (minZ + maxZ) * 0.5f;
-		const float halfExtent =
-			std::max({maxX - minX, maxY - minY, maxZ - minZ}) * 0.5f;
+		const VoxelChunk &chunk = world.chunks[chunkIndex];
+		const float chunkMinX = static_cast<float>(chunk.min.x);
+		const float chunkMinY = static_cast<float>(chunk.min.y);
+		const float chunkMinZ = static_cast<float>(chunk.min.z);
+		const float chunkMaxX = static_cast<float>(chunk.maxExclusive.x);
+		const float chunkMaxY = static_cast<float>(chunk.maxExclusive.y);
+		const float chunkMaxZ = static_cast<float>(chunk.maxExclusive.z);
+		float contentMinX = chunkMaxX;
+		float contentMinY = chunkMaxY;
+		float contentMinZ = chunkMaxZ;
+		float contentMaxX = chunkMinX;
+		float contentMaxY = chunkMinY;
+		float contentMaxZ = chunkMinZ;
+		bool foundNonAir = false;
+		if (chunk.nonAirVoxelCount > 0u) {
+			for (int z = chunk.min.z; z < chunk.maxExclusive.z; ++z) {
+				for (int y = chunk.min.y; y < chunk.maxExclusive.y; ++y) {
+					for (int x = chunk.min.x; x < chunk.maxExclusive.x; ++x) {
+						if (GetVoxelMaterial(world, {x, y, z}) == VoxelMaterial::Air) {
+							continue;
+						}
+						foundNonAir = true;
+						const float fx = static_cast<float>(x);
+						const float fy = static_cast<float>(y);
+						const float fz = static_cast<float>(z);
+						contentMinX = std::min(contentMinX, fx);
+						contentMinY = std::min(contentMinY, fy);
+						contentMinZ = std::min(contentMinZ, fz);
+						contentMaxX = std::max(contentMaxX, fx + 1.0f);
+						contentMaxY = std::max(contentMaxY, fy + 1.0f);
+						contentMaxZ = std::max(contentMaxZ, fz + 1.0f);
+					}
+				}
+			}
+		}
+		const float minX = foundNonAir ? contentMinX : chunkMinX;
+		const float minY = foundNonAir ? contentMinY : chunkMinY;
+		const float minZ = foundNonAir ? contentMinZ : chunkMinZ;
+		const float maxX = foundNonAir ? contentMaxX : chunkMaxX;
+		const float maxY = foundNonAir ? contentMaxY : chunkMaxY;
+		const float maxZ = foundNonAir ? contentMaxZ : chunkMaxZ;
+		const float halfX = (maxX - minX) * 0.5f;
+		const float halfY = (maxY - minY) * 0.5f;
+		const float halfZ = (maxZ - minZ) * 0.5f;
 		packedAabbs[chunkIndex].centerAndHalfExtent = {
-			centerX,
-			centerY,
-			centerZ,
-			halfExtent,
+			(minX + maxX) * 0.5f,
+			(minY + maxY) * 0.5f,
+			(minZ + maxZ) * 0.5f,
+			std::max({halfX, halfY, halfZ}),
 		};
 		packedAabbs[chunkIndex].originAndPadding = {
-			minX,
-			minY,
-			minZ,
-			0.0f,
+			halfX,
+			halfY,
+			halfZ,
+			foundNonAir ? 1.0f : 0.0f,
 		};
 	}
 	for (size_t chunkIndex = chunkCount;
-		chunkIndex < static_cast<size_t>(frameResources.chunkDescriptorCount);
-		++chunkIndex) {
+		 chunkIndex < static_cast<size_t>(frameResources.chunkDescriptorCount);
+		 ++chunkIndex) {
 		packedAabbs[chunkIndex] = {};
-	}
-	if (frameResources.visibilityMaskMappedData) {
-		const uint32_t wordCount = (static_cast<uint32_t>(chunkCount) + 31u) / 32u;
-		std::memset(frameResources.visibilityMaskMappedData, 0, sizeof(uint32_t) * wordCount);
 	}
 	return true;
 }
-
 
 bool RefreshNanoVdbFlattenBuffers(
 	const projectv::voxel::nanovdb::NanoVdbFlattenResult &flatten,
@@ -455,4 +482,3 @@ bool GrowNanoVdbBuffer(
 	profiling::RecordAllocation(allocation, allocInfo.size, profilingTag);
 	return true;
 }
-

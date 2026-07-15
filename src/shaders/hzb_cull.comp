@@ -15,7 +15,7 @@ layout(set = 0, binding = 1, std430) writeonly buffer VisibilityMask {
     uint visibilityWords[];
 };
 
-layout(set = 0, binding = 2) uniform sampler2D hizTexture;
+layout(set = 0, binding = 2) uniform texture2D hizTexture;
 layout(set = 0, binding = 3) uniform sampler hizSampler;
 
 layout(set = 0, binding = 4, std430) buffer VisibleCount {
@@ -23,34 +23,29 @@ layout(set = 0, binding = 4, std430) buffer VisibleCount {
 };
 
 layout(set = 0, binding = 5, std430) readonly buffer PerChunkMip {
-    // Packed per-chunk metadata: stride = 2 uint32 per chunk, layout [mip, blendWidth, mip, blendWidth, ...].
-    // blendWidth = 0 means "no smart blend" (use legacy path). mip = 0 means "use global mip level
-    // from push constant". CPU-side stride matches `projectv::render::kHizMipAndBlendWidthWordsPerChunk`
-    // (= 2).
+    // Kept for descriptor layout compatibility; mip is selected in-shader from footprint.
     uint perChunkMipAndBlendWidth[];
 };
 
 layout(push_constant) uniform CullPushConstants {
-    mat4 inverseViewProjection;
-    uvec4 hizExtentAndMipCount;
+    mat4 viewProjection;
+    uvec4 hizExtentAndMipCount; // xy=baseExtent, z=chunkCount, w=maxMip inclusive
     vec4 depthUnpackParams;
 } pushConstants;
 
 const uint kBitsPerWord = 32u;
 
-bool AabbVisibleAgainstMip(
-    const ChunkAabb aabb,
-    const int mipLevel,
-    const int blendWidthTexels,
-    const mat4 inverseViewProjection,
-    const sampler2D mipTexture,
-    const ivec2 hizBaseExtent)
+bool AabbVisibleHiZ(const ChunkAabb aabb, const mat4 viewProjection, const ivec2 hizBaseExtent, const int maxMip)
 {
     const vec3 center = aabb.centerAndHalfExtent.xyz;
-    const vec3 halfExtent = vec3(aabb.centerAndHalfExtent.w);
+    const vec3 anisotropicHalf = aabb.originAndPadding.xyz;
+    const vec3 halfExtent = (aabb.originAndPadding.w > 0.0)
+        ? anisotropicHalf
+        : vec3(aabb.centerAndHalfExtent.w);
 
     vec3 ndcMin = vec3( 1.0);
     vec3 ndcMax = vec3(-1.0);
+    bool anyValid = false;
     for (int cornerX = 0; cornerX < 2; ++cornerX) {
         for (int cornerY = 0; cornerY < 2; ++cornerY) {
             for (int cornerZ = 0; cornerZ < 2; ++cornerZ) {
@@ -58,53 +53,56 @@ bool AabbVisibleAgainstMip(
                     cornerX == 0 ? -1.0 : 1.0,
                     cornerY == 0 ? -1.0 : 1.0,
                     cornerZ == 0 ? -1.0 : 1.0);
-                const vec4 clip = inverseViewProjection * vec4(corner, 1.0);
+                const vec4 clip = viewProjection * vec4(corner, 1.0);
+                if (clip.w <= 1.0e-4) {
+                    return true; // crosses near plane — keep
+                }
                 const vec3 ndc = clip.xyz / clip.w;
                 ndcMin = min(ndcMin, ndc);
                 ndcMax = max(ndcMax, ndc);
+                anyValid = true;
             }
         }
     }
+    if (!anyValid) {
+        return true;
+    }
 
+    // Outside clip volume: keep (frustum cull lives elsewhere; avoid false kills).
     if (ndcMax.x < -1.0 || ndcMin.x > 1.0 ||
         ndcMax.y < -1.0 || ndcMin.y > 1.0 ||
         ndcMax.z <  0.0 || ndcMin.z > 1.0) {
         return true;
     }
 
+    const float uMin = clamp(ndcMin.x * 0.5 + 0.5, 0.0, 1.0);
+    const float uMax = clamp(ndcMax.x * 0.5 + 0.5, 0.0, 1.0);
+    const float vMin = clamp(ndcMin.y * 0.5 + 0.5, 0.0, 1.0);
+    const float vMax = clamp(ndcMax.y * 0.5 + 0.5, 0.0, 1.0);
+
+    const float sizeX = max((uMax - uMin) * float(hizBaseExtent.x), 1.0);
+    const float sizeY = max((vMax - vMin) * float(hizBaseExtent.y), 1.0);
+    const float footprint = max(sizeX, sizeY);
+    // floor(log2(extent)) — same as ComputePerChunkMipLevelCpu.
+    int mipLevel = int(floor(log2(footprint)));
+    mipLevel = clamp(mipLevel, 0, max(maxMip, 0));
+
     const int mipWidth = max(1, hizBaseExtent.x >> mipLevel);
     const int mipHeight = max(1, hizBaseExtent.y >> mipLevel);
-
-    float uMin = clamp(ndcMin.x * 0.5 + 0.5, 0.0, 1.0);
-    float uMax = clamp(ndcMax.x * 0.5 + 0.5, 0.0, 1.0);
-    float vMin = clamp(ndcMin.y * 0.5 + 0.5, 0.0, 1.0);
-    float vMax = clamp(ndcMax.y * 0.5 + 0.5, 0.0, 1.0);
-
-    if (blendWidthTexels > 0) {
-        const float uPad = float(blendWidthTexels) / float(max(mipWidth, 1));
-        const float vPad = float(blendWidthTexels) / float(max(mipHeight, 1));
-        uMin = clamp(uMin - uPad, 0.0, 1.0);
-        uMax = clamp(uMax + uPad, 0.0, 1.0);
-        vMin = clamp(vMin - vPad, 0.0, 1.0);
-        vMax = clamp(vMax + vPad, 0.0, 1.0);
-    }
 
     const int pixMinX = clamp(int(floor(uMin * float(mipWidth))), 0, mipWidth - 1);
     const int pixMinY = clamp(int(floor(vMin * float(mipHeight))), 0, mipHeight - 1);
     const int pixMaxX = clamp(int(floor(uMax * float(mipWidth))), 0, mipWidth - 1);
     const int pixMaxY = clamp(int(floor(vMax * float(mipHeight))), 0, mipHeight - 1);
 
-    const float minDepth = clamp(ndcMin.z, 0.0, 1.0);
-    const float maxDepth = clamp(ndcMax.z, 0.0, 1.0);
+    const float d00 = texelFetch(sampler2D(hizTexture, hizSampler), ivec2(pixMinX, pixMinY), mipLevel).r;
+    const float d10 = texelFetch(sampler2D(hizTexture, hizSampler), ivec2(pixMaxX, pixMinY), mipLevel).r;
+    const float d01 = texelFetch(sampler2D(hizTexture, hizSampler), ivec2(pixMinX, pixMaxY), mipLevel).r;
+    const float d11 = texelFetch(sampler2D(hizTexture, hizSampler), ivec2(pixMaxX, pixMaxY), mipLevel).r;
+    const float farthestDepth = max(max(d00, d10), max(d01, d11)); // Normal-Z max pyramid keeps partial AABB coverage visible.
 
-    float mipDepth = 1.0;
-    for (int y = pixMinY; y <= pixMaxY; ++y) {
-        for (int x = pixMinX; x <= pixMaxX; ++x) {
-            const float depth = texelFetch(mipTexture, ivec2(x, y), mipLevel).r;
-            mipDepth = min(mipDepth, depth);
-        }
-    }
-    return mipDepth >= maxDepth;
+    const float nearestDepth = clamp(ndcMin.z, 0.0, 1.0);
+    return nearestDepth <= farthestDepth + 1.0e-4;
 }
 
 void main()
@@ -117,30 +115,14 @@ void main()
         return;
     }
 
-    const int mipLevel = int(pushConstants.hizExtentAndMipCount.w);
+    const int maxMip = int(pushConstants.hizExtentAndMipCount.w);
     const ivec2 hizBaseExtent = ivec2(pushConstants.hizExtentAndMipCount.x, pushConstants.hizExtentAndMipCount.y);
 
-    const int perChunkMip = int(perChunkMipAndBlendWidth[chunkIndex * 2u]);
-    const int perChunkBlendWidth = int(perChunkMipAndBlendWidth[chunkIndex * 2u + 1u]);
-    const int useMipLevel = perChunkMip > 0 ? perChunkMip : mipLevel;
-
-    bool visible = AabbVisibleAgainstMip(
+    const bool visible = AabbVisibleHiZ(
         chunkAabbs[chunkIndex],
-        useMipLevel,
-        perChunkBlendWidth,
-        pushConstants.inverseViewProjection,
-        hizTexture,
-        hizBaseExtent);
-
-    if (!visible && perChunkMip > 0) {
-        visible = AabbVisibleAgainstMip(
-            chunkAabbs[chunkIndex],
-            0,
-            0,
-            pushConstants.inverseViewProjection,
-            hizTexture,
-            hizBaseExtent);
-    }
+        pushConstants.viewProjection,
+        hizBaseExtent,
+        maxMip);
 
     if (visible) {
         atomicOr(visibilityWords[wordIndex], 1u << bitIndex);

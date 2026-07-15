@@ -250,6 +250,12 @@ void MirrorRenderPassTimingsToDebugStats(
 	stats.renderPassPresentMs = render.renderPassTimings.presentMs;
 	stats.renderPassDebugOverlayMs = render.renderPassTimings.debugOverlayMs;
 	stats.renderPassDirtyChunkRebuiltCount = render.renderPassTimings.dirtyChunkRebuiltCount;
+	stats.hzbVisibleChunkCount = render.hzbLastVisibleChunkCount;
+	stats.hzbCulledChunkCount = render.hzbLastCulledChunkCount;
+	stats.hzbChunkCount = render.sceneFrameResources.empty()
+							  ? 0u
+							  : render.sceneFrameResources[0].chunkDescriptorCount;
+	stats.hzbCameraCut = render.hzbCameraCutThisFrame;
 	stats.renderPassOtherMs = std::max(
 		0.0f,
 		stats.frameTimeMilliseconds -

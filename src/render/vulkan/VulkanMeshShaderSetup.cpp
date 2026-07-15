@@ -26,6 +26,8 @@ constexpr std::array kMeshVisibilityBindings{
 	VkDescriptorSetLayoutBinding{.binding = 1, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT, .pImmutableSamplers = nullptr},
 	VkDescriptorSetLayoutBinding{.binding = 2, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT, .pImmutableSamplers = nullptr},
 	VkDescriptorSetLayoutBinding{.binding = 3, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_MESH_BIT_EXT, .pImmutableSamplers = nullptr},
+	VkDescriptorSetLayoutBinding{.binding = 4, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .pImmutableSamplers = nullptr},
+	VkDescriptorSetLayoutBinding{.binding = 5, .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .pImmutableSamplers = nullptr},
 };
 
 constexpr std::array kMeshClusterizeBindings{
@@ -169,10 +171,15 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 		ok = ok && vkCreateDescriptorSetLayout(context->device, &clusterizeLayoutInfo, nullptr, &render->meshClusterizeDescriptorSetLayout) == VK_SUCCESS;
 	}
 
-	VkPushConstantRange meshPush{};
-	meshPush.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-	meshPush.offset = 0;
-	meshPush.size = kMeshPushConstantSize;
+	VkPushConstantRange meshGraphicsPush{};
+	meshGraphicsPush.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	meshGraphicsPush.offset = 0;
+	meshGraphicsPush.size = kMeshPushConstantSize;
+
+	VkPushConstantRange meshCullPush{};
+	meshCullPush.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	meshCullPush.offset = 0;
+	meshCullPush.size = kMeshPushConstantSize;
 
 	VkPushConstantRange clusterizePush{};
 	clusterizePush.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -189,7 +196,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 		meshLayoutInfo.setLayoutCount = 2u;
 		meshLayoutInfo.pSetLayouts = meshSets;
 		meshLayoutInfo.pushConstantRangeCount = 1u;
-		meshLayoutInfo.pPushConstantRanges = &meshPush;
+		meshLayoutInfo.pPushConstantRanges = &meshGraphicsPush;
 		ok = vkCreatePipelineLayout(context->device, &meshLayoutInfo, nullptr, &render->meshShaderPipelineLayout) == VK_SUCCESS;
 
 		VkPipelineLayoutCreateInfo cullLayoutInfo{};
@@ -197,7 +204,7 @@ bool CreateMeshShaderPipelines(VulkanContextState *context, RenderState *render)
 		cullLayoutInfo.setLayoutCount = 1u;
 		cullLayoutInfo.pSetLayouts = &render->meshShaderDescriptorSetLayout;
 		cullLayoutInfo.pushConstantRangeCount = 1u;
-		cullLayoutInfo.pPushConstantRanges = &meshPush;
+		cullLayoutInfo.pPushConstantRanges = &meshCullPush;
 		ok = ok && vkCreatePipelineLayout(context->device, &cullLayoutInfo, nullptr, &render->meshCullPipelineLayout) == VK_SUCCESS;
 
 		VkPipelineLayoutCreateInfo clusterizeLayoutInfo{};

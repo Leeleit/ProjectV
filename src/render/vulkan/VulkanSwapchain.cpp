@@ -509,6 +509,13 @@ bool RecreateSwapchain(
 		projectv::render::DestroyPostFxResources(context, render);
 		projectv::render::DestroyHizBuffer(context, render->hizBuffer);
 		projectv::render::DestroyHizCullingPipeline(context, render);
+		render->hizBufferNeedsInit = true;
+		render->hzbMaskValid = false; // ForceAll next frame — old mask vs new Hi-Z = chunk pop/flicker
+		render->hzbPrevCameraForwardValid = false;
+		render->hzbUnifiedVisibilityWords.clear();
+		render->hzbUnifiedCullSerial = 0u;
+		render->hzbCullSerialCounter = 0u;
+		render->hzbSlotCullSerial = {};
 	}
 
 	// Must set before CreateDepthResources — it otherwise keeps the previous internal
@@ -537,6 +544,9 @@ bool RecreateSwapchain(
 			"RecreateSwapchain.CreateHizBuffer",
 			"CreateHizBuffer returned false after swapchain recreation");
 		return false;
+	}
+	if (projectv::render::IsHzbCullingEnabled()) {
+		render->hizBufferNeedsInit = true;
 	}
 
 	if (projectv::render::IsHzbCullingEnabled() &&

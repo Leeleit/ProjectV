@@ -140,7 +140,7 @@ bool CreateSceneFrameGeometryBuffers(
 		"SceneVisibleChunkIdBufferAllocation");
 	render->sceneMemoryBytes += visibleChunkIdAllocationInfo.size;
 
-	constexpr VkDeviceSize kFaceClusterBytes = 32u; // FaceCluster: 4x uint + vec4
+	constexpr VkDeviceSize kFaceClusterBytes = 48u; // FaceCluster: 4x uint + 2x vec4
 	VmaAllocationInfo faceClusterAllocationInfo{};
 	if (!CreateBuffer(
 			context,
@@ -182,7 +182,8 @@ bool CreateSceneFrameGeometryBuffers(
 	if (!CreateBuffer(
 			context,
 			sizeof(VkDrawMeshTasksIndirectCommandEXT),
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+				VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			allocationInfo,
 			&frameResources.meshClusters.meshDrawIndirectBuffer,
 			&frameResources.meshClusters.meshDrawIndirectAllocation,
@@ -238,6 +239,28 @@ bool CreateSceneFrameGeometryBuffers(
 		0,
 		sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size());
 
+	VmaAllocationInfo opaqueHzbDrawIndirectAllocationInfo{};
+	if (!CreateBuffer(
+			context,
+			sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size(),
+			VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			allocationInfo,
+			&frameResources.opaqueHzbDrawIndirectBuffer,
+			&frameResources.opaqueHzbDrawIndirectAllocation,
+			&opaqueHzbDrawIndirectAllocationInfo)) {
+		return false;
+	}
+	frameResources.opaqueHzbDrawIndirectMappedData = opaqueHzbDrawIndirectAllocationInfo.pMappedData;
+	profiling::RecordAllocation(
+		frameResources.opaqueHzbDrawIndirectAllocation,
+		opaqueHzbDrawIndirectAllocationInfo.size,
+		"SceneOpaqueHzbDrawIndirectBufferAllocation");
+	render->sceneMemoryBytes += opaqueHzbDrawIndirectAllocationInfo.size;
+	std::memset(
+		frameResources.opaqueHzbDrawIndirectMappedData,
+		0,
+		sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size());
+
 	VmaAllocationInfo transparentIndirectAllocationInfo{};
 	if (!CreateBuffer(
 			context,
@@ -257,6 +280,28 @@ bool CreateSceneFrameGeometryBuffers(
 	render->sceneMemoryBytes += transparentIndirectAllocationInfo.size;
 	std::memset(
 		frameResources.transparentIndirectMappedData,
+		0,
+		sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size());
+
+	VmaAllocationInfo transparentHzbDrawIndirectAllocationInfo{};
+	if (!CreateBuffer(
+			context,
+			sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size(),
+			VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			allocationInfo,
+			&frameResources.transparentHzbDrawIndirectBuffer,
+			&frameResources.transparentHzbDrawIndirectAllocation,
+			&transparentHzbDrawIndirectAllocationInfo)) {
+		return false;
+	}
+	frameResources.transparentHzbDrawIndirectMappedData = transparentHzbDrawIndirectAllocationInfo.pMappedData;
+	profiling::RecordAllocation(
+		frameResources.transparentHzbDrawIndirectAllocation,
+		transparentHzbDrawIndirectAllocationInfo.size,
+		"SceneTransparentHzbDrawIndirectBufferAllocation");
+	render->sceneMemoryBytes += transparentHzbDrawIndirectAllocationInfo.size;
+	std::memset(
+		frameResources.transparentHzbDrawIndirectMappedData,
 		0,
 		sizeof(VkDrawIndirectCommand) * world->voxelWorld->chunks.size());
 
@@ -334,7 +379,8 @@ bool CreateSceneFrameGeometryBuffers(
 		if (!CreateBuffer(
 				context,
 				sizeof(uint32_t) * visibilityMaskWordCount,
-				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+					VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 				allocationInfo,
 				&frameResources.visibilityMaskBuffer,
 				&frameResources.visibilityMaskAllocation,
@@ -349,7 +395,31 @@ bool CreateSceneFrameGeometryBuffers(
 		render->sceneMemoryBytes += visibilityMaskAllocationInfo.size;
 		std::memset(
 			frameResources.visibilityMaskMappedData,
-			0,
+			0xFF,
+			sizeof(uint32_t) * visibilityMaskWordCount);
+	}
+
+	if (visibilityMaskWordCount > 0u) {
+		VmaAllocationInfo prevVisibilityMaskAllocationInfo{};
+		if (!CreateBuffer(
+				context,
+				sizeof(uint32_t) * visibilityMaskWordCount,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+				allocationInfo,
+				&frameResources.prevVisibilityMaskBuffer,
+				&frameResources.prevVisibilityMaskAllocation,
+				&prevVisibilityMaskAllocationInfo)) {
+			return false;
+		}
+		frameResources.prevVisibilityMaskMappedData = prevVisibilityMaskAllocationInfo.pMappedData;
+		profiling::RecordAllocation(
+			frameResources.prevVisibilityMaskAllocation,
+			prevVisibilityMaskAllocationInfo.size,
+			"ScenePrevVisibilityMaskBufferAllocation");
+		render->sceneMemoryBytes += prevVisibilityMaskAllocationInfo.size;
+		std::memset(
+			frameResources.prevVisibilityMaskMappedData,
+			0xFF,
 			sizeof(uint32_t) * visibilityMaskWordCount);
 	}
 
@@ -357,7 +427,8 @@ bool CreateSceneFrameGeometryBuffers(
 	if (!CreateBuffer(
 			context,
 			sizeof(uint32_t),
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+				VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			allocationInfo,
 			&frameResources.hzbVisibleCountBuffer,
 			&frameResources.hzbVisibleCountAllocation,
