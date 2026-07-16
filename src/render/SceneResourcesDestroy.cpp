@@ -276,6 +276,7 @@ void DestroySceneResources(
 	render->sceneChunkVoxelPayloadRanges.clear();
 	render->sceneChunkVoxelPayloadWords.clear();
 	render->latestVoxelPayloadChunkIndices.clear();
+	render->sceneVoxelPayloadSync = {};
 	render->pendingChunkRebuildIndices.clear();
 	render->completedChunkRebuildIndices.clear();
 }

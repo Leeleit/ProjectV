@@ -1,5 +1,6 @@
 #include "render/HizCulling.hpp"
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -350,6 +351,50 @@ void TestTimestampResultsSkipUnsubmittedSlots(TestContext &context)
 		"a successful graphics submission marks its timestamp-query slot ready");
 }
 
+void TestHzbDiagnosticRangesAndReplayFields(TestContext &context)
+{
+	const std::string rendererSource = ReadProjectSource("render/RendererRecordCommands.cpp");
+	const std::string appUpdateSource = ReadProjectSource("app/AppUpdate.cpp");
+	for (const char *name : {
+			 "HZB Pass A Apply",
+			 "HZB Build Mip Chain",
+			 "HZB Cull Dispatch",
+			 "HZB Pass B Apply",
+			 "HZB Pass B Raster",
+		 }) {
+		EXPECT_TRUE(context, rendererSource.find(name) != std::string::npos, name);
+	}
+	EXPECT_TRUE(
+		context,
+		appUpdateSource.find("hzb_vis=%u") != std::string::npos,
+		"replay emits visible HZB chunks");
+	EXPECT_TRUE(
+		context,
+		appUpdateSource.find("hzb_cull=%u") != std::string::npos,
+		"replay emits culled HZB chunks");
+	EXPECT_TRUE(
+		context,
+		appUpdateSource.find("hzb_cut=%u") != std::string::npos,
+		"replay emits HZB cut state");
+}
+
+void TestHzbVisibleCountMasksUnusedTrailingBits(TestContext &context)
+{
+	const std::array<uint32_t, 2> visibilityWords{0b1011u, 0xffffffffu};
+	EXPECT_EQUAL_UINT(
+		context,
+		5u,
+		projectv::render::CountHzbVisibleChunks(visibilityWords, 34u),
+		__LINE__,
+		"only valid trailing visibility-mask bits count");
+	EXPECT_EQUAL_UINT(
+		context,
+		0u,
+		projectv::render::CountHzbVisibleChunks(visibilityWords, 0u),
+		__LINE__,
+		"zero chunks have zero visible chunks");
+}
+
 } // namespace
 
 int main() // NOLINT(*-exception-escape): MSVC STL stream construction may throw; terminating the test process is intended.
@@ -371,6 +416,8 @@ int main() // NOLINT(*-exception-escape): MSVC STL stream construction may throw
 	TestMeshShaderValidationContracts(context);
 	TestMeshPreCullResetsIndirectOnGpu(context);
 	TestTimestampResultsSkipUnsubmittedSlots(context);
+	TestHzbDiagnosticRangesAndReplayFields(context);
+	TestHzbVisibleCountMasksUnusedTrailingBits(context);
 	if (context.failures != 0) {
 		return EXIT_FAILURE;
 	}

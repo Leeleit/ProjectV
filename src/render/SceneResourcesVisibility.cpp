@@ -207,7 +207,8 @@ void ApplyCachedChunkVisibilityCommands(
 
 uint32_t PrepareDirtyChunkMeshingList(
 	const RenderState &render,
-	SceneFrameResources &frameResources)
+	SceneFrameResources &frameResources,
+	SceneVoxelPayloadSyncState &voxelPayloadSync)
 {
 	if (!frameResources.dirtyChunkIndexMappedData) {
 		return 0;
@@ -219,21 +220,26 @@ uint32_t PrepareDirtyChunkMeshingList(
 
 	auto *dirtyChunkIndices = static_cast<uint32_t *>(frameResources.dirtyChunkIndexMappedData);
 	uint32_t dirtyChunkCount = 0;
-	const bool canPatchLatestDirtyChunks =
-		frameResources.meshedSceneVersion + 1u == render.sceneVoxelPayloadVersion &&
-		!render.latestVoxelPayloadChunkIndices.empty();
+	const SceneVoxelPayloadSyncMode syncMode = ResolveSceneVoxelPayloadSyncMode(
+		voxelPayloadSync,
+		frameResources.meshedSceneVersion,
+		render.sceneVoxelPayloadVersion);
 
-	if (canPatchLatestDirtyChunks) {
-		for (const size_t chunkIndex : render.latestVoxelPayloadChunkIndices) {
-			dirtyChunkIndices[dirtyChunkCount++] = static_cast<uint32_t>(chunkIndex);
+	if (syncMode == SceneVoxelPayloadSyncMode::Patch) {
+		for (const uint32_t chunkIndex : voxelPayloadSync.pendingChunkIndices) {
+			if (chunkIndex < render.sceneChunkDescriptors.size()) {
+				dirtyChunkIndices[dirtyChunkCount++] = chunkIndex;
+			}
 		}
-	} else {
+	}
+	if (syncMode == SceneVoxelPayloadSyncMode::Full || dirtyChunkCount == 0u) {
 		for (uint32_t chunkIndex = 0; chunkIndex < static_cast<uint32_t>(render.sceneChunkDescriptors.size()); ++chunkIndex) {
 			dirtyChunkIndices[dirtyChunkCount++] = chunkIndex;
 		}
 	}
 
 	frameResources.meshedSceneVersion = render.sceneVoxelPayloadVersion;
+	CompleteSceneVoxelPayloadSync(voxelPayloadSync);
 	return dirtyChunkCount;
 }
 
@@ -301,4 +307,3 @@ bool UpdateSceneFrameChunkVisibility(
 	profiling::PlotValue("ChunkVisibilityCacheHits", static_cast<int64_t>(0));
 	return true;
 }
-

@@ -217,13 +217,6 @@ bool PrepareFrameRenderData(
 	frame->renderData.opaqueIndirectBuffer = sceneFrameResources.opaqueIndirectBuffer;
 	frame->renderData.transparentIndirectBuffer = sceneFrameResources.transparentIndirectBuffer;
 	frame->renderData.chunkDescriptorCount = sceneFrameResources.chunkDescriptorCount;
-	if (sceneFrameResources.hzbVisibleCountMappedData != nullptr &&
-		projectv::render::IsHzbCullingEnabled()) {
-		const uint32_t visible = *static_cast<const uint32_t *>(sceneFrameResources.hzbVisibleCountMappedData);
-		render->hzbLastVisibleChunkCount = visible;
-		const uint32_t total = sceneFrameResources.chunkDescriptorCount;
-		render->hzbLastCulledChunkCount = total > visible ? total - visible : 0u;
-	}
 	frame->renderData.chunkCullingParameters = chunkCullingParameters;
 	frame->renderData.dirtyChunkCount = sceneFrameResources.dirtyChunkCount;
 	frame->renderData.opaqueFaceCount = sceneFrameResources.opaqueFaceCount;

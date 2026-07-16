@@ -18,8 +18,22 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-16 Engine GPU ceiling:** Phase 0–4 measured under MAILBOX + InputReplay;
+Phase 5 wait-polish parked. Code: per-slot voxel-payload dirty **union** (no
+silent full remesh on version lag≥2). Captures:
+`profiler-captures/opt-ceiling-*/SUMMARY.md`. HZB/mesh not ceiling wins here;
+mask 0.5/0.4 cuts `gpu_rtx` but aliases (default **1.0**); AA Off≠new default.
+
 **2026-07-16 HZB fix:** Pass A/B + MSAA STORE/LOAD; host-unified visibility
 after fence (kills FIF even/odd flicker). Draw gating ON.
+
+**2026-07-16 HZB diagnostic:** replay now reports fenced final-mask
+`hzb_vis/hzb_cull/hzb_cut` rather than the reset/reused visible atomic. GPU labels
+split Pass A apply, mip build, cull, Pass B apply/raster. Full-look HZB ON sees
+26–27/27 chunks (0–1 culled); Systems GPU averages: mip build 84.8 µs, B raster
+71.2 µs, A apply 9.6 µs, cull 9.0 µs, B apply 8.7 µs. Artifacts:
+`profiler-captures/opt-ceiling-hzb-diagnostic-{off,on,nsys-on,validation}/`;
+ProjectV + HZB test green, validation has no VUID/error.
 
 **2026-07-15 Smooth specular tiers:** roughness budget in `voxel.frag` (no
 temporal — binary voxels). Full-look replay compare under

@@ -719,7 +719,7 @@ void MirrorAllFrameStats(
 		if (boundary && idx != lastLoggedReplayIndex) {
 			lastLoggedReplayIndex = idx;
 			SDL_Log(
-				"[ProjectV][InputReplay][metrics] frame=%zu/%zu dt_ms=%.3f fps=%.1f shadow_ms=%.3f mesh_ms=%.3f gfx_ms=%.3f aa_ms=%.3f post_ms=%.3f present_ms=%.3f other_ms=%.3f gpu_tlas=%.3f gpu_rtx=%.3f gpu_ddgi=%.3f gpu_opaque=%.3f gpu_aa=%.3f gpu_gfx=%.3f dirtyRebuild=%u dirtyChunks=%u tris=%u nonair=%u",
+				"[ProjectV][InputReplay][metrics] frame=%zu/%zu dt_ms=%.3f fps=%.1f shadow_ms=%.3f mesh_ms=%.3f gfx_ms=%.3f aa_ms=%.3f post_ms=%.3f present_ms=%.3f other_ms=%.3f gpu_tlas=%.3f gpu_rtx=%.3f gpu_ddgi=%.3f gpu_opaque=%.3f gpu_aa=%.3f gpu_gfx=%.3f hzb_vis=%u hzb_cull=%u hzb_cut=%u dirtyRebuild=%u dirtyChunks=%u tris=%u nonair=%u",
 				idx,
 				total,
 				debug->stats.frameTimeMilliseconds,
@@ -737,6 +737,9 @@ void MirrorAllFrameStats(
 				render->renderPassTimings.gpuOpaqueMs,
 				render->renderPassTimings.gpuAaPostMs,
 				render->renderPassTimings.gpuGraphicsMs,
+				debug->stats.hzbVisibleChunkCount,
+				debug->stats.hzbCulledChunkCount,
+				debug->stats.hzbCameraCut ? 1u : 0u,
 				debug->stats.renderPassDirtyChunkRebuiltCount,
 				debug->stats.dirtyChunkCount,
 				debug->stats.sceneTriangleCount,

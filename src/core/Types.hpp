@@ -284,6 +284,13 @@ struct DebugStats {
 	uint32_t inputReplayPlaybackFrameIndex = 0;
 };
 
+struct SceneVoxelPayloadSyncState {
+	std::vector<uint32_t> pendingChunkIndices;
+	uint64_t firstQueuedVersion = 0u;
+	uint64_t lastQueuedVersion = 0u;
+	bool requiresFullSync = true;
+};
+
 struct SceneFrameResources {
 	void *packedFaceMappedData = nullptr;
 	VkBuffer packedFaceBuffer = VK_NULL_HANDLE;
@@ -459,6 +466,7 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	std::vector<SceneChunkVoxelPayloadRange> sceneChunkVoxelPayloadRanges;
 	std::vector<uint32_t> sceneChunkVoxelPayloadWords;
 	std::vector<size_t> latestVoxelPayloadChunkIndices;
+	std::array<SceneVoxelPayloadSyncState, MAX_FRAMES_IN_FLIGHT> sceneVoxelPayloadSync{};
 	std::vector<size_t> pendingChunkRebuildIndices;
 	std::vector<size_t> completedChunkRebuildIndices;
 	projectv::voxel::nanovdb::NanoVdbFlattenResult sceneNanoVdbFlatten;

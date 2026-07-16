@@ -128,6 +128,10 @@ bool CreateSceneResources(
 	render->sceneVoxelPayloadVersion = 0;
 	render->latestVoxelPayloadChunkIndices.clear();
 	render->latestVoxelPayloadChunkIndices.reserve(world->voxelWorld->chunks.size());
+	for (SceneVoxelPayloadSyncState &sync : render->sceneVoxelPayloadSync) {
+		sync = {};
+		sync.pendingChunkIndices.reserve(world->voxelWorld->chunks.size());
+	}
 	render->pendingChunkRebuildIndices.clear();
 	render->pendingChunkRebuildIndices.reserve(world->voxelWorld->chunks.size());
 	render->completedChunkRebuildIndices.clear();

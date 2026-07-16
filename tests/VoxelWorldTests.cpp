@@ -1875,6 +1875,40 @@ void TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(TestContex
 	EXPECT_EQ(context, static_cast<uint32_t>(9), uploadedDescriptor.drawRanges[3]);
 }
 
+void TestSceneVoxelPayloadSyncPreservesMissedDirtyChunks(TestContext &context)
+{
+	SceneVoxelPayloadSyncState sync{};
+	const std::array<size_t, 2> firstDirtyChunks{2u, 5u};
+	const std::array<size_t, 2> secondDirtyChunks{5u, 7u};
+
+	CompleteSceneVoxelPayloadSync(sync);
+	AppendSceneVoxelPayloadDirtyChunks(sync, 5u, firstDirtyChunks);
+	AppendSceneVoxelPayloadDirtyChunks(sync, 6u, secondDirtyChunks);
+
+	EXPECT_EQ(
+		context,
+		SceneVoxelPayloadSyncMode::Patch,
+		ResolveSceneVoxelPayloadSyncMode(sync, 4u, 6u));
+	EXPECT_EQ(context, static_cast<size_t>(3), sync.pendingChunkIndices.size());
+	EXPECT_EQ(context, static_cast<uint32_t>(2), sync.pendingChunkIndices[0]);
+	EXPECT_EQ(context, static_cast<uint32_t>(5), sync.pendingChunkIndices[1]);
+	EXPECT_EQ(context, static_cast<uint32_t>(7), sync.pendingChunkIndices[2]);
+
+	SceneVoxelPayloadSyncState initialSync{};
+	EXPECT_EQ(
+		context,
+		SceneVoxelPayloadSyncMode::Full,
+		ResolveSceneVoxelPayloadSyncMode(initialSync, 0u, 1u));
+
+	SceneVoxelPayloadSyncState missingVersionSync{};
+	CompleteSceneVoxelPayloadSync(missingVersionSync);
+	AppendSceneVoxelPayloadDirtyChunks(missingVersionSync, 6u, secondDirtyChunks);
+	EXPECT_EQ(
+		context,
+		SceneVoxelPayloadSyncMode::Full,
+		ResolveSceneVoxelPayloadSyncMode(missingVersionSync, 4u, 6u));
+}
+
 void TestUpdateAppConsumesDebugInputActions(TestContext &context)
 {
 	PlatformState platform{};
@@ -6731,6 +6765,7 @@ int main() // NOLINT(*-exception-escape)
 	TestSceneChunkVisibilityUsesFrustumAndDistanceCulling(context);
 	TestSceneChunkVisibilityKeepsChunksVisibleAtFrustumEdges(context);
 	TestMakeUploadedSceneChunkDescriptorPreservesGeneratedFaceCounts(context);
+	TestSceneVoxelPayloadSyncPreservesMissedDirtyChunks(context);
 	TestUpdateAppConsumesDebugInputActions(context);
 	TestUpdateAppUsesVisibleSceneDistanceForSunShadowCascadeSplits(context);
 	TestUpdateAppTogglesWalkAirControlMode(context);

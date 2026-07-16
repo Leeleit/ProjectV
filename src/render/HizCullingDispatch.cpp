@@ -5,11 +5,33 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <vector>
 
 namespace projectv::render {
+uint32_t CountHzbVisibleChunks(
+	const std::span<const uint32_t> visibilityWords,
+	const uint32_t chunkCount)
+{
+	const size_t fullWordCount = chunkCount / 32u;
+	const size_t availableFullWordCount = std::min(fullWordCount, visibilityWords.size());
+	uint32_t visibleChunkCount = 0u;
+	for (size_t wordIndex = 0u; wordIndex < availableFullWordCount; ++wordIndex) {
+		visibleChunkCount += static_cast<uint32_t>(std::popcount(visibilityWords[wordIndex]));
+	}
+
+	const uint32_t trailingBitCount = chunkCount % 32u;
+	if (trailingBitCount != 0u && fullWordCount < visibilityWords.size()) {
+		const uint32_t validMask = (1u << trailingBitCount) - 1u;
+		visibleChunkCount += static_cast<uint32_t>(
+			std::popcount(visibilityWords[fullWordCount] & validMask));
+	}
+	return visibleChunkCount;
+}
+
 bool RecordHzbCullingDispatch(
 	const VkCommandBuffer commandBuffer,
 	VulkanContextState *context,

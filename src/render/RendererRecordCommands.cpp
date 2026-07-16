@@ -155,13 +155,18 @@ void RecordGraphicsCommands(
 				(cameraCut || !render.hzbMaskValid)
 					? projectv::render::HzbApplyMode::ForceAll
 					: projectv::render::HzbApplyMode::PassA;
-			const bool passAApplied = projectv::render::RecordHzbApplyVisibility(
-				cmd,
-				&context,
-				render,
-				render.sceneFrameResources[frameRenderData.frameIndex],
-				frameRenderData.chunkDescriptorCount,
-				passAMode);
+			bool passAApplied = false;
+			{
+				PV_PROFILE_GPU_LABEL(cmd, "HZB Pass A Apply");
+				PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "HZB Pass A Apply");
+				passAApplied = projectv::render::RecordHzbApplyVisibility(
+					cmd,
+					&context,
+					render,
+					render.sceneFrameResources[frameRenderData.frameIndex],
+					frameRenderData.chunkDescriptorCount,
+					passAMode);
+			}
 			if (meshFrameResources != nullptr) {
 				meshCullPush.visibilityMaskMode = {
 					static_cast<uint32_t>(
@@ -511,13 +516,17 @@ void RecordGraphicsCommands(
 				render.msaaSampleCount > 1u && render.depthResolveImage != VK_NULL_HANDLE;
 			const VkImageLayout hizDepthLayout =
 				useDepthResolve ? render.depthResolveCurrentLayout : render.depthImageCurrentLayout;
-			projectv::render::BuildHizMipChain(
-				cmd,
-				useDepthResolve ? render.depthResolveImage : render.depthImage,
-				hizDepthLayout,
-				render.hizBuffer,
-				&render,
-				&context);
+			{
+				PV_PROFILE_GPU_LABEL(cmd, "HZB Build Mip Chain");
+				PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "HZB Build Mip Chain");
+				projectv::render::BuildHizMipChain(
+					cmd,
+					useDepthResolve ? render.depthResolveImage : render.depthImage,
+					hizDepthLayout,
+					render.hizBuffer,
+					&render,
+					&context);
+			}
 			if (render.hizBuffer.imageView != VK_NULL_HANDLE &&
 				render.hizBuffer.sampler != VK_NULL_HANDLE &&
 				frameRenderData.hizCullingDescriptorSet != VK_NULL_HANDLE) {
@@ -526,23 +535,32 @@ void RecordGraphicsCommands(
 				for (uint32_t i = 0; i < 16u; ++i) {
 					viewProjectionFlat[i] = viewProjectionMat.data()[i];
 				}
-				projectv::render::RecordHzbCullingDispatch(
-					cmd,
-					&context,
-					render,
-					render.sceneFrameResources[frameRenderData.frameIndex],
-					*reinterpret_cast<const float (*)[16]>(viewProjectionFlat.data()),
-					frameRenderData.chunkDescriptorCount);
-				// Pass B: same-frame disocclusion (!prev && now). MS attachments STOREd above.
-				const bool passBSafe = !render.hzbCameraCutThisFrame && render.hzbMaskValid;
-				if (passBSafe) {
-					const bool passBApplied = projectv::render::RecordHzbApplyVisibility(
+				{
+					PV_PROFILE_GPU_LABEL(cmd, "HZB Cull Dispatch");
+					PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "HZB Cull Dispatch");
+					projectv::render::RecordHzbCullingDispatch(
 						cmd,
 						&context,
 						render,
 						render.sceneFrameResources[frameRenderData.frameIndex],
-						frameRenderData.chunkDescriptorCount,
-						projectv::render::HzbApplyMode::PassB);
+						*reinterpret_cast<const float (*)[16]>(viewProjectionFlat.data()),
+						frameRenderData.chunkDescriptorCount);
+				}
+				// Pass B: same-frame disocclusion (!prev && now). MS attachments STOREd above.
+				const bool passBSafe = !render.hzbCameraCutThisFrame && render.hzbMaskValid;
+				if (passBSafe) {
+					bool passBApplied = false;
+					{
+						PV_PROFILE_GPU_LABEL(cmd, "HZB Pass B Apply");
+						PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "HZB Pass B Apply");
+						passBApplied = projectv::render::RecordHzbApplyVisibility(
+							cmd,
+							&context,
+							render,
+							render.sceneFrameResources[frameRenderData.frameIndex],
+							frameRenderData.chunkDescriptorCount,
+							projectv::render::HzbApplyMode::PassB);
+					}
 					if (meshFrameResources != nullptr && passBApplied) {
 						meshCullPush.visibilityMaskMode = {
 							static_cast<uint32_t>(projectv::render::HzbApplyMode::PassB),
@@ -591,55 +609,59 @@ void RecordGraphicsCommands(
 						.pColorAttachments = passBColors,
 						.pDepthAttachment = &passBDepth,
 					};
-					vkCmdBeginRendering(cmd, &passBInfo);
-					vkCmdSetViewport(cmd, 0, 1, &viewport);
-					vkCmdSetScissor(cmd, 0, 1, &scissor);
-					if (frameRenderData.graphicsDescriptorSet != VK_NULL_HANDLE) {
-						vkCmdBindDescriptorSets(
-							cmd,
-							VK_PIPELINE_BIND_POINT_GRAPHICS,
-							render.graphicsPipelineLayout,
-							0,
-							1,
-							&frameRenderData.graphicsDescriptorSet,
-							0,
-							nullptr);
-					}
-					if (render.meshShaderEnabled && passBApplied) {
-						projectv::render::RecordMeshShaderDraw(
-							cmd,
-							render,
-							render.sceneFrameResources[frameRenderData.frameIndex],
-							frameRenderData.graphicsPushConstants,
-							render.faceClusterCapacity);
-					} else {
-						const bool rtxPathActive =
-							render.rayTracedShadows != nullptr &&
-							render.rayTracedShadows->IsEnabled() &&
-							render.rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
-						VkPipeline opaquePipeline = rtxPathActive ? render.graphicsPipelineRtx : VK_NULL_HANDLE;
-						if (opaquePipeline == VK_NULL_HANDLE) {
-							opaquePipeline = render.graphicsPipeline;
-						}
-						if (opaquePipeline != VK_NULL_HANDLE &&
-							frameRenderData.opaqueHzbDrawIndirectBuffer != VK_NULL_HANDLE) {
-							vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
-							vkCmdPushConstants(
+					{
+						PV_PROFILE_GPU_LABEL(cmd, "HZB Pass B Raster");
+						PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "HZB Pass B Raster");
+						vkCmdBeginRendering(cmd, &passBInfo);
+						vkCmdSetViewport(cmd, 0, 1, &viewport);
+						vkCmdSetScissor(cmd, 0, 1, &scissor);
+						if (frameRenderData.graphicsDescriptorSet != VK_NULL_HANDLE) {
+							vkCmdBindDescriptorSets(
 								cmd,
+								VK_PIPELINE_BIND_POINT_GRAPHICS,
 								render.graphicsPipelineLayout,
-								VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 								0,
-								sizeof(frameRenderData.graphicsPushConstants),
-								&frameRenderData.graphicsPushConstants);
-							vkCmdDrawIndirect(
-								cmd,
-								frameRenderData.opaqueHzbDrawIndirectBuffer,
+								1,
+								&frameRenderData.graphicsDescriptorSet,
 								0,
-								frameRenderData.chunkDescriptorCount,
-								sizeof(VkDrawIndirectCommand));
+								nullptr);
 						}
+						if (render.meshShaderEnabled && passBApplied) {
+							projectv::render::RecordMeshShaderDraw(
+								cmd,
+								render,
+								render.sceneFrameResources[frameRenderData.frameIndex],
+								frameRenderData.graphicsPushConstants,
+								render.faceClusterCapacity);
+						} else {
+							const bool rtxPathActive =
+								render.rayTracedShadows != nullptr &&
+								render.rayTracedShadows->IsEnabled() &&
+								render.rayTracedShadows->GetConfig().tlas != VK_NULL_HANDLE;
+							VkPipeline opaquePipeline = rtxPathActive ? render.graphicsPipelineRtx : VK_NULL_HANDLE;
+							if (opaquePipeline == VK_NULL_HANDLE) {
+								opaquePipeline = render.graphicsPipeline;
+							}
+							if (opaquePipeline != VK_NULL_HANDLE &&
+								frameRenderData.opaqueHzbDrawIndirectBuffer != VK_NULL_HANDLE) {
+								vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaquePipeline);
+								vkCmdPushConstants(
+									cmd,
+									render.graphicsPipelineLayout,
+									VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+									0,
+									sizeof(frameRenderData.graphicsPushConstants),
+									&frameRenderData.graphicsPushConstants);
+								vkCmdDrawIndirect(
+									cmd,
+									frameRenderData.opaqueHzbDrawIndirectBuffer,
+									0,
+									frameRenderData.chunkDescriptorCount,
+									sizeof(VkDrawIndirectCommand));
+							}
+						}
+						vkCmdEndRendering(cmd);
 					}
-					vkCmdEndRendering(cmd);
 				}
 			}
 		}

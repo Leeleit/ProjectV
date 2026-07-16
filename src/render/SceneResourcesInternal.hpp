@@ -20,7 +20,10 @@ uint32_t GetMaxSceneFaceCount(const VoxelWorld &world);
 void InitializeSceneChunkDescriptorsAndVoxelPayloadLayout(const VoxelWorld &world, RenderState &render);
 void RepackChunkVoxelPayload(const VoxelWorld &world, size_t chunkIndex, RenderState &render);
 void UpdateGeneratedFaceStatsFromFrameResources(RenderState &render, const SceneFrameResources &frameResources);
-uint32_t PrepareDirtyChunkMeshingList(const RenderState &render, SceneFrameResources &frameResources);
+uint32_t PrepareDirtyChunkMeshingList(
+	const RenderState &render,
+	SceneFrameResources &frameResources,
+	SceneVoxelPayloadSyncState &voxelPayloadSync);
 
 bool CreateSceneFrameGeometryBuffers(
 	VulkanContextState *context,

@@ -21,6 +21,71 @@ inline PackedSceneChunkDescriptor MakeUploadedSceneChunkDescriptor(
 	return uploadedDescriptor;
 }
 
+enum class SceneVoxelPayloadSyncMode : uint8_t {
+	None,
+	Patch,
+	Full,
+};
+
+inline void MarkSceneVoxelPayloadSyncFull(SceneVoxelPayloadSyncState &sync)
+{
+	sync.pendingChunkIndices.clear();
+	sync.firstQueuedVersion = 0u;
+	sync.lastQueuedVersion = 0u;
+	sync.requiresFullSync = true;
+}
+
+inline void AppendSceneVoxelPayloadDirtyChunks(
+	SceneVoxelPayloadSyncState &sync,
+	const uint64_t version,
+	const std::span<const size_t> chunkIndices)
+{
+	if (sync.requiresFullSync) {
+		return;
+	}
+	if (version == 0u ||
+		(sync.lastQueuedVersion != 0u && sync.lastQueuedVersion + 1u != version)) {
+		MarkSceneVoxelPayloadSyncFull(sync);
+		return;
+	}
+	if (sync.pendingChunkIndices.empty()) {
+		sync.firstQueuedVersion = version;
+	}
+	sync.lastQueuedVersion = version;
+	for (const size_t chunkIndex : chunkIndices) {
+		sync.pendingChunkIndices.push_back(static_cast<uint32_t>(chunkIndex));
+	}
+}
+
+inline SceneVoxelPayloadSyncMode ResolveSceneVoxelPayloadSyncMode(
+	SceneVoxelPayloadSyncState &sync,
+	const uint64_t appliedVersion,
+	const uint64_t targetVersion)
+{
+	if (appliedVersion == targetVersion) {
+		return SceneVoxelPayloadSyncMode::None;
+	}
+	std::sort(sync.pendingChunkIndices.begin(), sync.pendingChunkIndices.end());
+	const auto uniqueEnd = std::unique(sync.pendingChunkIndices.begin(), sync.pendingChunkIndices.end());
+	sync.pendingChunkIndices.erase(uniqueEnd, sync.pendingChunkIndices.end());
+	if (sync.requiresFullSync ||
+		appliedVersion == 0u ||
+		sync.pendingChunkIndices.empty() ||
+		sync.firstQueuedVersion != appliedVersion + 1u ||
+		sync.lastQueuedVersion != targetVersion) {
+		return SceneVoxelPayloadSyncMode::Full;
+	}
+	return SceneVoxelPayloadSyncMode::Patch;
+}
+
+inline void CompleteSceneVoxelPayloadSync(SceneVoxelPayloadSyncState &sync)
+{
+	sync.pendingChunkIndices.clear();
+	sync.firstQueuedVersion = 0u;
+	sync.lastQueuedVersion = 0u;
+	sync.requiresFullSync = false;
+}
+
 template <typename GetOrigin, typename GetHalfExtent>
 [[nodiscard]] bool FrustumCullVsCamera(
 	const ChunkCullingParameters &parameters,

@@ -80,6 +80,13 @@ void SyncHzbUnifiedVisibilityAfterFence(
 		render.hzbUnifiedVisibilityWords.data(),
 		slot.visibilityMaskMappedData,
 		wordCount * sizeof(uint32_t));
+	const uint32_t visibleChunkCount =
+		CountHzbVisibleChunks(render.hzbUnifiedVisibilityWords, slot.chunkDescriptorCount);
+	render.hzbLastVisibleChunkCount = visibleChunkCount;
+	render.hzbLastCulledChunkCount =
+		slot.chunkDescriptorCount > visibleChunkCount
+			? slot.chunkDescriptorCount - visibleChunkCount
+			: 0u;
 	render.hzbUnifiedCullSerial = render.hzbSlotCullSerial[frameIndex];
 }
 

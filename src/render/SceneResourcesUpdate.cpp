@@ -9,6 +9,27 @@
 #include <array>
 #include <span>
 
+namespace {
+void MarkAllSceneVoxelPayloadSyncsFull(RenderState &render)
+{
+	const size_t syncCount = std::min(render.sceneFrameResources.size(), render.sceneVoxelPayloadSync.size());
+	for (size_t index = 0; index < syncCount; ++index) {
+		MarkSceneVoxelPayloadSyncFull(render.sceneVoxelPayloadSync[index]);
+	}
+}
+
+void AppendSceneVoxelPayloadDeltaToAllSyncs(
+	RenderState &render,
+	const uint64_t version,
+	const std::span<const size_t> chunkIndices)
+{
+	const size_t syncCount = std::min(render.sceneFrameResources.size(), render.sceneVoxelPayloadSync.size());
+	for (size_t index = 0; index < syncCount; ++index) {
+		AppendSceneVoxelPayloadDirtyChunks(render.sceneVoxelPayloadSync[index], version, chunkIndices);
+	}
+}
+} // namespace
+
 bool UpdateSceneResources(
 	WorldState *world,
 	RenderState *render,
@@ -33,6 +54,7 @@ bool UpdateSceneResources(
 		InitializeSceneChunkDescriptorsAndVoxelPayloadLayout(*world->voxelWorld, *render);
 		++render->sceneUploadVersion;
 		++render->sceneVoxelPayloadVersion;
+		MarkAllSceneVoxelPayloadSyncsFull(*render);
 	}
 
 	render->completedChunkRebuildIndices.clear();
@@ -51,8 +73,11 @@ bool UpdateSceneResources(
 	render->pendingChunkRebuildIndices.clear();
 
 	if (!render->completedChunkRebuildIndices.empty()) {
-
 		++render->sceneVoxelPayloadVersion;
+		AppendSceneVoxelPayloadDeltaToAllSyncs(
+			*render,
+			render->sceneVoxelPayloadVersion,
+			render->latestVoxelPayloadChunkIndices);
 	}
 
 	const bool fluidOnlyChunkRebuilds = world->voxelWorld->editVersion == render->lastNanoVdbSyncedEditVersion;
@@ -100,11 +125,13 @@ bool UploadSceneFrameResources(
 	const uint32_t frameIndex)
 {
 	PV_PROFILE_ZONE_N("UploadSceneFrameResources");
-	if (static_cast<size_t>(frameIndex) >= render.sceneFrameResources.size()) {
+	if (static_cast<size_t>(frameIndex) >= render.sceneFrameResources.size() ||
+		static_cast<size_t>(frameIndex) >= render.sceneVoxelPayloadSync.size()) {
 		return false;
 	}
 
 	SceneFrameResources &frameResources = render.sceneFrameResources[frameIndex];
+	SceneVoxelPayloadSyncState &voxelPayloadSync = render.sceneVoxelPayloadSync[frameIndex];
 	if (frameResources.sceneLightingMappedData) {
 		std::memcpy(
 			frameResources.sceneLightingMappedData,
@@ -139,12 +166,13 @@ bool UploadSceneFrameResources(
 	}
 
 	if (frameResources.uploadedVoxelPayloadVersion != render.sceneVoxelPayloadVersion) {
-		const bool canPatchLatestDirtyChunks =
-			frameResources.uploadedVoxelPayloadVersion + 1u == render.sceneVoxelPayloadVersion &&
-			!render.latestVoxelPayloadChunkIndices.empty();
+		const SceneVoxelPayloadSyncMode syncMode = ResolveSceneVoxelPayloadSyncMode(
+			voxelPayloadSync,
+			frameResources.uploadedVoxelPayloadVersion,
+			render.sceneVoxelPayloadVersion);
 
-		if (canPatchLatestDirtyChunks) {
-			for (const size_t chunkIndex : render.latestVoxelPayloadChunkIndices) {
+		if (syncMode == SceneVoxelPayloadSyncMode::Patch) {
+			for (const uint32_t chunkIndex : voxelPayloadSync.pendingChunkIndices) {
 				if (chunkIndex >= render.sceneChunkVoxelPayloadRanges.size()) {
 					continue;
 				}
@@ -294,7 +322,7 @@ bool UploadSceneFrameResources(
 	}
 
 	frameResources.chunkDescriptorCount = static_cast<uint32_t>(render.sceneChunkDescriptors.size());
-	frameResources.dirtyChunkCount = PrepareDirtyChunkMeshingList(render, frameResources);
+	frameResources.dirtyChunkCount = PrepareDirtyChunkMeshingList(render, frameResources, voxelPayloadSync);
 	frameResources.opaqueFaceCount = render.sceneOpaqueFaceCount;
 	frameResources.transparentFaceCount = render.sceneTransparentFaceCount;
 	meshingDirtyChunkCount = frameResources.dirtyChunkCount;

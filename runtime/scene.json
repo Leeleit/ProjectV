@@ -1,7 +1,7 @@
 {
   "antialiasing": {
     "msaaMode": "MSAA4",
-    "renderScale": "1.50",
+    "renderScale": "1.00",
     "smaaEnabled": true
   },
   "lighting": {

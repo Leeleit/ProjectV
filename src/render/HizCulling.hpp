@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+#include <span>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -37,6 +38,10 @@ bool IsHzbSmartMipEnabled();
 bool IsHzbSmartBlendWidthEnabled();
 
 bool IsHzbMinMipEnabled();
+
+uint32_t CountHzbVisibleChunks(
+	std::span<const uint32_t> visibilityWords,
+	uint32_t chunkCount);
 
 uint32_t ComputeHzbMipLevelCount(uint32_t baseWidth, uint32_t baseHeight);
 
