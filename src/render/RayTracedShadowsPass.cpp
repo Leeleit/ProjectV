@@ -1,5 +1,6 @@
 #include "volk.h"
 #include "render/RayTracedShadows.hpp"
+#include "debug/ProfilingGpu.hpp"
 #include "SDL3/SDL_log.h"
 
 #include <array>
@@ -26,6 +27,7 @@ bool RayTracedShadows::RecordRayTracedShadowPass(
 
 bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	const VkCommandBuffer commandBuffer,
+	void *const tracyGraphicsContext,
 	const VulkanContextState &context,
 	const uint32_t frameIndex,
 	const VkBuffer chunkDescriptorBuffer,
@@ -50,9 +52,12 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	if (frameIndex >= MAX_FRAMES_IN_FLIGHT) {
 		return false;
 	}
-	const auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, descriptorSet] = m_rtxFrames[frameIndex];
+	const auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, traversalCounterBuffer,
+				 traversalCounterAllocation, traversalCounterMappedData, descriptorSet] = m_rtxFrames[frameIndex];
 	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
-	if (cameraUboMappedData == nullptr || (!usePushDescriptors && descriptorSet == VK_NULL_HANDLE)) {
+	if (cameraUboMappedData == nullptr || traversalCounterBuffer == VK_NULL_HANDLE ||
+		traversalCounterAllocation == nullptr || traversalCounterMappedData == nullptr ||
+		(!usePushDescriptors && descriptorSet == VK_NULL_HANDLE)) {
 		return false;
 	}
 	if (inverseViewProjection == nullptr || cameraPosition == nullptr || cameraForward == nullptr) {
@@ -77,12 +82,16 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	const VkDescriptorBufferInfo chunkVoxelPayloadInfo{chunkVoxelPayloadBuffer, 0, VK_WHOLE_SIZE};
 	const VkDescriptorImageInfo shadowMaskImageInfo{VK_NULL_HANDLE, m_shadowMaskImageView, VK_IMAGE_LAYOUT_GENERAL};
 	const VkDescriptorBufferInfo cameraUboInfo{cameraUboBuffer, 0, 96u};
+	const VkDescriptorBufferInfo traversalCounterInfo{
+		traversalCounterBuffer,
+		0,
+		sizeof(RtxTraversalCounters)};
 	VkWriteDescriptorSetAccelerationStructureKHR tlasInfo{};
 	tlasInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
 	tlasInfo.accelerationStructureCount = 1u;
 	tlasInfo.pAccelerationStructures = &m_config.tlas;
 
-	std::array<VkWriteDescriptorSet, 6> writes{};
+	std::array<VkWriteDescriptorSet, 7> writes{};
 	writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 	writes[0].dstSet = descriptorSet;
 	writes[0].dstBinding = 1;
@@ -131,6 +140,14 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 	writes[5].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	writes[5].pBufferInfo = &cameraUboInfo;
 
+	writes[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	writes[6].dstSet = descriptorSet;
+	writes[6].dstBinding = 20;
+	writes[6].dstArrayElement = 0;
+	writes[6].descriptorCount = 1u;
+	writes[6].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	writes[6].pBufferInfo = &traversalCounterInfo;
+
 	if (usePushDescriptors) {
 		vkCmdPushDescriptorSet(
 			commandBuffer,
@@ -176,16 +193,37 @@ bool RayTracedShadows::RecordVoxelAwareRtxShadowPass(
 			0u,
 			nullptr);
 	}
+	if (m_traversalMetricsEnabled) {
+		VkMemoryBarrier2 traversalCounterBarrier{};
+		traversalCounterBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+		traversalCounterBarrier.srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT;
+		traversalCounterBarrier.srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT;
+		traversalCounterBarrier.dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+		traversalCounterBarrier.dstAccessMask =
+			VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+		VkDependencyInfo traversalCounterDependency{};
+		traversalCounterDependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		traversalCounterDependency.memoryBarrierCount = 1u;
+		traversalCounterDependency.pMemoryBarriers = &traversalCounterBarrier;
+		vkCmdPipelineBarrier2(commandBuffer, &traversalCounterDependency);
+	}
 
-	vkCmdTraceRaysKHR(
-		commandBuffer,
-		&m_rtxSbt.GetRaygenRegion(),
-		&m_rtxSbt.GetMissRegion(),
-		&m_rtxSbt.GetHitRegion(),
-		&m_rtxSbt.GetCallableRegion(),
-		m_shadowMaskWidth,
-		m_shadowMaskHeight,
-		1u);
+	{
+		PV_PROFILE_GPU_LABEL(commandBuffer, "RTX Shadow Trace");
+		PV_PROFILE_GPU_ZONE(tracyGraphicsContext, commandBuffer, "RTX Shadow Trace");
+		vkCmdTraceRaysKHR(
+			commandBuffer,
+			&m_rtxSbt.GetRaygenRegion(),
+			&m_rtxSbt.GetMissRegion(),
+			&m_rtxSbt.GetHitRegion(),
+			&m_rtxSbt.GetCallableRegion(),
+			m_shadowMaskWidth,
+			m_shadowMaskHeight,
+			1u);
+	}
+	if (m_traversalMetricsEnabled) {
+		m_traversalCountersWritten[frameIndex] = true;
+	}
 
 	VkImageMemoryBarrier2 readBarrier{};
 	readBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;

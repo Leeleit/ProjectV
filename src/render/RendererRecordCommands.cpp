@@ -373,6 +373,7 @@ void RecordGraphicsCommands(
 			frameRenderData.chunkDescriptorCount > 0 &&
 			frameRenderData.opaqueIndirectBuffer != VK_NULL_HANDLE &&
 			frameRenderData.packedFaceBuffer != VK_NULL_HANDLE) {
+			PV_PROFILE_GPU_LABEL(cmd, "Opaque Pass A");
 			PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, "Opaque Pass");
 			if (render.meshShaderEnabled) {
 				projectv::render::RecordMeshShaderDraw(

@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <optional>
 
 namespace {
 
@@ -49,6 +50,15 @@ VkExtent2D ScaleShadowMaskExtent(const VkExtent2D full)
 bool IsRtxShadowPassEnabled()
 {
 	const char *const value = projectv::core::GetEnvVar("PROJECTV_RTX_SHADOW_PASS");
+	if (value == nullptr || value[0] == '\0') {
+		return true;
+	}
+	return !(value[0] == '0' || value[0] == 'n' || value[0] == 'N' || value[0] == 'f' || value[0] == 'F');
+}
+
+bool IsRtxTightAabbEnabled()
+{
+	const char *const value = projectv::core::GetEnvVar("PROJECTV_RTX_TIGHT_AABB");
 	if (value == nullptr || value[0] == '\0') {
 		return true;
 	}
@@ -151,6 +161,9 @@ SDL_AppResult DrawFrame(
 		return SDL_APP_FAILURE;
 	}
 	projectv::render::SyncHzbUnifiedVisibilityAfterFence(context, *render, currentFrameIndex);
+	if (render->rayTracedShadows != nullptr) {
+		render->rayTracedShadows->SyncTraversalCountersAfterFence(*context, currentFrame);
+	}
 	if (render->gpuTimestampQueryPool != VK_NULL_HANDLE &&
 		render->gpuTimestampQueriesReady[currentFrameIndex]) {
 		const uint32_t base = static_cast<uint32_t>(currentFrameIndex) * render->gpuTimestampQueriesPerFrame;
@@ -289,6 +302,10 @@ SDL_AppResult DrawFrame(
 		if (state->world().voxelWorld != nullptr) {
 			const VoxelWorld &world = *state->world().voxelWorld;
 			const auto &rtxConfig = render->rayTracedShadows->GetConfig();
+			const SceneFrameResources &aabbFrameResources = render->sceneFrameResources[currentFrameIndex];
+			const auto *const packedChunkAabbs =
+				static_cast<const PackedSceneChunkAabb *>(aabbFrameResources.chunkAabbMappedData);
+			const bool useTightAabbs = IsRtxTightAabbEnabled();
 
 			// Combine dirty (pendingBlasRebuildIndices) + initial (non-empty without BLAS).
 			// The initial path covers scene-load chunks that never received a voxel edit
@@ -318,12 +335,21 @@ SDL_AppResult DrawFrame(
 					const VoxelChunk &chunk = world.chunks[chunkIndex];
 					projectv::render::DirtyChunkRebuild entry{};
 					entry.chunkIndex = chunkIndex;
-					entry.aabb.minX = static_cast<float>(chunk.min.x);
-					entry.aabb.minY = static_cast<float>(chunk.min.y);
-					entry.aabb.minZ = static_cast<float>(chunk.min.z);
-					entry.aabb.maxX = static_cast<float>(chunk.maxExclusive.x);
-					entry.aabb.maxY = static_cast<float>(chunk.maxExclusive.y);
-					entry.aabb.maxZ = static_cast<float>(chunk.maxExclusive.z);
+					const std::optional<VkAabbPositionsKHR> tightAabb =
+						useTightAabbs && packedChunkAabbs != nullptr &&
+								chunkIndex < aabbFrameResources.chunkDescriptorCount
+							? projectv::render::TryBuildTightChunkAabb(packedChunkAabbs[chunkIndex])
+							: std::nullopt;
+					if (tightAabb.has_value()) {
+						entry.aabb = *tightAabb;
+					} else {
+						entry.aabb.minX = static_cast<float>(chunk.min.x);
+						entry.aabb.minY = static_cast<float>(chunk.min.y);
+						entry.aabb.minZ = static_cast<float>(chunk.min.z);
+						entry.aabb.maxX = static_cast<float>(chunk.maxExclusive.x);
+						entry.aabb.maxY = static_cast<float>(chunk.maxExclusive.y);
+						entry.aabb.maxZ = static_cast<float>(chunk.maxExclusive.z);
+					}
 					dirtyRebuilds.push_back(entry);
 				}
 				if (!dirtyRebuilds.empty()) {
@@ -331,8 +357,13 @@ SDL_AppResult DrawFrame(
 				}
 			}
 		}
-		const uint32_t blasBuilt = render->rayTracedShadows->RecordDirtyBlasBuilds(
-			cmd, *context, GetMaxBlasBuildsPerFrame());
+		uint32_t blasBuilt = 0u;
+		{
+			PV_PROFILE_GPU_LABEL(cmd, "RTX BLAS Build");
+			PV_PROFILE_GPU_ZONE(render->tracyGraphicsContext, cmd, "RTX BLAS Build");
+			blasBuilt = render->rayTracedShadows->RecordDirtyBlasBuilds(
+				cmd, *context, GetMaxBlasBuildsPerFrame());
+		}
 		(void)blasBuilt;
 
 		bool tlasNeedsBuild = false;
@@ -401,6 +432,7 @@ SDL_AppResult DrawFrame(
 			const VkExtent2D maskExtent = ScaleShadowMaskExtent(fullExtent);
 			render->rayTracedShadows->RecordVoxelAwareRtxShadowPass(
 				cmd,
+				render->tracyGraphicsContext,
 				*context,
 				frame->currentFrame,
 				frame->renderData.chunkDescriptorBuffer,

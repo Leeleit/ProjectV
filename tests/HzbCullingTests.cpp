@@ -378,6 +378,23 @@ void TestHzbDiagnosticRangesAndReplayFields(TestContext &context)
 		"replay emits HZB cut state");
 }
 
+void TestOpaquePassAHasGpuLabel(TestContext &context)
+{
+	const std::string rendererSource = ReadProjectSource("render/RendererRecordCommands.cpp");
+	const size_t opaqueZone = rendererSource.find(
+		"PV_PROFILE_GPU_ZONE(render.tracyGraphicsContext, cmd, \"Opaque Pass\")");
+	const size_t opaqueLabel = rendererSource.find("PV_PROFILE_GPU_LABEL(cmd, \"Opaque Pass A\")");
+	const size_t opaqueDraw = rendererSource.find("vkCmdDrawIndirect(", opaqueZone);
+	EXPECT_TRUE(context, opaqueZone != std::string::npos, "opaque pass Tracy zone is present");
+	EXPECT_TRUE(
+		context,
+		opaqueLabel != std::string::npos &&
+			opaqueDraw != std::string::npos &&
+			opaqueLabel < opaqueZone &&
+			opaqueZone < opaqueDraw,
+		"opaque pass A GPU label contains the Tracy zone and indirect draw");
+}
+
 void TestHzbVisibleCountMasksUnusedTrailingBits(TestContext &context)
 {
 	const std::array<uint32_t, 2> visibilityWords{0b1011u, 0xffffffffu};
@@ -417,6 +434,7 @@ int main() // NOLINT(*-exception-escape): MSVC STL stream construction may throw
 	TestMeshPreCullResetsIndirectOnGpu(context);
 	TestTimestampResultsSkipUnsubmittedSlots(context);
 	TestHzbDiagnosticRangesAndReplayFields(context);
+	TestOpaquePassAHasGpuLabel(context);
 	TestHzbVisibleCountMasksUnusedTrailingBits(context);
 	if (context.failures != 0) {
 		return EXIT_FAILURE;

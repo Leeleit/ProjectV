@@ -35,6 +35,31 @@ split Pass A apply, mip build, cull, Pass B apply/raster. Full-look HZB ON sees
 `profiler-captures/opt-ceiling-hzb-diagnostic-{off,on,nsys-on,validation}/`;
 ProjectV + HZB test green, validation has no VUID/error.
 
+**2026-07-16 GPU ceiling attribution:** marker trace has `RTX Shadow Trace`
+1.604 ms / 31.5% and `Opaque Pass A` 1.426 ms / 28.0%; BLAS is bursty
+(0.033 ms average, 0.000 ms median). Ticks 360/480/600 confirm opaque dominates
+at 480 (3.006 ms), RTX at 600 (1.866 ms). HZB remains 0–1/27 cull. Next scope:
+RTX shadow traversal, not fence/wait polish or further HZB work. Artifacts:
+`profiler-captures/opt-ceiling-tick-attribution-markers/`.
+
+**2026-07-16 RTX decomposition:** full-look RT ON is 209.3 mean FPS vs
+analysis-only RT OFF 379.2 (+81.2%). Marker-scoped GPU Trace: SM 42.1%, RT Core
+39.7%, VRAM write 2.1%, L2 13.6%, register-limited launch 47.7%; no RT-core or
+memory saturation. Next design: conservative tight non-air chunk AABBs to cut
+procedural DDA candidates; do not use HZB-only RT culling or a depth single-ray
+rewrite. Artifacts: `profiler-captures/opt-ceiling-rt-decomposition/`.
+
+**2026-07-16 tight RTX AABB:** default-on `PROJECTV_RTX_TIGHT_AABB=1` routes
+current non-air chunk bounds into BLAS (full-AABB `=0` remains baseline).
+Traversal counters confirm fewer primary/sun candidates and DDA steps; visual
+parity + validation smoke pass. Two Debug full-look A/B pairs average **+11.05%
+mean FPS**, passing the staged ≥10% gate. `PROJECTV_NGFX_GPU_TRACE_REPLAY_TICK=600`
+now starts an injected Nsight GPU Trace just before the matching replay frame;
+launch GPU Trace with Start After `NGFX SDK Start`. Post-change capture
+`ProjectV_2026_07_16_22_27_23.ngfx-gputrace`: RT Core 39.4%, SM 32.8%, L2 10.6%,
+VRAM write 1.2%, register-limited 47.0%, occupancy 53.9% — same per-dispatch
+limiter, lower aggregate traversal. Artifacts: `profiler-captures/opt-ceiling-rt-decomposition/`.
+
 **2026-07-15 Smooth specular tiers:** roughness budget in `voxel.frag` (no
 temporal — binary voxels). Full-look replay compare under
 `profiler-captures/full-look-baseline/replay-smooth-tiers/`. Prior profile:

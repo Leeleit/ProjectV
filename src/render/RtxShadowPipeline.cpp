@@ -96,7 +96,7 @@ bool RtxShadowPipeline::Initialize(
 		return false;
 	}
 
-	std::array<VkDescriptorSetLayoutBinding, 6> bindings{};
+	std::array<VkDescriptorSetLayoutBinding, 7> bindings{};
 	bindings[0].binding = 1;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	bindings[0].descriptorCount = 1;
@@ -126,6 +126,11 @@ bool RtxShadowPipeline::Initialize(
 	bindings[5].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	bindings[5].descriptorCount = 1;
 	bindings[5].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
+	bindings[6].binding = 20;
+	bindings[6].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[6].descriptorCount = 1;
+	bindings[6].stageFlags = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
 
 	const bool usePushDescriptors = context.features14.pushDescriptor == VK_TRUE;
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -172,17 +177,18 @@ bool RtxShadowPipeline::Initialize(
 		pipelineLibraryEnv != nullptr ? pipelineLibraryEnv : "<unset>",
 		deviceSupportsPipelineLibrary ? 1 : 0);
 
-	const uint32_t serSpecializationValue = config.shaderInvocationReorderEnabled ? 1u : 0u;
-	const VkSpecializationMapEntry serSpecializationEntry{
-		.constantID = 0u,
-		.offset = 0u,
-		.size = sizeof(serSpecializationValue),
-	};
-	const VkSpecializationInfo serSpecialization{
-		.mapEntryCount = 1u,
-		.pMapEntries = &serSpecializationEntry,
-		.dataSize = sizeof(serSpecializationValue),
-		.pData = &serSpecializationValue,
+	const std::array<uint32_t, 2> specializationValues{
+		config.shaderInvocationReorderEnabled ? 1u : 0u,
+		config.traversalMetricsEnabled ? 1u : 0u};
+	const std::array<VkSpecializationMapEntry, 2> specializationEntries{{
+		{.constantID = 0u, .offset = 0u, .size = sizeof(uint32_t)},
+		{.constantID = 1u, .offset = sizeof(uint32_t), .size = sizeof(uint32_t)},
+	}};
+	const VkSpecializationInfo rtxSpecialization{
+		.mapEntryCount = static_cast<uint32_t>(specializationEntries.size()),
+		.pMapEntries = specializationEntries.data(),
+		.dataSize = sizeof(specializationValues),
+		.pData = specializationValues.data(),
 	};
 
 	{
@@ -211,7 +217,7 @@ bool RtxShadowPipeline::Initialize(
 			};
 
 			const std::array<VkPipelineShaderStageCreateInfo, 1> rayGenStages{{
-				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pSpecializationInfo = &serSpecialization, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pSpecializationInfo = &rtxSpecialization, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
 			}};
 			std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> rayGenGroups{};
 			rayGenGroups[0].sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
@@ -233,7 +239,7 @@ bool RtxShadowPipeline::Initialize(
 			missGroups[0].intersectionShader = VK_SHADER_UNUSED_KHR;
 
 			const std::array<VkPipelineShaderStageCreateInfo, 2> hitGroupStages{{
-				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pSpecializationInfo = &rtxSpecialization, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
 				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, .module = m_closestHitModule, .pName = "main"},
 			}};
 			std::array<VkRayTracingShaderGroupCreateInfoKHR, 1> hitGroups{};
@@ -347,8 +353,8 @@ bool RtxShadowPipeline::Initialize(
 			}
 		} else {
 			const std::array<VkPipelineShaderStageCreateInfo, 4> stages{{
-				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pSpecializationInfo = &serSpecialization, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
-				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pSpecializationInfo = &rtxSpecialization, .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR, .module = m_rayGenModule, .pName = "main"},
+				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .pSpecializationInfo = &rtxSpecialization, .stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR, .module = m_intersectionModule, .pName = "main"},
 				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, .module = m_closestHitModule, .pName = "main"},
 				{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_MISS_BIT_KHR, .module = m_missModule, .pName = "main"},
 			}};
@@ -393,11 +399,12 @@ bool RtxShadowPipeline::Initialize(
 	}
 
 	SDL_Log(
-		"Render: RtxShadowPipeline: ready (sbtHandleSize=%u sbtBaseAlign=%u sbtHandleAlign=%u serGate=%d)",
+		"Render: RtxShadowPipeline: ready (sbtHandleSize=%u sbtBaseAlign=%u sbtHandleAlign=%u serGate=%d traversalMetrics=%d)",
 		config.shaderGroupHandleSize,
 		config.shaderGroupBaseAlignment,
 		config.shaderGroupHandleAlignment,
-		config.shaderInvocationReorderEnabled ? 1 : 0);
+		config.shaderInvocationReorderEnabled ? 1 : 0,
+		config.traversalMetricsEnabled ? 1 : 0);
 	return true;
 }
 

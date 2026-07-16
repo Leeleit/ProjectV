@@ -641,7 +641,7 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	// Host-unified visibility: after fence on slot i, pull that slot's completed cull into
 	// hzbUnifiedVisibilityWords; before Pass A, seed the current slot from unified so even/odd
 	// FIF slots don't disagree (whole-chunk flicker).
-	std::vector<uint32_t> hzbUnifiedVisibilityWords{};
+	std::vector<uint32_t> hzbUnifiedVisibilityWords;
 	uint64_t hzbCullSerialCounter = 0;
 	uint64_t hzbUnifiedCullSerial = 0;
 	std::array<uint64_t, MAX_FRAMES_IN_FLIGHT> hzbSlotCullSerial{};
@@ -804,6 +804,13 @@ struct LookDevCaptureAutomationState {
 	uint32_t nextViewIndex = 0;
 };
 
+struct NsightGpuTraceAutomationState {
+	uint32_t targetReplayTick = 0u;
+	bool active = false;
+	bool activityInitialized = false;
+	bool traceStartAttempted = false;
+};
+
 struct BenchmarkAutomationState {
 	bool active = false;
 	bool quitWhenDone = false;
@@ -930,6 +937,7 @@ struct AppStateImpl {
 	InputState input{};
 	InteractionState interaction{};
 	LookDevCaptureAutomationState lookDevCapture{};
+	NsightGpuTraceAutomationState nsightGpuTrace{};
 
 	BenchmarkAutomationState benchmark{};
 	EcsStatePtr ecs{nullptr, DestroyEcsState};
@@ -962,6 +970,8 @@ struct AppState {
 	[[nodiscard]] const InteractionState &interaction() const noexcept { return impl->interaction; }
 	LookDevCaptureAutomationState &lookDevCapture() noexcept { return impl->lookDevCapture; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
 	[[nodiscard]] const LookDevCaptureAutomationState &lookDevCapture() const noexcept { return impl->lookDevCapture; }
+	NsightGpuTraceAutomationState &nsightGpuTrace() noexcept { return impl->nsightGpuTrace; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
+	[[nodiscard]] const NsightGpuTraceAutomationState &nsightGpuTrace() const noexcept { return impl->nsightGpuTrace; }
 	BenchmarkAutomationState &benchmark() noexcept { return impl->benchmark; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor
 	[[nodiscard]] const BenchmarkAutomationState &benchmark() const noexcept { return impl->benchmark; }
 	EcsStatePtr &ecs() noexcept { return impl->ecs; } // NOLINT(readability-make-member-function-const): deliberate mutable accessor

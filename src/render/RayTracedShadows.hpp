@@ -2,7 +2,10 @@
 
 #include <array> // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
 #include <atomic>
+#include <cstdint>
 #include <mutex>
+#include <optional>
+#include <type_traits>
 #include <vector>
 
 #include "core/Types.hpp"
@@ -54,6 +57,19 @@ struct DirtyChunkRebuild {
 	uint32_t chunkIndex = 0;
 	VkAabbPositionsKHR aabb{};
 };
+
+struct alignas(16) RtxTraversalCounters {
+	uint32_t primaryAabbCandidates = 0u;
+	uint32_t primaryDdaSteps = 0u;
+	uint32_t sunAabbCandidates = 0u;
+	uint32_t sunDdaSteps = 0u;
+};
+
+static_assert(std::is_standard_layout_v<RtxTraversalCounters>);
+static_assert(sizeof(RtxTraversalCounters) == 16u);
+
+[[nodiscard]] std::optional<VkAabbPositionsKHR> TryBuildTightChunkAabb(
+	const PackedSceneChunkAabb &packedAabb) noexcept;
 
 class RayTracedShadows {
   public:
@@ -122,6 +138,7 @@ class RayTracedShadows {
 
 	bool RecordVoxelAwareRtxShadowPass(
 		VkCommandBuffer commandBuffer,
+		void *tracyGraphicsContext,
 		const VulkanContextState &context,
 		uint32_t frameIndex,
 		VkBuffer chunkDescriptorBuffer,
@@ -133,11 +150,17 @@ class RayTracedShadows {
 		uint32_t screenWidth,
 		uint32_t screenHeight);
 
+	void SyncTraversalCountersAfterFence(
+		const VulkanContextState &context,
+		uint32_t frameIndex);
+
 	void RecordDebugReport() const noexcept;
 
 	[[nodiscard]] VkImageView GetShadowMaskImageView() const noexcept { return m_shadowMaskImageView; }
 	[[nodiscard]] bool IsVoxelAwareRtxActive() const noexcept { return m_voxelAwareRtxActive; }
 	[[nodiscard]] bool IsVoxelAwareRtxPending() const noexcept { return m_voxelAwareRtxPending; }
+	[[nodiscard]] bool IsTraversalMetricsEnabled() const noexcept { return m_traversalMetricsEnabled; }
+	[[nodiscard]] RtxTraversalCounters GetLastTraversalCounters() const noexcept { return m_lastTraversalCounters; }
 	[[nodiscard]] VkAccelerationStructureKHR GetTlas() const noexcept { return m_config.tlas; }
 
 	// Poll once per frame until SBT/mask ready. Do not run deferred-ops on a worker while submitting (knowledge §37).
@@ -245,6 +268,9 @@ class RayTracedShadows {
 		VkBuffer cameraUboBuffer = VK_NULL_HANDLE;
 		VmaAllocation cameraUboAllocation = nullptr;
 		void *cameraUboMappedData = nullptr;
+		VkBuffer traversalCounterBuffer = VK_NULL_HANDLE;
+		VmaAllocation traversalCounterAllocation = nullptr;
+		void *traversalCounterMappedData = nullptr;
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 	};
 
@@ -268,6 +294,9 @@ class RayTracedShadows {
 	uint32_t m_shadowMaskHeight = 0u;
 	VkFormat m_shadowMaskFormat = VK_FORMAT_R8_UNORM;
 	std::array<RtxFrameResources, MAX_FRAMES_IN_FLIGHT> m_rtxFrames{};
+	std::array<bool, MAX_FRAMES_IN_FLIGHT> m_traversalCountersWritten{};
+	RtxTraversalCounters m_lastTraversalCounters{};
+	bool m_traversalMetricsEnabled = false;
 	bool m_voxelAwareRtxActive = false;
 	bool m_voxelAwareRtxPending = false; // true after Initialize until Finish succeeds or permanently fails
 	bool m_voxelAwareRtxFailed = false;

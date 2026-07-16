@@ -1,5 +1,6 @@
 #version 460
 #extension GL_EXT_ray_tracing : require // pre-reset rationale: legacy/docs/archive/2026-06-24-pre-reset-snapshot/COMMENTS.md
+layout(constant_id = 1) const uint projectvRtxTraversalMetricsEnabled = 0u;
 
 // Stage 5.2.E voxel-aware procedural intersection shader.
 // Called by RT cores when a shadow ray candidate intersects the AABB of a chunk
@@ -26,7 +27,22 @@ layout(set = 0, binding = 4, std430) readonly buffer PackedChunkVoxelPayload {
     uint chunkVoxelWords[];
 };
 
+layout(set = 0, binding = 20, std430) buffer RtxTraversalCounterBuffer {
+    uint primaryAabbCandidates;
+    uint primaryDdaSteps;
+    uint sunAabbCandidates;
+    uint sunDdaSteps;
+} rtxTraversalCounters;
+
 void main() {
+    const bool isSunRay = (gl_IncomingRayFlagsEXT & gl_RayFlagsTerminateOnFirstHitEXT) != 0u;
+    if (projectvRtxTraversalMetricsEnabled != 0u) {
+        if (isSunRay) {
+            atomicAdd(rtxTraversalCounters.sunAabbCandidates, 1u);
+        } else {
+            atomicAdd(rtxTraversalCounters.primaryAabbCandidates, 1u);
+        }
+    }
     const uint chunkIndex = gl_InstanceCustomIndexEXT;
     const uint chunkExtentX = chunkDescriptors[chunkIndex].chunkExtentAndNonAir.x;
     const uint chunkExtentY = chunkDescriptors[chunkIndex].chunkExtentAndNonAir.y;
@@ -101,6 +117,13 @@ void main() {
     for (uint stepIdx = 0u; stepIdx < maxSteps; ++stepIdx) {
         if (tCurrent > tEnd) {
             return;
+        }
+        if (projectvRtxTraversalMetricsEnabled != 0u) {
+            if (isSunRay) {
+                atomicAdd(rtxTraversalCounters.sunDdaSteps, 1u);
+            } else {
+                atomicAdd(rtxTraversalCounters.primaryDdaSteps, 1u);
+            }
         }
         const uint localIndex = uint(cell.x)
             + uint(chunkExtentX) * (uint(cell.y) + uint(chunkExtentY) * uint(cell.z));

@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <string>
 
 #include "core/RuntimeDiagnostics.hpp"
@@ -29,6 +30,17 @@ int gFailureCount = 0;
 			++gFailureCount;                                                              \
 		}                                                                                 \
 	} while (false)
+
+std::string ReadProjectSource(const char *relativePath)
+{
+	std::ifstream source{
+		std::string{PROJECTV_TESTS_SOURCE_DIR} + "/../src/" + relativePath,
+		std::ios::binary};
+	if (!source.good()) {
+		return {};
+	}
+	return {std::istreambuf_iterator(source), std::istreambuf_iterator<char>()};
+}
 
 void TestEnvGateDefaultsOff()
 {
@@ -568,6 +580,185 @@ void TestRtxGiProbeHostHeaderExistsAndLinks()
 	}
 }
 
+void TestGpuAttributionMarkersBracketTargetWork()
+{
+	const std::string drawFrameSource = ReadProjectSource("render/RendererDrawFrame.cpp");
+	const std::string shadowPassSource = ReadProjectSource("render/RayTracedShadowsPass.cpp");
+	PROJECTV_RTX_EXPECT(
+		!drawFrameSource.empty(),
+		"RendererDrawFrame.cpp must be readable for GPU attribution contracts");
+	PROJECTV_RTX_EXPECT(
+		!shadowPassSource.empty(),
+		"RayTracedShadowsPass.cpp must be readable for GPU attribution contracts");
+	if (drawFrameSource.empty() || shadowPassSource.empty()) {
+		return;
+	}
+
+	const size_t blasBuild = drawFrameSource.find("RecordDirtyBlasBuilds(");
+	const size_t blasMarker = drawFrameSource.rfind("RTX BLAS Build", blasBuild);
+	PROJECTV_RTX_EXPECT(
+		blasBuild != std::string::npos && blasMarker != std::string::npos,
+		"RTX BLAS marker must bracket RecordDirtyBlasBuilds");
+
+	const size_t traceDispatch = shadowPassSource.find("vkCmdTraceRaysKHR(");
+	const size_t traceMarker = shadowPassSource.rfind("RTX Shadow Trace", traceDispatch);
+	PROJECTV_RTX_EXPECT(
+		traceDispatch != std::string::npos && traceMarker != std::string::npos,
+		"RTX trace marker must bracket vkCmdTraceRaysKHR");
+}
+
+void TestRtxTraversalMetricsContract()
+{
+	const std::string headerSource = ReadProjectSource("render/RayTracedShadows.hpp");
+	const std::string pipelineSource = ReadProjectSource("render/RtxShadowPipeline.cpp");
+	const std::string passSource = ReadProjectSource("render/RayTracedShadowsPass.cpp");
+	const std::string intersectionSource = ReadProjectSource("shaders/voxel_rtx_shadow.rint");
+	const std::string appUpdateSource = ReadProjectSource("app/AppUpdate.cpp");
+	PROJECTV_RTX_EXPECT(
+		headerSource.find("RtxTraversalCounters") != std::string::npos,
+		"RT traversal counters must have a host-side contract");
+	PROJECTV_RTX_EXPECT(
+		pipelineSource.find("binding = 20") != std::string::npos,
+		"RT traversal metrics must reserve descriptor binding 20");
+	PROJECTV_RTX_EXPECT(
+		passSource.find("traversalCounterBuffer") != std::string::npos,
+		"RT pass must bind a traversal counter buffer");
+	PROJECTV_RTX_EXPECT(
+		intersectionSource.find("gl_IncomingRayFlagsEXT") != std::string::npos,
+		"rint must classify primary and sun rays by incoming flags");
+	PROJECTV_RTX_EXPECT(
+		intersectionSource.find("atomicAdd") != std::string::npos,
+		"rint must collect candidate and DDA counters with atomics");
+	PROJECTV_RTX_EXPECT(
+		appUpdateSource.find("rtx_primary_aabb=%u") != std::string::npos,
+		"InputReplay metrics must emit primary traversal candidates");
+	PROJECTV_RTX_EXPECT(
+		appUpdateSource.find("rtx_sun_steps=%u") != std::string::npos,
+		"InputReplay metrics must emit sun DDA steps");
+}
+
+void TestTightChunkAabbRoutingContract()
+{
+	const std::string headerSource = ReadProjectSource("render/RayTracedShadows.hpp");
+	const std::string drawFrameSource = ReadProjectSource("render/RendererDrawFrame.cpp");
+	PROJECTV_RTX_EXPECT(
+		headerSource.find("TryBuildTightChunkAabb") != std::string::npos,
+		"RTX must expose a pure tight chunk-AABB reconstruction helper");
+	PROJECTV_RTX_EXPECT(
+		drawFrameSource.find("chunkAabbMappedData") != std::string::npos,
+		"RTX BLAS rebuilds must consume the current frame packed AABB data");
+	PROJECTV_RTX_EXPECT(
+		drawFrameSource.find("TryBuildTightChunkAabb") != std::string::npos,
+		"RTX BLAS rebuilds must prefer validated tight chunk AABBs");
+}
+
+void TestTightChunkAabbReconstruction()
+{
+	PackedSceneChunkAabb singleVoxel{};
+	singleVoxel.centerAndHalfExtent = {3.5f, -2.5f, 8.5f, 0.5f};
+	singleVoxel.originAndPadding = {0.5f, 0.5f, 0.5f, 1.0f};
+	const auto singleVoxelAabb = projectv::render::TryBuildTightChunkAabb(singleVoxel);
+	PROJECTV_RTX_EXPECT(singleVoxelAabb.has_value(), "one occupied voxel must produce a tight AABB");
+	if (singleVoxelAabb.has_value()) {
+		PROJECTV_RTX_EXPECT(
+			singleVoxelAabb->minX == 3.0f && singleVoxelAabb->minY == -3.0f &&
+				singleVoxelAabb->minZ == 8.0f && singleVoxelAabb->maxX == 4.0f &&
+				singleVoxelAabb->maxY == -2.0f && singleVoxelAabb->maxZ == 9.0f,
+			"one occupied voxel must reconstruct its exact world bounds");
+	}
+
+	PackedSceneChunkAabb thinAxis{};
+	thinAxis.centerAndHalfExtent = {-7.5f, 4.0f, -11.5f, 4.0f};
+	thinAxis.originAndPadding = {0.5f, 3.0f, 0.5f, 1.0f};
+	const auto thinAxisAabb = projectv::render::TryBuildTightChunkAabb(thinAxis);
+	PROJECTV_RTX_EXPECT(thinAxisAabb.has_value(), "thin-axis content must keep its exact non-zero extents");
+	if (thinAxisAabb.has_value()) {
+		PROJECTV_RTX_EXPECT(
+			thinAxisAabb->minX == -8.0f && thinAxisAabb->maxX == -7.0f &&
+				thinAxisAabb->minY == 1.0f && thinAxisAabb->maxY == 7.0f &&
+				thinAxisAabb->minZ == -12.0f && thinAxisAabb->maxZ == -11.0f,
+			"tight reconstruction must use per-axis extents rather than HZB's scalar extent");
+	}
+}
+
+void TestTightChunkAabbRejectsInvalidBounds()
+{
+	PackedSceneChunkAabb empty{};
+	empty.centerAndHalfExtent = {1.0f, 1.0f, 1.0f, 1.0f};
+	empty.originAndPadding = {1.0f, 1.0f, 1.0f, 0.0f};
+	PROJECTV_RTX_EXPECT(
+		!projectv::render::TryBuildTightChunkAabb(empty).has_value(),
+		"empty packed bounds must select the conservative full-chunk fallback");
+
+	PackedSceneChunkAabb degenerate{};
+	degenerate.centerAndHalfExtent = {-4.0f, 0.0f, 2.0f, 1.0f};
+	degenerate.originAndPadding = {1.0f, 0.0f, 1.0f, 1.0f};
+	PROJECTV_RTX_EXPECT(
+		!projectv::render::TryBuildTightChunkAabb(degenerate).has_value(),
+		"degenerate packed bounds must select the conservative full-chunk fallback");
+
+	PackedSceneChunkAabb nonFinite{};
+	nonFinite.centerAndHalfExtent = {std::numeric_limits<float>::infinity(), 0.0f, 0.0f, 1.0f};
+	nonFinite.originAndPadding = {1.0f, 1.0f, 1.0f, 1.0f};
+	PROJECTV_RTX_EXPECT(
+		!projectv::render::TryBuildTightChunkAabb(nonFinite).has_value(),
+		"non-finite packed bounds must select the conservative full-chunk fallback");
+}
+
+void TestTightAabbAndTraversalSourceContracts()
+{
+	const std::string pipelineSource = ReadProjectSource("render/RtxShadowPipeline.cpp");
+	const std::string maskSource = ReadProjectSource("render/RayTracedShadowsMask.cpp");
+	const std::string intersectionSource = ReadProjectSource("shaders/voxel_rtx_shadow.rint");
+	const std::string drawFrameSource = ReadProjectSource("render/RendererDrawFrame.cpp");
+	PROJECTV_RTX_EXPECT(
+		pipelineSource.find("bindings[6].stageFlags = VK_SHADER_STAGE_INTERSECTION_BIT_KHR") != std::string::npos,
+		"traversal counter binding must be visible only to the intersection shader");
+	PROJECTV_RTX_EXPECT(
+		maskSource.find("PROJECTV_RTX_TRAVERSAL_METRICS") != std::string::npos &&
+			intersectionSource.find("projectvRtxTraversalMetricsEnabled") != std::string::npos,
+		"traversal counter collection must remain runtime-gated");
+	const size_t tightAabbRead = drawFrameSource.find("aabbFrameResources.chunkAabbMappedData");
+	const size_t queueWrite = drawFrameSource.find("SetBlasDirtyQueue", tightAabbRead);
+	PROJECTV_RTX_EXPECT(
+		tightAabbRead != std::string::npos && queueWrite != std::string::npos &&
+			drawFrameSource.substr(tightAabbRead, queueWrite - tightAabbRead).find("visibilityMask") == std::string::npos,
+		"BLAS routing must consume current packed AABBs without HZB visibility masks");
+	PROJECTV_RTX_EXPECT(
+		drawFrameSource.find("PROJECTV_RTX_TIGHT_AABB") != std::string::npos,
+		"replays must be able to select the full-AABB baseline without source edits");
+}
+
+void TestNsightGpuTraceReplayTickContract()
+{
+	const std::string automationSource = ReadProjectSource("app/NsightGpuTraceAutomation.cpp");
+	const std::string mainSource = ReadProjectSource("app/main.cpp");
+	PROJECTV_RTX_EXPECT(
+		automationSource.find("PROJECTV_NGFX_GPU_TRACE_REPLAY_TICK") != std::string::npos,
+		"Nsight GPU Trace must expose a replay-tick environment gate");
+	PROJECTV_RTX_EXPECT(
+		automationSource.find("NGFX_GPUTrace_InitializeActivity_Vulkan") != std::string::npos,
+		"Nsight GPU Trace activity must initialize before Vulkan work");
+	PROJECTV_RTX_EXPECT(
+		automationSource.find("NGFX_GPUTrace_StartTrace_Vulkan") != std::string::npos,
+		"Nsight GPU Trace must start procedurally at the requested replay tick");
+	PROJECTV_RTX_EXPECT(
+		automationSource.find("NGFX_GPUTrace_StopTrace_Vulkan") == std::string::npos,
+		"a frame-limited Nsight trace must not require a separate SDK stop trigger");
+	const size_t initVulkan = mainSource.find("InitVulkan(state.get())");
+	const size_t configureTrace = mainSource.find("ConfigureNsightGpuTraceAutomationFromEnvironment");
+	const size_t drawFrame = mainSource.find("DrawFrame(");
+	const size_t triggerTrace = mainSource.find("TryStartNsightGpuTraceAtReplayTick");
+	PROJECTV_RTX_EXPECT(
+		configureTrace != std::string::npos && initVulkan != std::string::npos &&
+			configureTrace < initVulkan,
+		"Nsight trace gate must configure before Vulkan initialization");
+	PROJECTV_RTX_EXPECT(
+		triggerTrace != std::string::npos && drawFrame != std::string::npos &&
+			triggerTrace < drawFrame,
+		"Nsight trace must start before the target frame is recorded");
+}
+
 } // namespace
 
 int main() // NOLINT(*-exception-escape)
@@ -602,6 +793,13 @@ int main() // NOLINT(*-exception-escape)
 	TestRtxShadowSbtClassHasGetters();
 	TestRtxShadowShaderFilesExistInBuildDirectory();
 	TestRtxShadowIntersectionShaderUsesVoxelDdaPattern();
+	TestGpuAttributionMarkersBracketTargetWork();
+	TestRtxTraversalMetricsContract();
+	TestTightChunkAabbRoutingContract();
+	TestTightChunkAabbReconstruction();
+	TestTightChunkAabbRejectsInvalidBounds();
+	TestTightAabbAndTraversalSourceContracts();
+	TestNsightGpuTraceReplayTickContract();
 
 	if (gFailureCount != 0) {
 		runtime::LogRuntimeFailure(

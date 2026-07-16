@@ -25,6 +25,18 @@ else ()
     message(FATAL_ERROR "ProjectV requires either glslc or glslangValidator from the Vulkan SDK in PATH")
 endif ()
 
+set(PROJECTV_HAS_NGFX_GPU_TRACE_SDK 0)
+if (WIN32)
+    file(GLOB PROJECTV_NGFX_SDK_INCLUDE_HINTS LIST_DIRECTORIES true
+            "$ENV{ProgramFiles}/NVIDIA Corporation/Nsight Graphics*/SDKs/NsightGraphicsSDK/*/include")
+    find_path(PROJECTV_NGFX_GPU_TRACE_SDK_INCLUDE_DIR
+            NAMES NGFX_GPUTrace_Vulkan.h
+            HINTS ${PROJECTV_NGFX_SDK_INCLUDE_HINTS})
+    if (PROJECTV_NGFX_GPU_TRACE_SDK_INCLUDE_DIR)
+        set(PROJECTV_HAS_NGFX_GPU_TRACE_SDK 1)
+    endif ()
+endif ()
+
 set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADERS
         ${SHADER_DIR}/voxel.vert
@@ -103,6 +115,7 @@ target_sources(ProjectV PRIVATE
         app/ModelGravigun.cpp
         app/InputReplay.cpp
         app/LookDevCaptureAutomation.cpp
+        app/NsightGpuTraceAutomation.cpp
         app/main.cpp
         asset/AssetStub.cpp
         asset/AssetLoader.cpp
@@ -211,6 +224,11 @@ target_sources(ProjectV PRIVATE
 target_include_directories(ProjectV PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
+if (PROJECTV_HAS_NGFX_GPU_TRACE_SDK)
+    target_include_directories(ProjectV PRIVATE
+            ${PROJECTV_NGFX_GPU_TRACE_SDK_INCLUDE_DIR}
+    )
+endif ()
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/external/miniaudio
         ${CMAKE_BINARY_DIR}/external/miniaudio EXCLUDE_FROM_ALL)
@@ -224,7 +242,8 @@ endif ()
 target_link_libraries(ProjectV PRIVATE projectv_build_options)
 
 target_compile_definitions(ProjectV PRIVATE
-        PROJECTV_CMAKE_BUILD_DIR="${CMAKE_BINARY_DIR}")
+        PROJECTV_CMAKE_BUILD_DIR="${CMAKE_BINARY_DIR}"
+        PROJECTV_HAS_NGFX_GPU_TRACE_SDK=${PROJECTV_HAS_NGFX_GPU_TRACE_SDK})
 
 target_link_libraries(ProjectV PRIVATE
         volk

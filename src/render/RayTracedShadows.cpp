@@ -2,6 +2,8 @@
 #include "render/RayTracedShadows.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 
 #include "SDL3/SDL_log.h"
 #include "core/RuntimeDiagnostics.hpp"
@@ -15,6 +17,38 @@ constexpr uint32_t kRtxMaxPrimitivesPerBlas = 8192u;
 constexpr VkDeviceSize kRtxScratchBufferBytes = 32ull * 1024ull * 1024ull;
 
 } // namespace
+
+std::optional<VkAabbPositionsKHR> TryBuildTightChunkAabb(
+	const PackedSceneChunkAabb &packedAabb) noexcept
+{
+	const float centerX = packedAabb.centerAndHalfExtent[0];
+	const float centerY = packedAabb.centerAndHalfExtent[1];
+	const float centerZ = packedAabb.centerAndHalfExtent[2];
+	const float halfX = packedAabb.originAndPadding[0];
+	const float halfY = packedAabb.originAndPadding[1];
+	const float halfZ = packedAabb.originAndPadding[2];
+	if (packedAabb.originAndPadding[3] != 1.0f || !std::isfinite(centerX) ||
+		!std::isfinite(centerY) || !std::isfinite(centerZ) || !std::isfinite(halfX) ||
+		!std::isfinite(halfY) || !std::isfinite(halfZ) || halfX <= 0.0f ||
+		halfY <= 0.0f || halfZ <= 0.0f) {
+		return std::nullopt;
+	}
+	VkAabbPositionsKHR result{};
+	result.minX = centerX - halfX;
+	result.minY = centerY - halfY;
+	result.minZ = centerZ - halfZ;
+	result.maxX = centerX + halfX;
+	result.maxY = centerY + halfY;
+	result.maxZ = centerZ + halfZ;
+	if (!std::isfinite(result.minX) || !std::isfinite(result.minY) ||
+		!std::isfinite(result.minZ) || !std::isfinite(result.maxX) ||
+		!std::isfinite(result.maxY) || !std::isfinite(result.maxZ) ||
+		result.minX >= result.maxX || result.minY >= result.maxY ||
+		result.minZ >= result.maxZ) {
+		return std::nullopt;
+	}
+	return result;
+}
 
 bool IsRayTracedShadowEnabled(const VulkanContextState &context) noexcept
 {
@@ -89,6 +123,49 @@ void RayTracedShadows::Shutdown(const VulkanContextState &context)
 	m_initialized.store(false, std::memory_order_release);
 	m_config.enabled = false;
 	m_previousTlasInstanceCount = 0u;
+}
+
+void RayTracedShadows::SyncTraversalCountersAfterFence(
+	const VulkanContextState &context,
+	const uint32_t frameIndex)
+{
+	if (!m_traversalMetricsEnabled || frameIndex >= MAX_FRAMES_IN_FLIGHT ||
+		!m_traversalCountersWritten[frameIndex]) {
+		return;
+	}
+	RtxFrameResources &frame = m_rtxFrames[frameIndex];
+	if (context.allocator == nullptr || frame.traversalCounterMappedData == nullptr ||
+		frame.traversalCounterAllocation == nullptr) {
+		return;
+	}
+	const VkResult invalidateResult = vmaInvalidateAllocation(
+		context.allocator,
+		frame.traversalCounterAllocation,
+		0u,
+		sizeof(RtxTraversalCounters));
+	if (invalidateResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"RayTracedShadows.SyncTraversalCountersAfterFence.vmaInvalidateAllocation",
+			invalidateResult);
+		return;
+	}
+	std::memcpy(
+		&m_lastTraversalCounters,
+		frame.traversalCounterMappedData,
+		sizeof(m_lastTraversalCounters));
+	std::memset(frame.traversalCounterMappedData, 0, sizeof(RtxTraversalCounters));
+	const VkResult flushResult = vmaFlushAllocation(
+		context.allocator,
+		frame.traversalCounterAllocation,
+		0u,
+		sizeof(RtxTraversalCounters));
+	if (flushResult != VK_SUCCESS) {
+		runtime::LogVkFailure(
+			"RayTracedShadows.SyncTraversalCountersAfterFence.vmaFlushAllocation",
+			flushResult);
+		return;
+	}
+	m_traversalCountersWritten[frameIndex] = false;
 }
 
 bool RayTracedShadows::AllocateBuffers(

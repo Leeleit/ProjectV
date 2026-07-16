@@ -7,9 +7,20 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <cstdlib>
 
 namespace projectv::render {
+
+namespace {
+
+bool IsTraversalMetricsEnvEnabled()
+{
+	const char *const value = projectv::core::GetEnvVar("PROJECTV_RTX_TRAVERSAL_METRICS");
+	return value != nullptr && (std::strcmp(value, "ON") == 0 || std::strcmp(value, "1") == 0);
+}
+
+} // namespace
 
 VkExtent2D RayTracedShadows::ResolveShadowMaskExtent(const VkExtent2D fullExtent)
 {
@@ -144,6 +155,8 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	pipelineConfig.shaderGroupBaseAlignment = context.rayTracing.shaderGroupBaseAlignment;
 	pipelineConfig.shaderGroupHandleAlignment = context.rayTracing.shaderGroupHandleAlignment;
 	pipelineConfig.shaderInvocationReorderEnabled = context.rayTracingInvocationReorderEnabled;
+	m_traversalMetricsEnabled = IsTraversalMetricsEnvEnabled();
+	pipelineConfig.traversalMetricsEnabled = m_traversalMetricsEnabled;
 	if (!m_rtxPipeline.Initialize(context, pipelineConfig)) {
 		SDL_Log("Render: RtxShadowPipeline.Initialize failed; voxel-aware RT shadows disabled");
 		return false;
@@ -166,7 +179,7 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	if (!usePushDescriptors) {
 		std::array<VkDescriptorPoolSize, 4> poolSizes{};
 		poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		poolSizes[0].descriptorCount = 2u * MAX_FRAMES_IN_FLIGHT;
+		poolSizes[0].descriptorCount = 3u * MAX_FRAMES_IN_FLIGHT;
 		poolSizes[1].type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 		poolSizes[1].descriptorCount = MAX_FRAMES_IN_FLIGHT;
 		poolSizes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -186,7 +199,8 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	}
 
 	for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-		auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, descriptorSet] = m_rtxFrames[i];
+		auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, traversalCounterBuffer, traversalCounterAllocation,
+			   traversalCounterMappedData, descriptorSet] = m_rtxFrames[i];
 
 		VkBufferCreateInfo uboInfo{};
 		uboInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -207,6 +221,33 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 		cameraUboMappedData = mappedInfo.pMappedData;
 		std::memset(cameraUboMappedData, 0, 96u);
 
+		VkBufferCreateInfo traversalCounterInfo{};
+		traversalCounterInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		traversalCounterInfo.size = sizeof(RtxTraversalCounters);
+		traversalCounterInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		traversalCounterInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		VmaAllocationCreateInfo traversalCounterAllocInfo{};
+		traversalCounterAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		traversalCounterAllocInfo.flags =
+			VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+		if (vmaCreateBuffer(
+				context.allocator,
+				&traversalCounterInfo,
+				&traversalCounterAllocInfo,
+				&traversalCounterBuffer,
+				&traversalCounterAllocation,
+				nullptr) != VK_SUCCESS) {
+			runtime::LogVkFailure(
+				"RayTracedShadows.CreateVoxelAwareRtxResources.vmaCreateBuffer.TraversalCounters",
+				VK_ERROR_INITIALIZATION_FAILED);
+			ReleaseVoxelAwareRtxResources(context);
+			return false;
+		}
+		vmaGetAllocationInfo(context.allocator, traversalCounterAllocation, &mappedInfo);
+		traversalCounterMappedData = mappedInfo.pMappedData;
+		std::memset(traversalCounterMappedData, 0, sizeof(RtxTraversalCounters));
+		vmaFlushAllocation(context.allocator, traversalCounterAllocation, 0u, sizeof(RtxTraversalCounters));
+
 		if (!usePushDescriptors) {
 			VkDescriptorSetAllocateInfo allocInfo{};
 			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -222,20 +263,30 @@ bool RayTracedShadows::CreateVoxelAwareRtxResources(const VulkanContextState &co
 	}
 
 	m_voxelAwareRtxActive = true;
-	SDL_Log("Render: VoxelAwareRtxShadows: ready (shadow mask pending resize, frames=%u)", MAX_FRAMES_IN_FLIGHT);
+	SDL_Log(
+		"Render: VoxelAwareRtxShadows: ready (shadow mask pending resize, frames=%u traversalMetrics=%d)",
+		MAX_FRAMES_IN_FLIGHT,
+		m_traversalMetricsEnabled ? 1 : 0);
 	return true;
 }
 
 void RayTracedShadows::ReleaseVoxelAwareRtxResources(const VulkanContextState &context) noexcept
 {
 	const VkDevice device = context.device;
-	for (auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, descriptorSet] : m_rtxFrames) {
+	for (auto &[cameraUboBuffer, cameraUboAllocation, cameraUboMappedData, traversalCounterBuffer,
+				traversalCounterAllocation, traversalCounterMappedData, descriptorSet] : m_rtxFrames) {
 		if (cameraUboBuffer != VK_NULL_HANDLE && context.allocator != nullptr) {
 			vmaDestroyBuffer(context.allocator, cameraUboBuffer, cameraUboAllocation);
 		}
 		cameraUboBuffer = VK_NULL_HANDLE;
 		cameraUboAllocation = nullptr;
 		cameraUboMappedData = nullptr;
+		if (traversalCounterBuffer != VK_NULL_HANDLE && context.allocator != nullptr) {
+			vmaDestroyBuffer(context.allocator, traversalCounterBuffer, traversalCounterAllocation);
+		}
+		traversalCounterBuffer = VK_NULL_HANDLE;
+		traversalCounterAllocation = nullptr;
+		traversalCounterMappedData = nullptr;
 		descriptorSet = VK_NULL_HANDLE;
 	}
 	if (m_rtxDescriptorPool != VK_NULL_HANDLE && device != VK_NULL_HANDLE) {
@@ -257,6 +308,9 @@ void RayTracedShadows::ReleaseVoxelAwareRtxResources(const VulkanContextState &c
 	m_shadowMaskHeight = 0u;
 	m_voxelAwareRtxActive = false;
 	m_voxelAwareRtxPending = false;
+	m_traversalCountersWritten.fill(false);
+	m_lastTraversalCounters = {};
+	m_traversalMetricsEnabled = false;
 }
 
 bool RayTracedShadows::InitializeShadowMaskClear(const VulkanContextState &context) const

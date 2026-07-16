@@ -12,6 +12,7 @@
 #include "physics/PhysicsWorld.hpp"
 #include "render/AaPass.hpp"
 #include "render/AntialiasingSettings.hpp"
+#include "render/RayTracedShadows.hpp"
 #include "voxel/SceneConfig.hpp"
 #include "voxel/VoxelInteraction.hpp"
 #include "voxel/VoxelWorld.hpp"
@@ -718,8 +719,17 @@ void MirrorAllFrameStats(
 		const bool boundary = idx == 1u || idx == total || (idx % 120u) == 0u;
 		if (boundary && idx != lastLoggedReplayIndex) {
 			lastLoggedReplayIndex = idx;
+			const projectv::render::RtxTraversalCounters traversalCounters =
+				render->rayTracedShadows != nullptr
+					? render->rayTracedShadows->GetLastTraversalCounters()
+					: projectv::render::RtxTraversalCounters{};
+			const uint32_t traversalMetricsEnabled =
+				render->rayTracedShadows != nullptr &&
+						render->rayTracedShadows->IsTraversalMetricsEnabled()
+					? 1u
+					: 0u;
 			SDL_Log(
-				"[ProjectV][InputReplay][metrics] frame=%zu/%zu dt_ms=%.3f fps=%.1f shadow_ms=%.3f mesh_ms=%.3f gfx_ms=%.3f aa_ms=%.3f post_ms=%.3f present_ms=%.3f other_ms=%.3f gpu_tlas=%.3f gpu_rtx=%.3f gpu_ddgi=%.3f gpu_opaque=%.3f gpu_aa=%.3f gpu_gfx=%.3f hzb_vis=%u hzb_cull=%u hzb_cut=%u dirtyRebuild=%u dirtyChunks=%u tris=%u nonair=%u",
+				"[ProjectV][InputReplay][metrics] frame=%zu/%zu dt_ms=%.3f fps=%.1f shadow_ms=%.3f mesh_ms=%.3f gfx_ms=%.3f aa_ms=%.3f post_ms=%.3f present_ms=%.3f other_ms=%.3f gpu_tlas=%.3f gpu_rtx=%.3f gpu_ddgi=%.3f gpu_opaque=%.3f gpu_aa=%.3f gpu_gfx=%.3f rtx_metrics=%u rtx_primary_aabb=%u rtx_primary_steps=%u rtx_sun_aabb=%u rtx_sun_steps=%u hzb_vis=%u hzb_cull=%u hzb_cut=%u dirtyRebuild=%u dirtyChunks=%u tris=%u nonair=%u",
 				idx,
 				total,
 				debug->stats.frameTimeMilliseconds,
@@ -737,6 +747,11 @@ void MirrorAllFrameStats(
 				render->renderPassTimings.gpuOpaqueMs,
 				render->renderPassTimings.gpuAaPostMs,
 				render->renderPassTimings.gpuGraphicsMs,
+				traversalMetricsEnabled,
+				traversalCounters.primaryAabbCandidates,
+				traversalCounters.primaryDdaSteps,
+				traversalCounters.sunAabbCandidates,
+				traversalCounters.sunDdaSteps,
 				debug->stats.hzbVisibleChunkCount,
 				debug->stats.hzbCulledChunkCount,
 				debug->stats.hzbCameraCut ? 1u : 0u,

@@ -11,6 +11,7 @@
 #include "app/InputActions.hpp"
 #include "app/InputReplay.hpp"
 #include "app/LookDevCaptureAutomation.hpp"
+#include "app/NsightGpuTraceAutomation.hpp"
 #include "asset/ModelManifestLoader.hpp"
 #include "audio/AudioEngine.hpp"
 #include "audio/MusicDirectoryPath.hpp"
@@ -355,6 +356,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int, char **)
 	profiling::ConfigureDefaultPlots();
 
 	auto state = std::make_unique<AppState>();
+	ConfigureNsightGpuTraceAutomationFromEnvironment(&state->nsightGpuTrace());
+	InitializeNsightGpuTraceAutomationBeforeVulkan(&state->nsightGpuTrace());
 	if (!InitializeAppEcs(state.get())) {
 		runtime::LogRuntimeFailure("App", "SDL_AppInit.InitializeAppEcs", "InitializeAppEcs returned false");
 		ShutdownVulkan(state.get());
@@ -663,6 +666,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 			"SDL_AppIterate.PrepareFrameRenderData",
 			"PrepareFrameRenderData returned false");
 	} else {
+		TryStartNsightGpuTraceAtReplayTick(
+			&state->nsightGpuTrace(),
+			state->input().replay.playbackFrameIndex);
 		result = DrawFrame(
 			state,
 			&state->platform(),

@@ -13,6 +13,7 @@ struct RtxShadowPipelineConfig {
 	uint32_t shaderGroupBaseAlignment = 64u;
 	uint32_t shaderGroupHandleAlignment = 16u;
 	bool shaderInvocationReorderEnabled = false;
+	bool traversalMetricsEnabled = false;
 };
 
 class RtxShadowPipeline {
