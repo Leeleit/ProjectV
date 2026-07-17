@@ -522,6 +522,52 @@ set_tests_properties(ProjectVVulkanBootstrapTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVVulkanBootstrapTests)
 
+add_executable(ProjectVVoxelWorldAsciiTests
+        VoxelWorldAsciiTests.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldAscii.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelAsciiTickLogger.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld_Walk.cpp
+        ${CMAKE_SOURCE_DIR}/src/physics/walk/WalkInternals.cpp
+        ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
+        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
+        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
+)
+
+target_compile_definitions(ProjectVVoxelWorldAsciiTests PRIVATE
+        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
+)
+
+target_include_directories(ProjectVVoxelWorldAsciiTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/external/tracy/public
+        ${CMAKE_SOURCE_DIR}/external/volk
+        ${CMAKE_SOURCE_DIR}/external/JoltPhysics
+)
+
+target_link_libraries(ProjectVVoxelWorldAsciiTests PRIVATE
+        projectv_build_options
+        volk
+        glm
+        GPUOpen::VulkanMemoryAllocator
+        SDL3::SDL3
+        fmt::fmt
+        Jolt::Jolt
+)
+
+add_test(NAME ProjectVVoxelWorldAsciiTests COMMAND ProjectVVoxelWorldAsciiTests)
+set_tests_properties(ProjectVVoxelWorldAsciiTests PROPERTIES LABELS "unit")
+
+projectv_test_add_modules(ProjectVVoxelWorldAsciiTests)
+
 add_executable(ProjectVSparse64TreeTests
         Sparse64TreeTests.cpp
 )

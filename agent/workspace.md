@@ -18,6 +18,14 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-17 ASCII tick log:** `VoxelAsciiTickLogger` — 60 Hz sim-tick file dump
+(default ON next to exe as `voxel-ascii-tick.log`; `PROJECTV_ASCII_TICK_LOG=0` off),
+per-Y FNV dedup. Hook in `RunSimulationTickLoop`. Guide: `docs/VoxelAsciiGuide.md`.
+`ProjectVVoxelWorldAsciiTests` green.
+
+**2026-07-17 Voxel ASCII Y-layers:** `VoxelWorldAscii` — DF-style этажи по Y
+(карта XZ), auto tight non-Air AABB + padding/override.
+
 **2026-07-16 Engine GPU ceiling:** Phase 0–4 measured under MAILBOX + InputReplay;
 Phase 5 wait-polish parked. Code: per-slot voxel-payload dirty **union** (no
 silent full remesh on version lag≥2). Captures:

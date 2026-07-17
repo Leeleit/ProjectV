@@ -5,6 +5,7 @@
 #include "app/Camera.hpp"
 #include "app/InputReplay.hpp"
 #include "physics/PhysicsWorld.hpp"
+#include "voxel/VoxelAsciiTickLogger.hpp"
 #include "voxel/VoxelWorld.hpp"
 
 namespace projectv::app {
@@ -104,6 +105,9 @@ bool RunSimulationTickLoop(
 		simulation.simulationAccumulatorSeconds -= simulation.fixedSimulationDeltaSeconds;
 		++simulation.simulationStepsLastFrame;
 		++simulation.simulationTick;
+		if (world.voxelWorld) {
+			MaybeLogVoxelAsciiTick(*world.voxelWorld, simulation.simulationTick);
+		}
 	}
 
 	if (simulation.simulationAccumulatorSeconds >= simulation.fixedSimulationDeltaSeconds) {

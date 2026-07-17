@@ -276,6 +276,22 @@ ascending order) → commit. Determinism per `decisions §30`: никаких FP
 остаётся как authoritative reference + для tests где нужна детерминированная
 симуляция без GPU.
 
+## 8.1 Voxel ASCII Y-layers (agent orientation)
+
+**API:** `src/voxel/VoxelWorldAscii.hpp` — `FormatVoxelAsciiYLayer` /
+`FormatVoxelAsciiYLayers` / `ComputeVoxelAsciiBounds`. DF-style floors =
+ProjectV **Y** (map **XZ** top-down). Default window = tight non-Air AABB
+(+ optional `padding`); explicit `VoxelAsciiBounds` overrides. Legend:
+`.Air G Glass ~Fluid #FloorWhite %FloorGray`. Returns `std::string` (no I/O).
+Tests: `ProjectVVoxelWorldAsciiTests`.
+
+**Tick log (default ON):** `VoxelAsciiTickLogger` + `MaybeLogVoxelAsciiTick` in
+`RunSimulationTickLoop` @ 60 Hz. Default file: `SDL_GetBasePath()` +
+`voxel-ascii-tick.log` (обычно `build/.../bin/`). Env `PROJECTV_ASCII_TICK_LOG`:
+unset/`1`/`ON` = default path; custom path = that file (parents created);
+`0`/`OFF` = disabled. Per-Y FNV dedup; do not gate on `editVersion` (fluid
+Air↔Fluid suppresses bumps). Guide: `docs/VoxelAsciiGuide.md`.
+
 ## 9. Voxel world pipeline (full)
 
 **Решение:** `VoxelWorld` (`src/voxel/VoxelWorld.hpp`) — canonical state.

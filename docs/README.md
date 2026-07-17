@@ -26,6 +26,7 @@
 | Понять RTX-рендеринг, тени и DDGI              | [RTX Renderer Architecture](RTX_Renderer_Architecture.md) |
 | Понять физику, перемещение и greedy merging    | [Physics & Movement Guide](Physics_And_Movement_Guide.md) |
 | Найти горячие клавиши и отладочные инструменты | [Debugging Guide](Debugging.md)                           |
+| ASCII-слои мира и tick-лог для агентов         | [Voxel ASCII Guide](VoxelAsciiGuide.md)                   |
 | Провести perf-замеры и использовать Tracy      | [Profiling Guide](Profiling.md)                           |
 | Снять GPU/replay трассировку (Nsight, InputReplay) | [Tracing Guide](Tracing.md)                           |
 | Понять раскладку `src/` и include boundaries   | [Source Layout Guide](source_layout.md)                   |
@@ -46,6 +47,7 @@
 | [Physics_And_Movement_Guide.md](Physics_And_Movement_Guide.md) | `[Current][Physics]`      | Интеграция Jolt Physics, режимы Creative/Spectator/Walk, auto-jump, sneak, greedy physics merging.        |
 | [source_layout.md](source_layout.md)                           | `[Current][Architecture]` | Физическая раскладка `src/`, include boundaries и ключевые файлы по подсистемам.                          |
 | [voxel_mvp_smoke_checklist.md](voxel_mvp_smoke_checklist.md)   | `[Current][Debugging]`    | Ручной и автоматический smoke checklist для Windows runtime.                                              |
+| [VoxelAsciiGuide.md](VoxelAsciiGuide.md)                       | `[Current][Debugging]`    | ASCII этажи (Y/XZ) + opt-in tick-лог `PROJECTV_ASCII_TICK_LOG` с дедупом по слоям.                        |
 
 ### Исторические и устаревшие документы
 

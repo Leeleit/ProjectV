@@ -212,6 +212,8 @@ target_sources(ProjectV PRIVATE
         voxel/VoxelLodDownsample.cpp
         voxel/NanoVdb.cpp
         voxel/VoxelWorld.cpp
+        voxel/VoxelWorldAscii.cpp
+        voxel/VoxelAsciiTickLogger.cpp
         voxel/VoxelWorldPreset.cpp
         voxel/VoxelWorldSnapshot.cpp
         voxel/VoxelWorldFluid.cpp

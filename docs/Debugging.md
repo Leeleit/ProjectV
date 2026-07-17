@@ -213,6 +213,7 @@ metrics pack.
 
 ## Полезные файлы
 
+- [Voxel ASCII Guide](VoxelAsciiGuide.md) — этажи Y/XZ и tick-лог `PROJECTV_ASCII_TICK_LOG`
 - [voxel_mvp_smoke_checklist.md](voxel_mvp_smoke_checklist.md)
 - [Linux Build & Run Guide](Linux_Build_And_Run.md)
 - [RTX Renderer Architecture](RTX_Renderer_Architecture.md)
