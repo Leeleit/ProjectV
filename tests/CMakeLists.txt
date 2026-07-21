@@ -40,9 +40,10 @@ add_executable(ProjectVTests
         ../src/voxel/VoxelWorld.cpp
         ../src/voxel/VoxelWorldPreset.cpp
         ../src/voxel/VoxelWorldSnapshot.cpp
-        ../src/voxel/VoxelWorldFluid.cpp
         ../src/voxel/VoxelWorldLod.cpp
         ../src/voxel/VoxelWorldStatic.cpp
+        ../src/voxel/VoxelWorldAscii.cpp
+        ../src/voxel/VoxelAsciiTickLogger.cpp
         ../src/voxel/SceneConfig.cpp
 )
 
@@ -414,49 +415,6 @@ if (PROJECTV_ENABLE_BENCHMARKS)
 
 endif ()
 
-add_executable(ProjectVFluidCATests
-        FluidCATests.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
-        ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
-        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.cpp
-        ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld_Walk.cpp
-        ${CMAKE_SOURCE_DIR}/src/physics/walk/WalkInternals.cpp
-        ${CMAKE_SOURCE_DIR}/src/app/InputActions.cpp
-        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
-)
-
-target_compile_definitions(ProjectVFluidCATests PRIVATE
-        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
-)
-
-target_include_directories(ProjectVFluidCATests PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/external/tracy/public
-        ${CMAKE_SOURCE_DIR}/external/volk
-        ${CMAKE_SOURCE_DIR}/external/JoltPhysics
-)
-
-target_link_libraries(ProjectVFluidCATests PRIVATE
-        projectv_build_options
-        volk
-        glm
-        GPUOpen::VulkanMemoryAllocator
-        SDL3::SDL3
-        fmt::fmt
-        Jolt::Jolt
-)
-
-add_test(NAME ProjectVFluidCATests COMMAND ProjectVFluidCATests)
-set_tests_properties(ProjectVFluidCATests PROPERTIES LABELS "unit")
-
-projectv_test_add_modules(ProjectVFluidCATests)
 
 add_executable(ProjectVPresentModeTests
         PresentModeTests.cpp
@@ -530,7 +488,6 @@ add_executable(ProjectVVoxelWorldAsciiTests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
@@ -725,39 +682,6 @@ set_tests_properties(ProjectVMeshShaderTests PROPERTIES LABELS "unit")
 
 projectv_test_add_modules(ProjectVMeshShaderTests)
 
-add_executable(ProjectVFluidCAGpuTests
-        FluidCAGpuTests.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaSetup.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaDispatch.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanDebug.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanResult.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanSyncPrimitives.cpp
-        ${CMAKE_SOURCE_DIR}/src/core/ShaderIO.cpp
-        ${CMAKE_SOURCE_DIR}/src/core/RuntimeDiagnostics.cpp
-        vma_implementation.cpp
-)
-
-target_compile_definitions(ProjectVFluidCAGpuTests PRIVATE
-        PROJECTV_TESTS_SOURCE_DIR="${PROJECTV_TESTS_SOURCE_DIR_CMAKE}"
-)
-
-target_include_directories(ProjectVFluidCAGpuTests PRIVATE
-        ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/external/tracy/public
-        ${CMAKE_SOURCE_DIR}/external/volk
-)
-
-target_link_libraries(ProjectVFluidCAGpuTests PRIVATE projectv_build_options)
-target_link_libraries(ProjectVFluidCAGpuTests PRIVATE volk)
-target_link_libraries(ProjectVFluidCAGpuTests PRIVATE glm)
-target_link_libraries(ProjectVFluidCAGpuTests PRIVATE fmt::fmt)
-target_link_libraries(ProjectVFluidCAGpuTests PRIVATE GPUOpen::VulkanMemoryAllocator)
-target_link_libraries(ProjectVFluidCAGpuTests PRIVATE SDL3::SDL3)
-
-add_test(NAME ProjectVFluidCAGpuTests COMMAND ProjectVFluidCAGpuTests)
-set_tests_properties(ProjectVFluidCAGpuTests PROPERTIES LABELS "unit")
-
-projectv_test_add_modules(ProjectVFluidCAGpuTests)
 
 add_executable(ProjectVLodDownsampleTests
         LodDownsampleTests.cpp
@@ -827,8 +751,6 @@ projectv_test_add_modules(ProjectVLodDownsampleGpuConsumeTests)
 
 add_executable(ProjectVAsyncComputeTests
         AsyncComputeTests.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaSetup.cpp
-        ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanFluidCaDispatch.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanAsyncCompute.cpp
         ${CMAKE_SOURCE_DIR}/src/render/vulkan/VulkanWorldGenPipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/render/HizCullingSetup.cpp
@@ -837,7 +759,6 @@ add_executable(ProjectVAsyncComputeTests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
@@ -980,7 +901,6 @@ add_executable(ProjectVPhysicsGreedyMergerTests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
@@ -1067,7 +987,6 @@ add_executable(ProjectVPhysicsIncrementalJoltTests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
@@ -1110,7 +1029,6 @@ add_executable(ProjectVPhysicsSyncTests
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp

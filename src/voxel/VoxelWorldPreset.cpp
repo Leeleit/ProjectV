@@ -549,8 +549,6 @@ void RebuildVoxelWorldDerivedState(VoxelWorld &world)
 	const uint32_t dirtyChunkCount = static_cast<uint32_t>(world.pendingChunkRebuildIndices.size());
 	world.stats = {};
 	world.stats.dirtyChunkCount = dirtyChunkCount;
-	world.fluidCAAabbMin = {INT32_MAX, INT32_MAX, INT32_MAX};
-	world.fluidCAAabbMaxExclusive = {INT32_MIN, INT32_MIN, INT32_MIN};
 
 	for (VoxelChunk &chunk : world.chunks) {
 		chunk.nonAirVoxelCount = 0;
@@ -569,14 +567,6 @@ void RebuildVoxelWorldDerivedState(VoxelWorld &world)
 				AccumulateMaterialCount(world.stats, material, 1);
 				VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, GetVoxelChunkCoord(world, {x, y, z}))];
 				++chunk.nonAirVoxelCount;
-				if (material == VoxelMaterial::Fluid) {
-					world.fluidCAAabbMin.x = std::min(world.fluidCAAabbMin.x, x);
-					world.fluidCAAabbMin.y = std::min(world.fluidCAAabbMin.y, y);
-					world.fluidCAAabbMin.z = std::min(world.fluidCAAabbMin.z, z);
-					world.fluidCAAabbMaxExclusive.x = std::max(world.fluidCAAabbMaxExclusive.x, x + 1);
-					world.fluidCAAabbMaxExclusive.y = std::max(world.fluidCAAabbMaxExclusive.y, y + 1);
-					world.fluidCAAabbMaxExclusive.z = std::max(world.fluidCAAabbMaxExclusive.z, z + 1);
-				}
 				++voxelIndex;
 			}
 		}

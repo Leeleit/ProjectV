@@ -106,8 +106,6 @@ struct VoxelWorld {
 	std::vector<size_t> pendingChunkRebuildIndices;
 	std::vector<size_t> pendingBlasRebuildIndices;
 	VoxelWorldStats stats{};
-	Int3 fluidCAAabbMin{INT32_MAX, INT32_MAX, INT32_MAX};
-	Int3 fluidCAAabbMaxExclusive{INT32_MIN, INT32_MIN, INT32_MIN};
 };
 
 VoxelScenePreset GetNextVoxelScenePreset(VoxelScenePreset preset);
@@ -129,12 +127,6 @@ void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material, 
 uint32_t GetVoxelChunkStaticPromotionThreshold();
 void TickVoxelChunkStaticPromotion(VoxelWorld &world, uint32_t threshold);
 uint32_t CountStaticVoxelChunks(const VoxelWorld &world);
-
-bool IsFluidCaGpuEnabled();
-
-std::vector<uint32_t> BuildActiveChunkIdsForFluidCa(const VoxelWorld &world);
-
-void ToggleFluidCaGpuEnabledForTesting(bool enabled);
 
 uint8_t SelectLodLevelForDistance(float distanceMeters);
 void AssignLodLevels(VoxelWorld &world, float cameraX, float cameraY, float cameraZ);
@@ -160,5 +152,3 @@ uint32_t CountDirtyVoxelChunks(const VoxelWorld &world);
 uint32_t CountActiveVoxelChunks(const VoxelWorld &world);
 uint32_t CountVoxelsByMaterial(const VoxelWorld &world, VoxelMaterial material);
 std::vector<uint8_t> BuildFlatVoxelSnapshot(const VoxelWorld &world);
-uint32_t UpdateFluidCA(VoxelWorld &world);
-

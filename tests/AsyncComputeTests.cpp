@@ -1,6 +1,5 @@
 #include "render/vulkan/VulkanAsyncCompute.hpp"
 #include "core/EnvUtils.hpp"
-#include "render/vulkan/VulkanFluidCaPipeline.hpp"
 
 #include <array>
 #include <cstdio>

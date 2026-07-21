@@ -12,7 +12,6 @@
 #include "render/RtxGiProbes.hpp"
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanAsyncCompute.hpp"
-#include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanMeshShaderPipeline.hpp"
 #include "render/vulkan/VulkanVoxelMeshingPipeline.hpp"
@@ -66,7 +65,6 @@ void ShutdownVulkan(AppState *state)
 		}
 		DestroyVoxelMeshingPipeline(&state->context(), &state->render());
 		projectv::render::DestroyMeshShaderPipelines(&state->context(), &state->render());
-		projectv::render::DestroyFluidCaPipelines(&state->context(), &state->render());
 		projectv::render::DestroyWorldGenPipelines(&state->context(), &state->render());
 		projectv::render::DestroySkyAtmospherePipelines(&state->context(), &state->render());
 		projectv::render::DestroyVolumetricFogResources(&state->context(), &state->render());

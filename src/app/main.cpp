@@ -606,7 +606,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 		runtime::LogRuntimeFailure("App", "SDL_AppIterate.UpdateApp", "UpdateApp returned false");
 	} else {
 		TickAudioRefreshPlaylistSystem(state->ecs().get());
-		TickFluidCASystem(state->ecs().get());
 		TickLookDevCaptureSystem(state->ecs().get());
 		TickBenchmarkAutomationSystem(state->ecs().get());
 	}

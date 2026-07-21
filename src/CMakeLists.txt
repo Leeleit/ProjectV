@@ -48,7 +48,6 @@ set(SHADERS
         ${SHADER_DIR}/hzb_cull.comp
         ${SHADER_DIR}/hzb_apply_visibility.comp
         ${SHADER_DIR}/hiz_minify.comp
-        ${SHADER_DIR}/fluid_ca.comp
         ${SHADER_DIR}/world_gen.comp
         ${SHADER_DIR}/voxelize.comp
         ${SHADER_DIR}/debug_overlay.vert
@@ -190,8 +189,6 @@ target_sources(ProjectV PRIVATE
         render/vulkan/VulkanMeshShaderBindings.cpp
         render/vulkan/VulkanMeshShaderCull.cpp
         render/vulkan/VulkanMeshShaderDraw.cpp
-        render/vulkan/VulkanFluidCaSetup.cpp
-        render/vulkan/VulkanFluidCaDispatch.cpp
         render/vulkan/VulkanVoxelizeSetup.cpp
         render/vulkan/VulkanVoxelizeMipChain.cpp
         render/vulkan/VulkanWorldGenPipeline.cpp
@@ -216,7 +213,6 @@ target_sources(ProjectV PRIVATE
         voxel/VoxelAsciiTickLogger.cpp
         voxel/VoxelWorldPreset.cpp
         voxel/VoxelWorldSnapshot.cpp
-        voxel/VoxelWorldFluid.cpp
         voxel/VoxelWorldLod.cpp
         voxel/VoxelWorldStatic.cpp
         voxel/ChunkStreamer.cpp

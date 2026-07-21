@@ -10,7 +10,6 @@
 #include "render/RayTracedShadows.hpp"
 #include "render/RtxGiProbes.hpp"
 #include "render/vulkan/VulkanAsyncCompute.hpp"
-#include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "render/vulkan/VulkanGraphicsPipeline.hpp"
 #include "render/vulkan/VulkanInit.hpp"
 #include "render/vulkan/VulkanResult.hpp"
@@ -506,45 +505,7 @@ SDL_AppResult DrawFrame(
 	const bool asyncComputePathActive =
 		projectv::render::IsAsyncComputeEnabled() &&
 		projectv::render::IsAsyncComputeResourcesAllocated(*context) &&
-		(render->fluidCaPipelineEnabled || render->worldGenPipelineEnabled);
-
-	if (!asyncComputePathActive && render->fluidCaPipelineEnabled && state->simulation().fluidGpuTicksPending > 0u) {
-		PV_PROFILE_ZONE_N("RecordFluidCaCommands");
-		VoxelWorld *voxelWorld = state->world().voxelWorld.get();
-		if (voxelWorld != nullptr) {
-			const std::vector<uint32_t> activeChunkIds = BuildActiveChunkIdsForFluidCa(*voxelWorld);
-			SceneFrameResources &frameResources = render->sceneFrameResources[frame->currentFrame];
-			if (frameResources.fluidCaActiveChunkIdMappedData != nullptr && !activeChunkIds.empty()) {
-				std::memcpy(
-					frameResources.fluidCaActiveChunkIdMappedData,
-					activeChunkIds.data(),
-					activeChunkIds.size() * sizeof(uint32_t));
-			}
-			projectv::render::FluidCaPushConstants fluidCaPush{};
-			fluidCaPush.chunkDimensions = {
-				static_cast<uint32_t>(voxelWorld->chunkSize),
-				static_cast<uint32_t>(voxelWorld->chunkSize),
-				static_cast<uint32_t>(voxelWorld->chunkSize),
-				0u,
-			};
-			fluidCaPush.chunkCountAndFlags = {
-				static_cast<uint32_t>(activeChunkIds.size()),
-				0u,
-				0u,
-				0u,
-			};
-			fluidCaPush.fluidTickInterval = 1.0f / std::max(state->simulation().fluidTickRateHz, 1.0f);
-			for (uint32_t tickIndex = 0; tickIndex < state->simulation().fluidGpuTicksPending; ++tickIndex) {
-				projectv::render::RecordFluidCaDispatch(
-					cmd,
-					*render,
-					frameResources,
-					fluidCaPush,
-					static_cast<uint32_t>(activeChunkIds.size()));
-			}
-			state->simulation().fluidGpuTicksPending = 0u;
-		}
-	}
+		render->worldGenPipelineEnabled;
 
 	if (!asyncComputePathActive && render->worldGenPipelineEnabled && state->world().voxelWorld != nullptr) {
 		PV_PROFILE_ZONE_N("RecordWorldGenCommands");

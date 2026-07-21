@@ -142,8 +142,8 @@ MSVC STL реально даёт false-positive (не blanket по всем те
 **Link flags:** `-flto=thin -Wl,--gc-sections`.
 
 **Категорически запрещено** в Release:
-- `-ffast-math` — ломает детерминизм Fluid CA (CPU path в `VoxelWorld::UpdateFluidCA`,
-  `z,y,x`-ascending ordering) и TAA YCoCg clamp (`taa_resolve.frag`).
+- `-ffast-math` — ломает TAA YCoCg clamp (`taa_resolve.frag`) и любой детерминированный
+  sim-path с FP-сравнениями.
 - `-fno-omit-frame-pointer` — нет пользы без backtrace symbols в production.
 - PGO / AutoFDO — отдельный 3-step workflow, не часть release-пресета.
 
@@ -256,25 +256,14 @@ See knowledge §39.
 **Почему:** GPU greedy быстрее (нет CPU↔GPU transfer), 6-axis за один dispatch
 (shared bitmask amortization). CPU fallback — для регрессий и pre-RTX smoke.
 
-## 8. Voxel fluid CA: GPU primary, CPU reference
+## 8. Voxel Fluid material (no CA)
 
-**Решение:** GPU compute ping-pong — mainline path.
-- `fluid_ca.comp` читает `sourceFluidCells` (binding 2), пишет `destinationFluidCells`
-  (binding 3). Per-tile determinism via `imageAtomicCompareExchange`.
-- `ActiveChunkIds` (binding 1) фильтрует skip-tile chunks.
-- Default rate 5 Hz (`simulation.fluidTickRateHz`, `Types.hpp:943`).
-- Multi-tick allowed per frame (no cap on N в `Renderer.cpp:1512-1548`).
-- Pipeline: `VulkanFluidCaPipeline` + `SubmitFluidCaToComputeQueue` (async compute).
-- `IsFluidCaGpuEnabled()` / `ToggleFluidCaGpuEnabledForTesting(bool)` — env-driven gate.
+**Решение (2026-07-21):** Fluid CA **удалён** из mainline (CPU `UpdateFluidCA`,
+GPU `fluid_ca.comp` / `VulkanFluidCa*`, ECS fluid-tick, FluidCA tests). Архивы
+попыток: `legacy/docs/archive/2026-07-*-fluid-ca-*-attempt/`.
 
-**CPU reference implementation** (`VoxelWorld::UpdateFluidCA`,
-`VoxelWorld.cpp:1510+`) — 3-phase: read snapshot → sim (fall+spread with z,y,x
-ascending order) → commit. Determinism per `decisions §30`: никаких FP в simulation,
-зера/y/x ascending. **Сохранён** для regression tests.
-
-**Почему:** GPU ping-pong на порядок быстрее для сцен с тысячами вокселей. CPU
-остаётся как authoritative reference + для tests где нужна детерминированная
-симуляция без GPU.
+**Остаётся:** `VoxelMaterial::Fluid` как статический материал (пресеты, рендер,
+физика, ascii `~`). Симуляции потока воды в рантайме нет.
 
 ## 8.1 Voxel ASCII Y-layers (agent orientation)
 
@@ -286,11 +275,11 @@ ProjectV **Y** (map **XZ** top-down). Default window = tight non-Air AABB
 Tests: `ProjectVVoxelWorldAsciiTests`.
 
 **Tick log (default ON):** `VoxelAsciiTickLogger` + `MaybeLogVoxelAsciiTick` in
-`RunSimulationTickLoop` @ 60 Hz. Default file: `SDL_GetBasePath()` +
-`voxel-ascii-tick.log` (обычно `build/.../bin/`). Env `PROJECTV_ASCII_TICK_LOG`:
-unset/`1`/`ON` = default path; custom path = that file (parents created);
-`0`/`OFF` = disabled. Per-Y FNV dedup; do not gate on `editVersion` (fluid
-Air↔Fluid suppresses bumps). Guide: `docs/VoxelAsciiGuide.md`.
+`RunSimulationTickLoop` @ 60 Hz (`simulation.simulationTick` — **not** a fluid
+CA clock; CA removed 2026-07-21). Default file: `SDL_GetBasePath()` +
+`voxel-ascii-tick.log`. Env `PROJECTV_ASCII_TICK_LOG`: unset/`1`/`ON` = default
+path; custom path = that file; `0`/`OFF` = disabled. Per-Y FNV dedup. Guide:
+`docs/VoxelAsciiGuide.md`.
 
 ## 9. Voxel world pipeline (full)
 
@@ -303,9 +292,6 @@ Air↔Fluid suppresses bumps). Guide: `docs/VoxelAsciiGuide.md`.
 - `pendingBlasRebuildIndices` — chunks для re-build BLAS (RTX)
 - `editVersion` — monotonically incrementing на каждый `SetVoxelMaterial`
 - `stats { dirtyChunkCount, activeChunkCount, nonAirVoxelCount, glassVoxelCount, fluidVoxelCount, ... }`
-- `fluidCAAabbMin/MaxExclusive` — invalid sentinels `{INT32_MAX, …}` /
-  `{INT32_MIN, …}`, recomputed during snapshot load + каждый раз когда fluid voxel
-  установлен.
 
 **VoxelChunk struct (40 B, 8-byte aligned):** `min` (Int3, 12 B) +
 `maxExclusive` (Int3, 12 B) + `rebuildQueued` (bool) + `isStatic` (bool) +
@@ -395,8 +381,7 @@ recompile. BRDF centralized в `lighting.glsl` + per-shader copy избегае�
    rendering → `vkCmdDraw(3,1,0,0)` на swapchain → history copy (vkCmdCopyImage
    в `taaHistoryColorTarget`).
 7. **HZB chain:** `BuildHizMipChain` (depth → mip chain) + sync/async HZB cull dispatch.
-8. **Inline compute (если async compute path inactive):** Fluid CA dispatch × N +
-   WorldGen dispatch.
+8. **Inline compute (если async compute path inactive):** WorldGen dispatch.
 9. **Submit:** `vkEndCommandBuffer` + (если async path) `RecordAsyncComputePass` +
    `SubmitToComputeQueue` (signals `renderTimelineSemaphore`).
 10. **vkQueueSubmit2:** wait = imageAvailableSemaphore + (compute) renderTimeline;
@@ -690,11 +675,6 @@ high-speed transparency boost.
 
 **Spectator mode:** `TickCamera` (free flight, not bound by pause per §21).
 
-**Fluid CA throttling:** `simulation.fluidTickRateHz=5.0` (default) +
-`fluidAccumulatorSeconds` + `fluidGpuTicksPending`. ECS `TickFluidCASystem` drains
-`fluidGpuTicksPending` → up to N GPU dispatches per frame (no cap on N в
-`Renderer.cpp:1512-1548`).
-
 **Почему:** fixed timestep = deterministic physics. Accumulator pattern = stable
 simulation при variable framerate. Frame-step = debug-friendly without TAA history
 invalidation.
@@ -779,10 +759,8 @@ regression. Auto-detect из `vkGetPhysicalDeviceSurfacePresentModes` гаран
 **Решение:** `SaveVoxelWorldSnapshot(world, path)` + `LoadVoxelWorldSnapshot(path)`
 (`VoxelWorld.cpp`) — `std::expected<…, VoxelSnapshotError>` cold-path.
 
-**After load:** `RebuildVoxelWorldDerivedState` сбрасывает `fluidCAAabbMin` /
-`fluidCAAabbMaxExclusive` на sentinels (`INT32_MAX, …` / `INT32_MIN, …`) и
-re-expand на каждый Fluid voxel found. Stats rebuild выполняется в той же
-O(world_volume) итерации.
+**After load:** `RebuildVoxelWorldDerivedState` пересчитывает chunk stats /
+derived counters в одной O(world_volume) итерации.
 
 **Finalize flow** (`main.cpp:82-166` `FinalizeActiveVoxelWorldReload`):
 1. `ResetCameraState` + `ApplyStartupCameraOverrideFromEnvironment`.

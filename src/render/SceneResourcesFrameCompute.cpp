@@ -29,96 +29,6 @@ bool CreateSceneFrameComputeBuffers(
 		VMA_ALLOCATION_CREATE_MAPPED_BIT;
 	allocationInfo.usage = VMA_MEMORY_USAGE_AUTO;
 
-	const uint32_t fluidCaMaxActiveChunks = static_cast<uint32_t>(world->voxelWorld->chunks.size());
-	const VkDeviceSize fluidCaActiveChunkIdBytes = sizeof(uint32_t) * std::max(fluidCaMaxActiveChunks, 1u);
-	VmaAllocationInfo fluidCaActiveChunkIdAllocationInfo{};
-	if (!CreateBuffer(
-			context,
-			fluidCaActiveChunkIdBytes,
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			allocationInfo,
-			&frameResources.fluidCaActiveChunkIdBuffer,
-			&frameResources.fluidCaActiveChunkIdAllocation,
-			&fluidCaActiveChunkIdAllocationInfo,
-			asyncComputeSharingMode,
-			asyncComputeQueueFamilyIndices,
-			asyncComputeQueueFamilyIndexCount)) {
-		return false;
-	}
-	frameResources.fluidCaActiveChunkIdMappedData = fluidCaActiveChunkIdAllocationInfo.pMappedData;
-	profiling::RecordAllocation(
-		frameResources.fluidCaActiveChunkIdAllocation,
-		fluidCaActiveChunkIdAllocationInfo.size,
-		"SceneFluidCaActiveChunkIdBufferAllocation");
-	render->sceneMemoryBytes += fluidCaActiveChunkIdAllocationInfo.size;
-	std::memset(frameResources.fluidCaActiveChunkIdMappedData, 0, fluidCaActiveChunkIdBytes);
-
-	VmaAllocationInfo fluidCaStatsAllocationInfo{};
-	if (!CreateBuffer(
-			context,
-			sizeof(uint32_t) * 4u,
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			allocationInfo,
-			&frameResources.fluidCaStatsBuffer,
-			&frameResources.fluidCaStatsAllocation,
-			&fluidCaStatsAllocationInfo,
-			asyncComputeSharingMode,
-			asyncComputeQueueFamilyIndices,
-			asyncComputeQueueFamilyIndexCount)) {
-		return false;
-	}
-	frameResources.fluidCaStatsMappedData = fluidCaStatsAllocationInfo.pMappedData;
-	profiling::RecordAllocation(
-		frameResources.fluidCaStatsAllocation,
-		fluidCaStatsAllocationInfo.size,
-		"SceneFluidCaStatsBufferAllocation");
-	render->sceneMemoryBytes += fluidCaStatsAllocationInfo.size;
-	std::memset(frameResources.fluidCaStatsMappedData, 0, sizeof(uint32_t) * 4u);
-
-	if (frameResourceIndex == 0) {
-		render->fluidCaMaxActiveChunks = fluidCaMaxActiveChunks;
-	}
-
-	const uint32_t chunkVoxelCount = static_cast<uint32_t>(world->voxelWorld->chunkSize) *
-									 static_cast<uint32_t>(world->voxelWorld->chunkSize) *
-									 static_cast<uint32_t>(world->voxelWorld->chunkSize);
-	const VkDeviceSize fluidCaPingPongBytes = std::max<VkDeviceSize>(
-		sizeof(uint32_t) * 4u * std::max(chunkVoxelCount, 1u) * std::max(fluidCaMaxActiveChunks, 1u),
-		sizeof(uint32_t) * 4u);
-	if (frameResourceIndex == 0) {
-		render->fluidCaPingPongBufferBytes = static_cast<uint32_t>(fluidCaPingPongBytes);
-	}
-
-	for (uint32_t pingPong = 0u; pingPong < 2u; ++pingPong) {
-		VkBuffer &targetBuffer = pingPong == 0u ? frameResources.fluidCaSourceBuffer
-												: frameResources.fluidCaDestinationBuffer;
-		VmaAllocation &targetAllocation = pingPong == 0u ? frameResources.fluidCaSourceAllocation
-														 : frameResources.fluidCaDestinationAllocation;
-		void *&targetMappedData = pingPong == 0u ? frameResources.fluidCaSourceMappedData
-												 : frameResources.fluidCaDestinationMappedData;
-		VmaAllocationInfo pingPongAllocationInfo{};
-		if (!CreateBuffer(
-				context,
-				fluidCaPingPongBytes,
-				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				allocationInfo,
-				&targetBuffer,
-				&targetAllocation,
-				&pingPongAllocationInfo,
-				asyncComputeSharingMode,
-				asyncComputeQueueFamilyIndices,
-				asyncComputeQueueFamilyIndexCount)) {
-			return false;
-		}
-		targetMappedData = pingPongAllocationInfo.pMappedData;
-		profiling::RecordAllocation(
-			targetAllocation,
-			pingPongAllocationInfo.size,
-			pingPong == 0u ? "SceneFluidCaSourceBufferAllocation" : "SceneFluidCaDestinationBufferAllocation");
-		render->sceneMemoryBytes += pingPongAllocationInfo.size;
-		std::memset(targetMappedData, 0, fluidCaPingPongBytes);
-	}
-
 	constexpr VkDeviceSize kNanoVdbInitialUpperCapacityBytes = sizeof(projectv::voxel::nanovdb::NanoVdbUpper) * 1u;
 	constexpr VkDeviceSize kNanoVdbInitialLowerCapacityBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLower) * 64u;
 	constexpr VkDeviceSize kNanoVdbInitialLeafCapacityBytes = sizeof(projectv::voxel::nanovdb::NanoVdbLeaf) * 64u;
@@ -236,30 +146,6 @@ bool CreateSceneFrameComputeBuffers(
 
 	char bufferName[64]{};
 
-	std::snprintf(bufferName, sizeof(bufferName), "SceneFluidCaActiveChunkIdBuffer[%zu]", frameResourceIndex);
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(frameResources.fluidCaActiveChunkIdBuffer),
-		VK_OBJECT_TYPE_BUFFER,
-		bufferName);
-	std::snprintf(bufferName, sizeof(bufferName), "SceneFluidCaStatsBuffer[%zu]", frameResourceIndex);
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(frameResources.fluidCaStatsBuffer),
-		VK_OBJECT_TYPE_BUFFER,
-		bufferName);
-	std::snprintf(bufferName, sizeof(bufferName), "SceneFluidCaSourceBuffer[%zu]", frameResourceIndex);
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(frameResources.fluidCaSourceBuffer),
-		VK_OBJECT_TYPE_BUFFER,
-		bufferName);
-	std::snprintf(bufferName, sizeof(bufferName), "SceneFluidCaDestinationBuffer[%zu]", frameResourceIndex);
-	SetVulkanObjectName(
-		*context,
-		reinterpret_cast<uint64_t>(frameResources.fluidCaDestinationBuffer),
-		VK_OBJECT_TYPE_BUFFER,
-		bufferName);
 	std::snprintf(bufferName, sizeof(bufferName), "SceneNanoVdbUpperBuffer[%zu]", frameResourceIndex);
 	SetVulkanObjectName(
 		*context,

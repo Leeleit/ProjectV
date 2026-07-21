@@ -45,7 +45,7 @@ void TestBuildMeshCullPushConstantsDispatchParams(TestContext &context)
 	parameters.cameraRightAndTanHalfHorizontalFov = {1.0f, 0.0f, 0.0f, 0.5f};
 	parameters.cameraUpAndNearPlane = {0.0f, 1.0f, 0.0f, 0.1f};
 
-	const auto [dispatchParams, frustumPlanes] =
+	const auto [dispatchParams, frustumPlanes, visibilityMaskMode] =
 		projectv::render::BuildMeshCullPushConstants(parameters, 256u);
 	EXPECT_EQUAL_UINT(context, 256u, dispatchParams[0], __LINE__, "dispatchParams[0] = chunk count");
 }
@@ -58,7 +58,7 @@ void TestBuildMeshCullPushConstantsFrustumForwardPlane(TestContext &context)
 	parameters.cameraRightAndTanHalfHorizontalFov = {1.0f, 0.0f, 0.0f, 0.0f};
 	parameters.cameraUpAndNearPlane = {0.0f, 1.0f, 0.0f, 0.5f};
 
-	const auto [dispatchParams, frustumPlanes] =
+	const auto [dispatchParams, frustumPlanes, visibilityMaskMode] =
 		projectv::render::BuildMeshCullPushConstants(parameters, 16u);
 	(void)dispatchParams;
 	const auto &nearPlane = frustumPlanes[4];
@@ -80,7 +80,7 @@ void TestBuildMeshCullPushConstantsFrustumFarPlane(TestContext &context)
 	parameters.cameraRightAndTanHalfHorizontalFov = {1.0f, 0.0f, 0.0f, 0.0f};
 	parameters.cameraUpAndNearPlane = {0.0f, 1.0f, 0.0f, 0.5f};
 
-	const auto [dispatchParams, frustumPlanes] =
+	const auto [dispatchParams, frustumPlanes, visibilityMaskMode] =
 		projectv::render::BuildMeshCullPushConstants(parameters, 16u);
 	(void)dispatchParams;
 	const auto &farPlane = frustumPlanes[5];

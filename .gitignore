@@ -21,3 +21,5 @@ docker/vulkansdk.tar.xz
 .superpowers/sdd/progress.md
 /.superpowers/
 /.cursor/
+/docs/superpowers/
+/tmp/

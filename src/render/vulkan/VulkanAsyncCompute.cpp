@@ -5,7 +5,6 @@
 #include "render/HizCulling.hpp"
 #include "render/SceneResources.hpp"
 #include "render/vulkan/VulkanDebug.hpp"
-#include "render/vulkan/VulkanFluidCaPipeline.hpp"
 #include "render/vulkan/VulkanWorldGenPipeline.hpp"
 
 #include <array>
@@ -132,44 +131,6 @@ bool RecordAsyncComputePass(
 
 	SceneFrameResources &frameResources = render.sceneFrameResources[frame->currentFrame];
 	bool dispatched = false;
-
-	if (render.fluidCaPipelineEnabled && state->simulation().fluidGpuTicksPending > 0u) {
-		PV_PROFILE_ZONE_N("AsyncPass.RecordFluidCa");
-		const VoxelWorld *voxelWorld = state->world().voxelWorld.get();
-		if (voxelWorld != nullptr) {
-			const std::vector<uint32_t> activeChunkIds = BuildActiveChunkIdsForFluidCa(*voxelWorld);
-			if (frameResources.fluidCaActiveChunkIdMappedData != nullptr && !activeChunkIds.empty()) {
-				std::memcpy(
-					frameResources.fluidCaActiveChunkIdMappedData,
-					activeChunkIds.data(),
-					activeChunkIds.size() * sizeof(uint32_t));
-			}
-			FluidCaPushConstants fluidCaPush{};
-			fluidCaPush.chunkDimensions = {
-				static_cast<uint32_t>(voxelWorld->chunkSize),
-				static_cast<uint32_t>(voxelWorld->chunkSize),
-				static_cast<uint32_t>(voxelWorld->chunkSize),
-				0u,
-			};
-			fluidCaPush.chunkCountAndFlags = {
-				static_cast<uint32_t>(activeChunkIds.size()),
-				0u,
-				0u,
-				0u,
-			};
-			fluidCaPush.fluidTickInterval = 1.0f / std::max(state->simulation().fluidTickRateHz, 1.0f);
-			for (uint32_t tickIndex = 0; tickIndex < state->simulation().fluidGpuTicksPending; ++tickIndex) {
-				RecordFluidCaDispatch(
-					asyncCommandBuffer,
-					render,
-					frameResources,
-					fluidCaPush,
-					static_cast<uint32_t>(activeChunkIds.size()));
-			}
-			state->simulation().fluidGpuTicksPending = 0u;
-			dispatched = true;
-		}
-	}
 
 	if (render.worldGenPipelineEnabled && state->world().voxelWorld != nullptr) {
 		PV_PROFILE_ZONE_N("AsyncPass.RecordWorldGen");

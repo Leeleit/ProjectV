@@ -44,10 +44,6 @@ struct AudioPlaylistRefreshRequest {
 	bool requested = false;
 };
 
-struct FluidCATickState {
-	float accumulatorSeconds = 0.0f;
-};
-
 struct BenchmarkTickResult {
 	bool quitAfterFrame = false;
 };
@@ -162,7 +158,6 @@ bool InitializeAppEcs(AppState *state)
 	ecs.world.set<WorldChunkSummary>({});
 	ecs.world.set<DebugState>({});
 	ecs.world.set<AudioPlaylistRefreshRequest>({});
-	ecs.world.set<FluidCATickState>({});
 	ecs.world.set<BenchmarkTickResult>({});
 	ecs.world.set<LookDevCaptureTickResult>({});
 	ecs.world.set<AppStateBinding>({state});
@@ -186,39 +181,6 @@ bool InitializeAppEcs(AppState *state)
 				}
 				req.requested = false;
 			}
-		});
-
-	ecs.world.system<FluidCATickState>("FluidCATickSystem")
-		.kind(flecs::OnUpdate)
-		.each([](const flecs::entity e, FluidCATickState &tickState) {
-			const AppStateBinding *binding = e.world().try_get_mut<AppStateBinding>();
-			if (!binding || !binding->state) {
-				return;
-			}
-			SimulationState &simulation = binding->state->simulation();
-			if (simulation.effectivePaused || simulation.fluidTickRateHz <= 0.0f) {
-				tickState.accumulatorSeconds = 0.0f;
-				simulation.fluidAccumulatorSeconds = 0.0f;
-				return;
-			}
-			VoxelWorld *voxelWorld = binding->state->world().voxelWorld.get();
-			if (!voxelWorld) {
-				tickState.accumulatorSeconds = 0.0f;
-				simulation.fluidAccumulatorSeconds = 0.0f;
-				return;
-			}
-			tickState.accumulatorSeconds += simulation.frameDeltaSeconds;
-			const float fluidInterval = 1.0f / simulation.fluidTickRateHz;
-			const bool gpuEnabled = IsFluidCaGpuEnabled();
-			while (tickState.accumulatorSeconds >= fluidInterval) {
-				tickState.accumulatorSeconds -= fluidInterval;
-				if (gpuEnabled) {
-					++simulation.fluidGpuTicksPending;
-				} else {
-					UpdateFluidCA(*voxelWorld);
-				}
-			}
-			simulation.fluidAccumulatorSeconds = tickState.accumulatorSeconds;
 		});
 
 	ecs.world.system<BenchmarkTickResult>("BenchmarkAutomationTickSystem")
@@ -264,14 +226,6 @@ void RequestAudioPlaylistRefresh(EcsState *ecs)
 }
 
 void TickAudioRefreshPlaylistSystem(EcsState *ecs)
-{
-	if (!ecs) {
-		return;
-	}
-	(void)ecs->impl.world.progress();
-}
-
-void TickFluidCASystem(EcsState *ecs)
 {
 	if (!ecs) {
 		return;

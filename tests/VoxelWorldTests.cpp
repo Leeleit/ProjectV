@@ -6677,30 +6677,6 @@ void TestLodLevelSelectionAndAssignment(TestContext &context)
 	EXPECT_EQ(context, totalChunks, totalAssigned);
 }
 
-void TestFluidCaGpuEnvToggleDefaultsOff(TestContext &context)
-{
-	ToggleFluidCaGpuEnabledForTesting(false);
-	EXPECT_TRUE(context, !IsFluidCaGpuEnabled());
-	ToggleFluidCaGpuEnabledForTesting(true);
-	EXPECT_TRUE(context, IsFluidCaGpuEnabled());
-	ToggleFluidCaGpuEnabledForTesting(false);
-}
-
-void TestBuildActiveChunkIdsForFluidCa(TestContext &context)
-{
-	VoxelWorld world = MakeTestWorld({0, 0, 0}, {8, 8, 8}, 4);
-	EXPECT_TRUE(context, BuildActiveChunkIdsForFluidCa(world).empty());
-
-	SetVoxelMaterial(world, {0, 0, 0}, VoxelMaterial::Fluid, nullptr);
-	const auto one = BuildActiveChunkIdsForFluidCa(world);
-	EXPECT_EQ(context, static_cast<size_t>(1), one.size());
-	EXPECT_EQ(context, static_cast<uint32_t>(0), one[0]);
-
-	SetVoxelMaterial(world, {5, 5, 5}, VoxelMaterial::FloorWhite, nullptr);
-	const auto two = BuildActiveChunkIdsForFluidCa(world);
-	EXPECT_EQ(context, static_cast<size_t>(2), two.size());
-}
-
 } // namespace
 
 int main() // NOLINT(*-exception-escape)
@@ -6727,8 +6703,6 @@ int main() // NOLINT(*-exception-escape)
 	TestVoxelChunkStaticPromotionThresholdFromEnv(context);
 	TestIncrementalJoltPerChunkBodyMap(context);
 	TestLodLevelSelectionAndAssignment(context);
-	TestFluidCaGpuEnvToggleDefaultsOff(context);
-	TestBuildActiveChunkIdsForFluidCa(context);
 	TestVoxelWorldSnapshotRoundTripsWorldState(context);
 	TestMarkVoxelRegionDirtyQueuesExpectedChunks(context);
 	TestSetVoxelMaterialTracksCountsAndQueuesRebuild(context);

@@ -1,0 +1,2222 @@
+warning: in the working copy of 'src/voxel/VoxelWorldFluid.cpp', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'tests/FluidCATests.cpp', CRLF will be replaced by LF the next time Git touches it
+diff --git a/agent/knowledge.md b/agent/knowledge.md
+index a5221207..0eb2564e 100644
+--- a/agent/knowledge.md
++++ b/agent/knowledge.md
+@@ -256,25 +256,40 @@ See knowledge ┬з39.
+ **╨Я╨╛╤З╨╡╨╝╤Г:** GPU greedy ╨▒╤Л╤Б╤В╤А╨╡╨╡ (╨╜╨╡╤В CPUтЖФGPU transfer), 6-axis ╨╖╨░ ╨╛╨┤╨╕╨╜ dispatch
+ (shared bitmask amortization). CPU fallback тАФ ╨┤╨╗╤П ╤А╨╡╨│╤А╨╡╤Б╤Б╨╕╨╣ ╨╕ pre-RTX smoke.
+ 
+-## 8. Voxel fluid CA: GPU primary, CPU reference
+-
+-**╨а╨╡╤И╨╡╨╜╨╕╨╡:** GPU compute ping-pong тАФ mainline path.
+-- `fluid_ca.comp` ╤З╨╕╤В╨░╨╡╤В `sourceFluidCells` (binding 2), ╨┐╨╕╤И╨╡╤В `destinationFluidCells`
+-  (binding 3). Per-tile determinism via `imageAtomicCompareExchange`.
+-- `ActiveChunkIds` (binding 1) ╤Д╨╕╨╗╤М╤В╤А╤Г╨╡╤В skip-tile chunks.
+-- Default rate 5 Hz (`simulation.fluidTickRateHz`, `Types.hpp:943`).
+-- Multi-tick allowed per frame (no cap on N ╨▓ `Renderer.cpp:1512-1548`).
+-- Pipeline: `VulkanFluidCaPipeline` + `SubmitFluidCaToComputeQueue` (async compute).
+-- `IsFluidCaGpuEnabled()` / `ToggleFluidCaGpuEnabledForTesting(bool)` тАФ env-driven gate.
+-
+-**CPU reference implementation** (`VoxelWorld::UpdateFluidCA`,
+-`VoxelWorld.cpp:1510+`) тАФ 3-phase: read snapshot тЖТ sim (fall+spread with z,y,x
+-ascending order) тЖТ commit. Determinism per `decisions ┬з30`: ╨╜╨╕╨║╨░╨║╨╕╤Е FP ╨▓ simulation,
+-╨╖╨╡╤А╨░/y/x ascending. **╨б╨╛╤Е╤А╨░╨╜╤С╨╜** ╨┤╨╗╤П regression tests.
+-
+-**╨Я╨╛╤З╨╡╨╝╤Г:** GPU ping-pong ╨╜╨░ ╨┐╨╛╤А╤П╨┤╨╛╨║ ╨▒╤Л╤Б╤В╤А╨╡╨╡ ╨┤╨╗╤П ╤Б╤Ж╨╡╨╜ ╤Б ╤В╤Л╤Б╤П╤З╨░╨╝╨╕ ╨▓╨╛╨║╤Б╨╡╨╗╨╡╨╣. CPU
+-╨╛╤Б╤В╨░╤С╤В╤Б╤П ╨║╨░╨║ authoritative reference + ╨┤╨╗╤П tests ╨│╨┤╨╡ ╨╜╤Г╨╢╨╜╨░ ╨┤╨╡╤В╨╡╤А╨╝╨╕╨╜╨╕╤А╨╛╨▓╨░╨╜╨╜╨░╤П
+-╤Б╨╕╨╝╤Г╨╗╤П╤Ж╨╕╤П ╨▒╨╡╨╖ GPU.
++## 8. Voxel fluid CA: hydrostatic target + gradient chains (2026-07-21)
++
++**Gameplay truth:** CPU `UpdateFluidCA` (driver `VoxelWorldFluid.cpp` + engine
++`VoxelWorldFluidBodies.cpp`). Default rate 5 Hz (`simulation.fluidTickRateHz`).
++Spec: `docs/superpowers/specs/2026-07-20-fluid-ca-hydrostatic-chains-design.md`.
++
++**Mass model:** binary Fluid. `fluidFill` 0/255 storage; ignored by CA.
++`fluid_ca.comp` research; `PROJECTV_FLUID_CA_GPU` default **OFF**.
++
++**Pipeline per tick:** FALL (contiguous runs shift down by 1) тЖТ bodies тЖТ
++**basins** (union-find over touching floods тАФ one disc per basin) тЖТ reachability
++flood тЖТ target T (bottom-up by (y, stickiness); octant round-robin by radius,
++budget shared across 8 octants) тЖТ distance D to T тЖТ chains (K=8/body for
++T-spread; every active fall-entry exit emits 1/tick, heads-first by y).
++
++**Sources (2026-07-21):** excess bottom on settled support тАФ grounded, тИЙT, below
++is Solid or FluidтИИT. On consume: **column settle** (same-body fluid above the
++source drops one cell into the vacancy) тАФ net top of the column shrinks, streams
++stay contiguous. Guard `(y_src > y_dst) || (same y && D_src > D_dst)`. тЙд1 chain
++per (x,z) column per tick. Bay fallback: fillable Air with тЙе3 body neighbours,
++loose source тЙд1 neighbour (loose may be тИИT тАФ T prefers stick-0 fluid over Air
++holes). Lone cell: T = itself тЖТ never moves.
++
++**Wake/idle + frame cap:** `fluidEditSerial` bumps on **any** material change
++(breaking glass wakes the CA) and `RebuildVoxelWorldDerivedState`;
++`lastFluidCaSerial` gates the idle early-out. ECS runs тЙд2 `UpdateFluidCA` per
++frame and drops accumulator backlog.
++
++Tests: `ProjectVFluidCATests` (N1 per-column top-shrink, N2 no-teleport + exit
++budget, N3 stream continuity, N4/N8 sphere-break, N5 idle, N6 glass-wake, N7
++overflow, N9 stray merge, N10 side-breach contiguous stream).
++
++**Archives:** `legacy/docs/archive/2026-07-17-fluid-ca-base-drain-attempt/`,
++`legacy/docs/archive/2026-07-20-fluid-ca-bfs-pressure-attempt/`.
+ 
+ ## 8.1 Voxel ASCII Y-layers (agent orientation)
+ 
+diff --git a/agent/workspace.md b/agent/workspace.md
+index 2b484b6d..e1179752 100644
+--- a/agent/workspace.md
++++ b/agent/workspace.md
+@@ -18,13 +18,67 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
+ 
+ ## 1. Now
+ 
++**2026-07-21 Fluid CA hotfix 5 (╨┐╨╛╤А╤Ж╨╕╨╕ + ╨┤╨▓╨░ ╤А╤Г╤З╤М╤П):** T-╤Ж╨╡╨┐╨╛╤З╨║╨╕ ╤А╨▓╨░╨╗╨╕
++╨┐╨░╨┤╨░╤О╤Й╨╕╨╣ ╤Б╤В╨╛╨╗╨▒ ╨┐╨╛╤Б╨╗╨╡ ╨║╨░╤Б╨░╨╜╨╕╤П ╨╗╤Г╨╢╨╕ (╤Н╨╝╨╕╤Б╤Б╨╕╤П ╨▓ ╨│╨╛╨╗╨╛╨▓╤Г + ╨╢╨╛╤А mid-column тЖТ
++`~..~..`). ╨Ш╤Б╤В╨╛╤З╨╜╨╕╨║╨╕ = **╨╜╨╕╨╖ ╨╕╨╖╨▒╤Л╤В╨║╨░ ╨╜╨░ ╨╛╨┐╨╛╤А╨╡** (Solid / FluidтИИT) +
++**╨╛╤Б╨╡╨┤╨░╨╜╨╕╨╡ ╨║╨╛╨╗╨╛╨╜╨╜╤Л** ╨┐╤А╨╕ consume; exit-service ╨║╨░╨╢╨┤╤Л╨╣ ╤В╨╕╨║ (╨│╨╛╨╗╨╛╨▓╤Л ╨┐╨╛ y);
++тЙд1 chain/(x,z)/╤В╨╕╨║; bay loose ╨╝╨╛╨╢╨╡╤В ╨▒╤Л╤В╤М тИИT. N1 тЖТ per-column top-shrink; N10
++side-breach contiguous. `ProjectVFluidCATests` green; ctest Fluid/Voxel 5/5.
++
++**2026-07-20 Fluid CA hotfix 4 (basin + ╨╛╨║╤В╨░╨╜╤В╨╜╨░╤П ╤А╨░╨▓╨╜╨╛╨╝╨╡╤А╨╜╨╛╤Б╤В╤М):** ╨│╨╕╨┤╤А╨╛╤Б╤В╨░╤В╨╕╨║╨░
++╨┐╨╛╨┤╨╜╤П╤В╨░ ╤Б per-body ╨╜╨░ **per-basin** (union-find ╨┐╨╛ ╨║╨░╤Б╨░╤О╤Й╨╕╨╝╤Б╤П flood'╨░╨╝): ╨╛╨┤╨╜╨░
++╤Ж╨╡╨╗╤М-╨┤╨╕╤Б╨║ ╨╜╨░ ╨▒╨░╤Б╤Б╨╡╨╣╨╜, ╤Б╤В╤А╨░╨│╨╗╨╡╤А╤Л ╨┐╨╛╨╗╨╖╤Г╤В ╨║ ╨╜╨╡╨╣ ╨┐╨╛ D-╨│╤А╨░╨┤╨╕╨╡╨╜╤В╤Г (stickiness ╤В╨╛╨╗╤М╨║╨╛ ╤Г
++╤П╨║╨╛╤А╨╜╨╛╨│╨╛ ╤В╨╡╨╗╨░). ╨Т╨╖╤П╤В╨╕╨╡ T: (y, stickiness) тЖТ **╨╛╨║╤В╨░╨╜╤В╨╜╤Л╨╣ round-robin ╨┐╨╛ ╤А╨░╨┤╨╕╤Г╤Б╤Г**
++тАФ ╨▒╤О╨┤╨╢╨╡╤В ╨┐╨╛╤А╨╛╨▓╨╜╤Г ╨╝╨╡╨╢╨┤╤Г 8 ╤Б╨╡╨║╤В╨╛╤А╨░╨╝╨╕, ╤А╨░╨▓╨╜╨╛╨╝╨╡╤А╨╜╨╛╤Б╤В╤М ╨┐╨╛ ╨┐╨╛╤Б╤В╤А╨╛╨╡╨╜╨╕╤О, ╨░ ╨╜╨╡ ╤Н╨╝╨╡╤А╨┤╨╢╨╡╨╜╤В╨╜╨╛
++(╤Г╨▒╤А╨░╨╜╤Л feedback-╨║╨╛╨╗╨╗╨░╨┐╤Б╤Л: lex tie-break, rad-anchor drift, dist path-length
++asymmetry). N7 ╨║╨▓╨░╨┤╤А╨░╨╜╤В╨╜╤Л╨╣ ╤П╨║╨╛╤А╤М + N9 stray-merge. `ProjectVFluidCATests` 28/28.
++
++**2026-07-20 Fluid CA hotfix 3 (╨╛╨┤╨╜╨╛╤Б╤В╨╛╤А╨╛╨╜╨╜╨╡╨╡ ╨▓╤Л╤В╨╡╨║╨░╨╜╨╕╨╡):** ╨┐╨╛╤Б╨╗╨╡ radial
++tie-break ╨╛╤Б╤В╨░╨╗╤Б╤П ╤Б╨┤╨▓╨╕╨│ ╨║ (тИТz,тИТx): ╤Д╨╕╨╜╨░╨╗╤М╨╜╤Л╨╣ lex tie-break ╨▓╨╜╤Г╤В╤А╨╕ ╤А╨░╨▓╨╜╤Л╤Е
++rad-╨╛╨▒╨╛╨╗╨╛╤З╨╡╨║. ╨Ъ╨╛╨╝╨┐╨░╤Б╨╜╤Л╨╣ tie-break ╤В╨╡╨┐╨╡╤А╤М ╤А╨╛╤В╨╕╤А╤Г╨╡╤В╤Б╤П ╤Ж╨╕╨║╨╗╨╛╨╝ ╨╕╨╖ 4 ╨║╨▓╨░╨┤╤А╨░╨╜╤В╨╛╨▓
++╨║╨░╨╢╨┤╤Л╨╣ ╤В╨╕╨║ (`targetGen & 3`) ╨▓ T-fill ╨╕ ╤Б╨╛╤А╤В╨╕╤А╨╛╨▓╨║╨╡ dests тАФ ╨╜╨╡╤В ╤Д╨╕╨║╤Б╨╕╤А╨╛╨▓╨░╨╜╨╜╨╛╨│╨╛
++╨╜╨░╨┐╤А╨░╨▓╨╗╨╡╨╜╨╕╤П ╨╖╨░╨┐╨╛╨╗╨╜╨╡╨╜╨╕╤П. N7 ╤Г╤Б╨╕╨╗╨╡╨╜ ╨║╨▓╨░╨┤╤А╨░╨╜╤В╨╜╤Л╨╝ ╤П╨║╨╛╤А╨╡╨╝ (тЙд60% ╨╜╨░ ╨║╨▓╨░╨┤╤А╨░╨╜╤В).
++ctest 43/43.
++
++**2026-07-20 Fluid CA hotfix 2 (╤Д╤А╨╕╨╖╤Л + ╤А╤Г╤З╨╡╨╣):** chains loop ╨▒╤Л╨╗ 52тАУ64 ╨╝╤Б/╤В╨╕╨║
++(dests├Чsources ╤Д╨╕╨╗╤М╤В╤А ╤Б decode-╨┤╨╡╨╗╨╡╨╜╨╕╤П╨╝╨╕, ╨┐╨╡╤А╨╡╤Б╨▒╨╛╤А╨║╨░ 8├Ч ╨╜╨░ ╤В╨╡╨╗╨╛) тЖТ hoisted dests
+++ ╨│╨░╤А╨┤ O(1) ╤З╨╡╤А╨╡╨╖ top-layer ╤Б╨▓╨╛╨┤╨║╤Г тЖТ 1.8 ╨╝╤Б; engine 27.6 тЖТ ~7 ╨╝╤Б/╤В╨╕╨║ (Debug).
++╨а╤Г╤З╨╡╨╣ ╨▓ ╨╛╨┤╨╜╤Г ╤Б╤В╨╛╤А╨╛╨╜╤Г: lex tie-break (z,x) ╨▓ T-fill ╨┤╨░╨▓╨░╨╗ ╤Г╨│╨╗╨╛╨▓╤Г╤О ╨▓╨╛╨╗╨╜╤Г тЖТ
++╤А╨░╨┤╨╕╨░╨╗╤М╨╜╤Л╨╣ tie-break (dist┬▓ ╨┤╨╛ ╤Ж╨╡╨╜╤В╤А╨╛╨╕╨┤╨░ ╤В╨╡╨╗╨░) тАФ ╨╗╤Г╨╢╨░ ╨┤╨╕╤Б╨║╨╛╨╝. ECS frame cap
++(тЙд2/╨║╨░╨┤╤А) ╤Г╨╢╨╡ ╤Б╤В╨╛╨╕╤В. ctest 43/43, lint OK.
++
++**2026-07-20 Fluid CA hotfix (operator runtime feedback):** ╤В╤А╨╕ ╨┤╨╡╤Д╨╡╨║╤В╨░ ╨┐╨╛
++╤А╤Г╤З╨╜╨╛╨╝╤Г ╨┐╤А╨╛╨│╨╛╨╜╤Г. (1) CA ╤Б╨┐╨░╨╗ ╨┐╨╛╤Б╨╗╨╡ ╤А╨░╨╖╨▒╨╕╤В╨╕╤П ╤Б╤В╨╡╨║╨╗╨░: `fluidEditSerial` ╤В╨╡╨┐╨╡╤А╤М
++╨▒╨░╨╝╨┐╨░╨╡╤В╤Б╤П ╨╜╨░ ╨Ы╨о╨С╨Ю╨Ь ╨╕╨╖╨╝╨╡╨╜╨╡╨╜╨╕╨╕ ╨╝╨░╤В╨╡╤А╨╕╨░╨╗╨░ (`SetVoxelMaterial`). (2) ╨Ы╨░╨│ ╨┐╤А╨╕ ╤Б╨╗╨╕╨▓╨╡:
++catch-up ╤Ж╨╕╨║╨╗ ECS ╨▒╨╡╨╖ ╨╗╨╕╨╝╨╕╤В╨░ ╤Б╨║╨╗╨░╨┤╤Л╨▓╨░╨╗ ╤Б╨╡╤А╨╕╤О ╤В╨╕╨║╨╛╨▓ ╨▓ ╨╛╨┤╨╕╨╜ ╨║╨░╨┤╤А тАФ ╤В╨╡╨┐╨╡╤А╤М тЙд2
++`UpdateFluidCA`/╨║╨░╨┤╤А + ╤Б╨▒╤А╨╛╤Б backlog. (3) ╨а╤Г╤З╨╡╨╣ ╨▓ ╨╛╨┤╨╜╤Г ╤Б╤В╨╛╤А╨╛╨╜╤Г + ╤Б╤В╨░╨│╨╜╨░╤Ж╨╕╤П ╨╜╨░
++╨┐╨╗╨╕╤В╨╡: ╨┐╨╛╨╗╨╜╤Л╨╣ reachability flood (decoupled ╨╛╤В ╨╜╨░╨▒╨╛╤А╨░ T тАФ ╤А╨░╨╜╤М╤И╨╡ ╨▒╤О╨┤╨╢╨╡╤В T
++╤Б╤К╨╡╨┤╨░╨╗╤Б╤П ╨║╨╗╨╡╤В╨║╨░╨╝╨╕ ╤В╨╡╨╗╨░ ╨┤╨╛ ╨╜╨░╤Е╨╛╨┤╨║╨╕ ╨╜╨╕╨╢╨╜╨╕╤Е ╨▒╨░╤Б╤Б╨╡╨╣╨╜╨╛╨▓) + ╤А╨╛╤В╨░╤Ж╨╕╤П ╨╜╨░╨╖╨╜╨░╤З╨╡╨╜╨╕╨╣ ╨▓╨╜╤Г╤В╤А╨╕
++╤А╨░╨▓╨╜╤Л╤Е D-╨│╤А╤Г╨┐╨┐. `ProjectVFluidCATests` 27/27 (+N6 glass-wake, N7 overflow, N8 bottom-break
++uniformity), ctest 43/43.
++
++**2026-07-20 Fluid CA hydrostatic rewrite:** `UpdateFluidCA` ╨┐╨╡╤А╨╡╨┐╨╕╤Б╨░╨╜ ╨┐╨╛
++╨║╨╛╨╜╤В╤А╨░╨║╤В╤Г ╨╛╨┐╨╡╤А╨░╤В╨╛╤А╨░ (╤Б╨╗╨╛╨╕: ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║ ╤В╨╛╨╗╤М╨║╨╛ ╤Б ╨▓╨╡╤А╤Е╨╜╨╡╨│╨╛ ╤Б╨╗╨╛╤П ╤В╨╡╨╗╨░; ╨▒╨╡╨╖ ╤В╨╡╨╗╨╡╨┐╨╛╤А╤В╨░,
++╨┐╤А╨╛╨┐╨░╤Б╤В╨╡╨╣, ╨┤╨╢╨╕╤В╤В╨╡╤А╨░). Driver (`VoxelWorldFluid.cpp`) + engine
++(`VoxelWorldFluidBodies.cpp`): FALL run-shift тЖТ ╤В╨╡╨╗╨░ тЖТ ╤Ж╨╡╨╗╤М T (bottom-up fill,
++`(y,dist,z,x)`) тЖТ ╨┐╨╛╨╗╨╡ D тЖТ ╨│╤А╨░╨┤╨╕╨╡╨╜╤В╨╜╤Л╨╡ ╤Ж╨╡╨┐╨╛╤З╨║╨╕ K=8 (╨│╨░╤А╨┤ (╬гy,╬гD) тЖУ; bay fallback).
++╨Ю╤Б╤Ж╨╕╨╗╨╗╤П╤Ж╨╕╤П ╨╜╨╡╨▓╨╛╨╖╨╝╨╛╨╢╨╜╨░ ╨║╨╛╨╜╤Б╤В╤А╤Г╨║╤В╨╕╨▓╨╜╨╛. Idle fast-path ╨╜╨░ `fluidEditSerial`.
++`ProjectVFluidCATests` 24/24, ╨▓╨╡╤Б╤М ctest 43/43. Spec:
++`docs/superpowers/specs/2026-07-20-fluid-ca-hydrostatic-chains-design.md`.
++BFS-attempt ╨▓ `legacy/docs/archive/2026-07-20-fluid-ca-bfs-pressure-attempt/`.
++
+ **2026-07-17 ASCII tick log:** `VoxelAsciiTickLogger` тАФ 60 Hz sim-tick file dump
+-(default ON next to exe as `voxel-ascii-tick.log`; `PROJECTV_ASCII_TICK_LOG=0` off),
+-per-Y FNV dedup. Hook in `RunSimulationTickLoop`. Guide: `docs/VoxelAsciiGuide.md`.
+-`ProjectVVoxelWorldAsciiTests` green.
++via `PROJECTV_ASCII_TICK_LOG`, per-Y FNV dedup (unchanged floors omitted). Hook in
++`RunSimulationTickLoop`. `ProjectVVoxelWorldAsciiTests` green.
+ 
+ **2026-07-17 Voxel ASCII Y-layers:** `VoxelWorldAscii` тАФ DF-style ╤Н╤В╨░╨╢╨╕ ╨┐╨╛ Y
+-(╨║╨░╤А╤В╨░ XZ), auto tight non-Air AABB + padding/override.
++(╨║╨░╤А╤В╨░ XZ), auto tight non-Air AABB + padding/override; unit target
++`ProjectVVoxelWorldAsciiTests` green. No FluidCA file edits.
++
++**2026-07-17 Fluid CA:** rewritten again after ascii stall (Swiss-cheese + stop).
++Root cause: interior HтЙе2 could not displace when edge was тЙе2 away; extent
++heuristic slowed jets. Now: BFS pressure drain + gap-fill tension; no extent.
++`ProjectVFluidCATests` green (5├Ч5 interior + gap-fill). GPU OFF. See ┬з8.
+ 
+ **2026-07-16 Engine GPU ceiling:** Phase 0тАУ4 measured under MAILBOX + InputReplay;
+ Phase 5 wait-polish parked. Code: per-slot voxel-payload dirty **union** (no
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 516be29d..4d3c34f1 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -217,6 +217,7 @@ target_sources(ProjectV PRIVATE
+         voxel/VoxelWorldPreset.cpp
+         voxel/VoxelWorldSnapshot.cpp
+         voxel/VoxelWorldFluid.cpp
++        voxel/VoxelWorldFluidBodies.cpp
+         voxel/VoxelWorldLod.cpp
+         voxel/VoxelWorldStatic.cpp
+         voxel/ChunkStreamer.cpp
+diff --git a/src/voxel/VoxelWorldFluid.cpp b/src/voxel/VoxelWorldFluid.cpp
+index 4eff4153..8f863e2b 100644
+--- a/src/voxel/VoxelWorldFluid.cpp
++++ b/src/voxel/VoxelWorldFluid.cpp
+@@ -1,14 +1,18 @@
+ #include "core/Math.hpp"
+ #include "core/EnvUtils.hpp"
+ #include "core/StringId.hpp"
++#include "voxel/VoxelWorldFluidInternal.hpp"
+ #include "voxel/VoxelWorldInternal.hpp"
+ #include "debug/Profiling.hpp"
+ #include "core/RuntimeDiagnostics.hpp"
+ 
++#include <cstdint>
+ #include <vector>
+ 
+ namespace {
++
+ bool gFluidCaGpuEnabledForTesting = false;
++
+ } // namespace
+ 
+ bool IsFluidCaGpuEnabled()
+@@ -44,6 +48,10 @@ std::vector<uint32_t> BuildActiveChunkIdsForFluidCa(const VoxelWorld &world)
+ 	return active;
+ }
+ 
++// Binary Fluid CA driver: READ тЖТ FALL (contiguous runs shift down as a unit) тЖТ
++// per-body hydrostatic engine (ProcessFluidBodyChains, VoxelWorldFluidBodies.cpp)
++// тЖТ COMMIT. Idle fast-path: no AirтЖФFluid edits since a no-move tick тЖТ free return.
++// Spec: docs/superpowers/specs/2026-07-20-fluid-ca-hydrostatic-chains-design.md
+ uint32_t UpdateFluidCA(VoxelWorld &world)
+ {
+ 	PV_PROFILE_ZONE_N("UpdateFluidCA");
+@@ -52,162 +60,100 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
+ 		return 0u;
+ 	}
+ 
++	if (world.fluidEditSerial == world.lastFluidCaSerial) {
++		return 0u; // settled water costs nothing until an edit wakes the CA
++	}
++	const uint64_t serialAtEntry = world.fluidEditSerial;
++
+ 	const int width = world.width;
+ 	const int height = world.height;
+ 	const int depth = world.depth;
+ 
+ #if !defined(NDEBUG)
+-	{
+-		PV_ASSERT(
+-			width > 0 && height > 0 && depth > 0,
+-			"VoxelWorld",
+-			"UpdateFluidCA",
+-			"world dimensions must be strictly positive");
+-	}
++	PV_ASSERT(
++		width > 0 && height > 0 && depth > 0,
++		"VoxelWorld",
++		"UpdateFluidCA",
++		"world dimensions must be strictly positive");
+ #endif
+ 
+-	const auto index = [width, height](const int x, const int y, const int z) -> size_t {
+-		return static_cast<size_t>(x) + static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(z) * static_cast<size_t>(width) * static_cast<size_t>(height);
++	const auto index = [width, height](const int lx, const int ly, const int lz) -> size_t {
++		return static_cast<size_t>(lx) + static_cast<size_t>(ly) * static_cast<size_t>(width) +
++			   static_cast<size_t>(lz) * static_cast<size_t>(width) * static_cast<size_t>(height);
+ 	};
+ 
+ 	const size_t totalCells = static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(depth);
+ 	std::vector<uint8_t> next(totalCells, 0u);
+ 
+-	int readMinX = world.fluidCAAabbMin.x - 1;
+-	int readMinY = world.fluidCAAabbMin.y - 1;
+-	int readMinZ = world.fluidCAAabbMin.z - 1;
+-	int readMaxX = world.fluidCAAabbMaxExclusive.x + 1;
+-	int readMaxY = world.fluidCAAabbMaxExclusive.y + 1;
+-	int readMaxZ = world.fluidCAAabbMaxExclusive.z + 1;
+-	if (readMinX < world.min.x)
+-		readMinX = world.min.x;
+-	if (readMinY < world.min.y)
+-		readMinY = world.min.y;
+-	if (readMinZ < world.min.z)
+-		readMinZ = world.min.z;
+-	if (readMaxX > world.maxExclusive.x)
+-		readMaxX = world.maxExclusive.x;
+-	if (readMaxY > world.maxExclusive.y)
+-		readMaxY = world.maxExclusive.y;
+-	if (readMaxZ > world.maxExclusive.z)
+-		readMaxZ = world.maxExclusive.z;
+-
+-	const int simMinX = readMinX < world.min.x ? world.min.x : readMinX;
+-	const int simMinY = readMinY < world.min.y ? world.min.y : readMinY;
+-	const int simMinZ = readMinZ < world.min.z ? world.min.z : readMinZ;
+-	const int simMaxX = readMaxX > world.maxExclusive.x ? world.maxExclusive.x : readMaxX;
+-	const int simMaxY = readMaxY > world.maxExclusive.y ? world.maxExclusive.y : readMaxY;
+-	const int simMaxZ = readMaxZ > world.maxExclusive.z ? world.maxExclusive.z : readMaxZ;
+-
+-	profiling::PlotValue("Fluid CA Cells Read", static_cast<int64_t>(readMaxX - readMinX) * (readMaxY - readMinY) * (readMaxZ - readMinZ));
++	const int readMinX = world.min.x;
++	const int readMinY = world.min.y;
++	const int readMinZ = world.min.z;
++	const int readMaxX = world.maxExclusive.x;
++	const int readMaxY = world.maxExclusive.y;
++	const int readMaxZ = world.maxExclusive.z;
++
++	profiling::PlotValue(
++		"Fluid CA Cells Read",
++		static_cast<int64_t>(readMaxX - readMinX) * (readMaxY - readMinY) * (readMaxZ - readMinZ));
+ 
+ 	{
+ 		PV_PROFILE_ZONE_N("UpdateFluidCA.ReadPass");
+ 		for (int z = readMinZ; z < readMaxZ; ++z) {
+ 			for (int y = readMinY; y < readMaxY; ++y) {
+ 				for (int x = readMinX; x < readMaxX; ++x) {
+-					const int lx = x - world.min.x;
+-					const int ly = y - world.min.y;
+-					const int lz = z - world.min.z;
+-					next[index(lx, ly, lz)] = ReadVoxelFromSparseStorage(world, {x, y, z});
++					next[index(x - readMinX, y - readMinY, z - readMinZ)] = ReadVoxelFromSparseStorage(world, {x, y, z});
+ 				}
+ 			}
+ 		}
+ 	}
+ 
+-	std::vector<uint8_t> claimed(totalCells, 0u);
+-
+-	uint32_t movedCount = 0u;
+-
+-	for (int z = simMinZ; z < simMaxZ; ++z) {
+-		for (int y = simMinY; y < simMaxY; ++y) {
+-			for (int x = simMinX; x < simMaxX; ++x) {
+-				const int lx = x - world.min.x;
+-				const int ly = y - world.min.y;
+-				const int lz = z - world.min.z;
+-				const size_t idx = index(lx, ly, lz);
+-				if (next[idx] != static_cast<uint8_t>(VoxelMaterial::Fluid)) {
++	uint32_t moved = 0u;
++	constexpr uint8_t kAir = static_cast<uint8_t>(VoxelMaterial::Air);
++	constexpr uint8_t kFluid = static_cast<uint8_t>(VoxelMaterial::Fluid);
++
++	// Phase 1: FALL тАФ contiguous Fluid runs shift down by 1 as a unit (stream never shreds into drops)
++	for (int z = 0; z < depth; ++z) {
++		for (int x = 0; x < width; ++x) {
++			int y = 0;
++			while (y < height) {
++				if (next[index(x, y, z)] != kFluid || y == 0 || next[index(x, y - 1, z)] != kAir) {
++					++y;
+ 					continue;
+ 				}
+-
+-				if (claimed[idx] != 0u) {
+-					continue;
++				int runTop = y; // maximal contiguous Fluid run above the Air gap
++				while (runTop + 1 < height && next[index(x, runTop + 1, z)] == kFluid) {
++					++runTop;
+ 				}
+-
+-				if (ly > 0) {
+-					const size_t belowIdx = index(lx, ly - 1, lz);
+-
+-					if (next[belowIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
+-						next[idx] = static_cast<uint8_t>(VoxelMaterial::Air);
+-						next[belowIdx] = static_cast<uint8_t>(VoxelMaterial::Fluid);
+-
+-						claimed[idx] = 1u;
+-						claimed[belowIdx] = 1u;
+-						++movedCount;
+-						continue;
+-					}
+-				}
+-
+-				{
+-					const uint32_t h = lx * 73856093u ^ ly * 19349663u ^ lz * 83492791u;
+-					constexpr int sides[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+-					const int startSide = static_cast<int>(h & 0x3u);
+-
+-					const int dirs[2] = {startSide, startSide + 1 & 0x3};
+-					int spreadDir = -1;
+-					for (int d = 0; d < 2; ++d) {
+-						const int sideIdx = dirs[d];
+-						const int nlx = lx + sides[sideIdx][0];
+-						const int nlz = lz + sides[sideIdx][1];
+-						if (nlx < 0 || nlx >= width || nlz < 0 || nlz >= depth) {
+-							continue;
+-						}
+-						const size_t neighbourIdx = index(nlx, ly, nlz);
+-						if (next[neighbourIdx] == static_cast<uint8_t>(VoxelMaterial::Air)) {
+-							spreadDir = d;
+-							break;
+-						}
+-					}
+-					if (spreadDir >= 0) {
+-						const int sideIdx = dirs[spreadDir];
+-						const int nlx = lx + sides[sideIdx][0];
+-						const int nlz = lz + sides[sideIdx][1];
+-						const size_t neighbourIdx = index(nlx, ly, nlz);
+-						next[idx] = static_cast<uint8_t>(VoxelMaterial::Air);
+-						next[neighbourIdx] = static_cast<uint8_t>(VoxelMaterial::Fluid);
+-						claimed[idx] = 1u;
+-						claimed[neighbourIdx] = 1u;
+-						++movedCount;
+-					}
++				for (int ry = y; ry <= runTop; ++ry) { // the whole run descends exactly 1 cell
++					next[index(x, ry - 1, z)] = kFluid;
++					next[index(x, ry, z)] = kAir;
+ 				}
++				moved += static_cast<uint32_t>(runTop - y + 1);
++				y = runTop + 1;
+ 			}
+ 		}
+ 	}
+ 
+-	if (movedCount == 0u) {
++	// Phase 2: per-body hydrostatic target + gradient chains
++	moved += ProcessFluidBodyChains(width, height, depth, next);
++
++	if (moved == 0u) {
++		world.lastFluidCaSerial = world.fluidEditSerial; // settled: next tick early-outs unless edits bump the serial
+ 		return 0u;
+ 	}
+ 
+-	profiling::PlotValue("Fluid CA Cells Moved", static_cast<int64_t>(movedCount));
++	profiling::PlotValue("Fluid CA Cells Moved", static_cast<int64_t>(moved));
+ 	{
+ 		PV_PROFILE_ZONE_N("UpdateFluidCA.Commit");
+-		for (int z = simMinZ; z < simMaxZ; ++z) {
+-			for (int y = simMinY; y < simMaxY; ++y) {
+-				for (int x = simMinX; x < simMaxX; ++x) {
+-					const int lx = x - world.min.x;
+-					const int ly = y - world.min.y;
+-					const int lz = z - world.min.z;
+-					const size_t idx = index(lx, ly, lz);
+-					const uint8_t current = next[idx];
+-					const VoxelMaterial currentMaterial = static_cast<VoxelMaterial>(current);
++		for (int z = readMinZ; z < readMaxZ; ++z) {
++			for (int y = readMinY; y < readMaxY; ++y) {
++				for (int x = readMinX; x < readMaxX; ++x) {
++					const VoxelMaterial currentMaterial = static_cast<VoxelMaterial>(next[index(x - readMinX, y - readMinY, z - readMinZ)]);
+ 					const VoxelMaterial previousMaterial = GetVoxelMaterial(world, {x, y, z});
+ 					if (previousMaterial == currentMaterial) {
+ 						continue;
+ 					}
+-					SetVoxelMaterial(
+-						world,
+-						{x, y, z},
+-						currentMaterial);
++					SetVoxelMaterial(world, {x, y, z}, currentMaterial);
+ 				}
+ 			}
+ 		}
+@@ -215,16 +161,10 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
+ 
+ #if !defined(NDEBUG)
+ 	{
+-		const int worldMinX = world.min.x;
+-		const int worldMinY = world.min.y;
+-		const int worldMinZ = world.min.z;
+-		const int worldMaxX = world.maxExclusive.x;
+-		const int worldMaxY = world.maxExclusive.y;
+-		const int worldMaxZ = world.maxExclusive.z;
+ 		uint32_t actualFluidCount = 0u;
+-		for (int z = worldMinZ; z < worldMaxZ; ++z) {
+-			for (int y = worldMinY; y < worldMaxY; ++y) {
+-				for (int x = worldMinX; x < worldMaxX; ++x) {
++		for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
++			for (int y = world.min.y; y < world.maxExclusive.y; ++y) {
++				for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
+ 					if (GetVoxelMaterial(world, {x, y, z}) == VoxelMaterial::Fluid) {
+ 						++actualFluidCount;
+ 					}
+@@ -239,5 +179,6 @@ uint32_t UpdateFluidCA(VoxelWorld &world)
+ 	}
+ #endif
+ 
+-	return movedCount;
++	world.lastFluidCaSerial = serialAtEntry; // own commits bumped the serial тАФ re-run next tick until a no-move tick
++	return moved;
+ }
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 39e7219d..6e742b49 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -41,9 +41,12 @@ add_executable(ProjectVTests
+         ../src/voxel/VoxelWorldPreset.cpp
+         ../src/voxel/VoxelWorldSnapshot.cpp
+         ../src/voxel/VoxelWorldFluid.cpp
++        ../src/voxel/VoxelWorldFluidBodies.cpp
+         ../src/voxel/VoxelWorldLod.cpp
+         ../src/voxel/VoxelWorldStatic.cpp
+         ../src/voxel/SceneConfig.cpp
++        ../src/voxel/VoxelAsciiTickLogger.cpp
++        ../src/voxel/VoxelWorldAscii.cpp
+ )
+ 
+ file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" PROJECTV_TESTS_SOURCE_DIR_CMAKE)
+@@ -420,7 +423,8 @@ add_executable(ProjectVFluidCATests
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++                ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluidBodies.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
+         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
+@@ -530,7 +534,8 @@ add_executable(ProjectVVoxelWorldAsciiTests
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++                ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluidBodies.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
+         ${CMAKE_SOURCE_DIR}/src/physics/GreedyPhysicsMerger.cpp
+@@ -837,7 +842,8 @@ add_executable(ProjectVAsyncComputeTests
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++                ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluidBodies.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+@@ -980,7 +986,8 @@ add_executable(ProjectVPhysicsGreedyMergerTests
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++                ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluidBodies.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+@@ -1067,7 +1074,8 @@ add_executable(ProjectVPhysicsIncrementalJoltTests
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++                ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluidBodies.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+@@ -1110,7 +1118,8 @@ add_executable(ProjectVPhysicsSyncTests
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorld.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldPreset.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldSnapshot.cpp
+-        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++                ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluid.cpp
++        ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldFluidBodies.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldLod.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelWorldStatic.cpp
+         ${CMAKE_SOURCE_DIR}/src/voxel/VoxelLodDownsample.cpp
+diff --git a/tests/FluidCAGpuTests.cpp b/tests/FluidCAGpuTests.cpp
+index f9a652bc..f5eb800d 100644
+--- a/tests/FluidCAGpuTests.cpp
++++ b/tests/FluidCAGpuTests.cpp
+@@ -31,12 +31,12 @@ void ExpectEqualUInt(TestContext &context, const uint32_t expected, const uint32
+ 	}
+ }
+ 
+-void TestFluidCaPipelineRequestedDefaultOn(TestContext &context)
++void TestFluidCaPipelineRequestedDefaultOff(TestContext &context)
+ {
+ 	projectv::core::UnsetEnvVar("PROJECTV_FLUID_CA_GPU");
+ 	const bool requested = projectv::render::IsFluidCaGpuPipelineRequested();
+-	if (!requested) {
+-		context.Fail(__LINE__, "PROJECTV_FLUID_CA_GPU unset -> true (per TODO Stage 3.1 Step 2 default flip)");
++	if (requested) {
++		context.Fail(__LINE__, "PROJECTV_FLUID_CA_GPU unset -> false (CPU CA is gameplay truth; GPU is opt-in research)");
+ 	}
+ }
+ 
+@@ -87,7 +87,7 @@ void TestFluidCaPushConstantsPropagation(TestContext &context)
+ int main()
+ {
+ 	TestContext context{};
+-	TestFluidCaPipelineRequestedDefaultOn(context);
++	TestFluidCaPipelineRequestedDefaultOff(context);
+ 	TestFluidCaPipelineRequestedOptOut(context);
+ 	TestFluidCaPipelineRequestedExplicit(context);
+ 	TestFluidCaPushConstantsSize(context);
+diff --git a/tests/FluidCATests.cpp b/tests/FluidCATests.cpp
+index 97eddeb6..90a5f3ae 100644
+--- a/tests/FluidCATests.cpp
++++ b/tests/FluidCATests.cpp
+@@ -1,12 +1,10 @@
+-
+ #include "voxel/VoxelWorld.hpp"
+ 
+ #include "core/Types.hpp"
+ 
+ #include <algorithm>
+ #include <cstdio>
+-#include <cstdlib>
+-#include <string_view>
++#include <string>
+ #include <vector>
+ 
+ #include "projectv_test_utils.hpp"
+@@ -35,15 +33,15 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
+ 		}
+ 	}
+ 	world.chunks.assign(
+-		static_cast<size_t>(world.chunkCountX) *
+-			static_cast<size_t>(world.chunkCountY) *
++		static_cast<size_t>(world.chunkCountX) * static_cast<size_t>(world.chunkCountY) *
+ 			static_cast<size_t>(world.chunkCountZ),
+ 		VoxelChunk{});
+ 	for (int chunkZ = 0; chunkZ < world.chunkCountZ; ++chunkZ) {
+ 		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
+ 			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
+ 				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
+-				auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit, lodLevel, reserved0, reserved1, reserved2] = world.chunks[chunkIndex];
++				auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit, lodLevel,
++					   reserved0, reserved1, reserved2] = world.chunks[chunkIndex];
+ 				min = {
+ 					world.min.x + chunkX * world.chunkSize,
+ 					world.min.y + chunkY * world.chunkSize,
+@@ -65,753 +63,1064 @@ VoxelWorld MakeFluidCATestWorld(const int width, const int height, const int dep
+ size_t CountFluid(const VoxelWorld &world)
+ {
+ 	const auto snapshot = BuildFlatVoxelSnapshot(world);
+-	return static_cast<size_t>(std::ranges::count(snapshot,
+-												  static_cast<uint8_t>(VoxelMaterial::Fluid)));
++	return static_cast<size_t>(
++		std::ranges::count(snapshot, static_cast<uint8_t>(VoxelMaterial::Fluid)));
+ }
+-} // namespace
+ 
+-void TestFluidCASingleCellFallsOneCellPerTick(TestContext &context)
++int MaxFluidColumnHeight(const VoxelWorld &world)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(8, 8, 8);
+-	SetVoxelMaterial(world, {4, 5, 4}, VoxelMaterial::Fluid, nullptr);
+-
+-	const uint32_t moved = UpdateFluidCA(world);
+-	EXPECT_EQ(context, 1u, moved);
+-	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {4, 5, 4}));
+-	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {4, 4, 4}));
++	int maxH = 0;
++	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
++		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
++			int h = 0;
++			for (int y = world.min.y; y < world.maxExclusive.y; ++y) {
++				if (GetVoxelMaterial(world, {x, y, z}) == VoxelMaterial::Fluid) {
++					++h;
++					maxH = std::max(maxH, h);
++				} else {
++					h = 0;
++				}
++			}
++		}
++	}
++	return maxH;
+ }
+ 
+-void TestFluidCAColumnPercolatesAndSpreadsOnFloor(TestContext &context)
++int ColumnHeightAt(const VoxelWorld &world, const int x, const int z)
+ {
+-	constexpr int kColumnHeight = 4;
+-	constexpr int kStartY = 5;
+-	VoxelWorld world = MakeFluidCATestWorld(4, 16, 4);
+-	for (int y = kStartY; y < kStartY + kColumnHeight; ++y) {
+-		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
+-	}
+-	const uint32_t initialCount = world.stats.fluidVoxelCount;
+-	EXPECT_EQ(context, static_cast<uint32_t>(kColumnHeight), initialCount);
+-
+-	for (int tick = 0; tick < 30; ++tick) {
+-		UpdateFluidCA(world);
+-		EXPECT_TRUE(context, world.stats.fluidVoxelCount >= initialCount);
++	int h = 0;
++	for (int y = world.min.y; y < world.maxExclusive.y; ++y) {
++		if (GetVoxelMaterial(world, {x, y, z}) == VoxelMaterial::Fluid) {
++			++h;
++		} else if (h > 0) {
++			break;
++		}
+ 	}
++	return h;
++}
+ 
+-	for (int y = kStartY + kColumnHeight; y < world.height; ++y) {
+-		EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {2, y, 2}));
++void FillFloor(VoxelWorld &world, const int y, const VoxelMaterial material)
++{
++	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
++		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
++			SetVoxelMaterial(world, {x, y, z}, material, nullptr);
++		}
+ 	}
+ }
+ 
+-void TestFluidCARestingOnFloorStaysPut(TestContext &context)
++std::string SnapshotMaterials(const VoxelWorld &world)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass, nullptr);
+-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
++	const auto snap = BuildFlatVoxelSnapshot(world);
++	return std::string(snap.begin(), snap.end());
++}
+ 
+-	for (int tick = 0; tick < 5; ++tick) {
+-		UpdateFluidCA(world);
+-		EXPECT_EQ(
+-			context,
+-			VoxelMaterial::Glass,
+-			GetVoxelMaterial(world, {2, 0, 2}));
++std::vector<Int3> CollectFluidCells(const VoxelWorld &world)
++{
++	std::vector<Int3> cells;
++	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
++		for (int y = world.min.y; y < world.maxExclusive.y; ++y) {
++			for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
++				if (GetVoxelMaterial(world, {x, y, z}) == VoxelMaterial::Fluid) {
++					cells.push_back({x, y, z});
++				}
++			}
++		}
+ 	}
+-
+-	EXPECT_TRUE(context, world.stats.fluidVoxelCount >= 1u);
++	return cells;
+ }
+ 
+-void TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks(TestContext &context)
++bool ContainsCell(const std::vector<Int3> &cells, const Int3 cell)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass, nullptr);
+-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
+-
+-	UpdateFluidCA(world);
+-	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {2, 0, 2}));
+-	EXPECT_TRUE(context, world.stats.fluidVoxelCount >= 1u);
+-
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Air, nullptr);
+-
+-	for (int tick = 0; tick < 5; ++tick) {
+-		UpdateFluidCA(world);
+-		EXPECT_TRUE(context, world.stats.fluidVoxelCount >= 1u);
++	for (const Int3 c : cells) {
++		if (c.x == cell.x && c.y == cell.y && c.z == cell.z) {
++			return true;
++		}
+ 	}
++	return false;
+ }
+ 
+-void TestFluidCAFluidAtY0IsStable(TestContext &context)
++bool HasSixNeighbourInSet(const std::vector<Int3> &cells, const Int3 cell)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Fluid, nullptr);
+-
+-	for (int tick = 0; tick < 5; ++tick) {
+-		UpdateFluidCA(world);
+-		EXPECT_TRUE(context, world.stats.fluidVoxelCount >= 1u);
++	constexpr int dirs[6][3] = {{0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}};
++	for (const auto &d : dirs) {
++		if (ContainsCell(cells, {cell.x + d[0], cell.y + d[1], cell.z + d[2]})) {
++			return true;
++		}
+ 	}
++	return false;
+ }
+ 
+-void TestFluidCAFluidDoesNotFallThroughPlatform(TestContext &context)
++} // namespace
++
++void TestFluidCASingleCellFallsOneCellPerTick(TestContext &context)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(8, 8, 8);
++	SetVoxelMaterial(world, {4, 5, 4}, VoxelMaterial::Fluid, nullptr);
+ 
+ 	const uint32_t moved = UpdateFluidCA(world);
+-	EXPECT_TRUE(context, moved > 0u);
+-
+-	EXPECT_EQ(
+-		context,
+-		VoxelMaterial::FloorWhite,
+-		GetVoxelMaterial(world, {2, 0, 2}));
+-
+-	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
++	EXPECT_EQ(context, 1u, moved);
++	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {4, 5, 4}));
++	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {4, 4, 4}));
++	EXPECT_EQ(context, size_t{1}, CountFluid(world));
+ }
+ 
+-void TestFluidCASpreadsToCardinalNeighbour(TestContext &context)
++void TestFluidCAMassPreservedEachTick(TestContext &context)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
++	VoxelWorld world = MakeFluidCATestWorld(8, 12, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	SetVoxelMaterial(world, {3, 4, 3}, VoxelMaterial::Fluid, nullptr);
++	SetVoxelMaterial(world, {3, 5, 3}, VoxelMaterial::Fluid, nullptr);
++	SetVoxelMaterial(world, {3, 6, 3}, VoxelMaterial::Fluid, nullptr);
++	SetVoxelMaterial(world, {4, 4, 3}, VoxelMaterial::Fluid, nullptr);
++	const size_t mass = CountFluid(world);
++	for (int tick = 0; tick < 20; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++	}
++}
+ 
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Glass, nullptr);
++void TestFluidCAHeight1StaysOnFlatFloor(TestContext &context)
++{
++	VoxelWorld world = MakeFluidCATestWorld(8, 4, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
+ 	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
++	for (int tick = 0; tick < 8; ++tick) {
++		EXPECT_EQ(context, 0u, UpdateFluidCA(world));
++		EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {2, 1, 2}));
++	}
++	EXPECT_EQ(context, size_t{1}, CountFluid(world));
++}
+ 
+-	const uint32_t moved = UpdateFluidCA(world);
+-	EXPECT_TRUE(context, moved > 0u);
+-	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {2, 1, 2}));
+-
+-	const bool spreadToXPlus = GetVoxelMaterial(world, {3, 1, 2}) == VoxelMaterial::Fluid;
+-	const bool spreadToXMinus = GetVoxelMaterial(world, {1, 1, 2}) == VoxelMaterial::Fluid;
+-	const bool spreadToZPlus = GetVoxelMaterial(world, {2, 1, 3}) == VoxelMaterial::Fluid;
+-	const bool spreadToZMinus = GetVoxelMaterial(world, {2, 1, 1}) == VoxelMaterial::Fluid;
+-	const int spreadCount = static_cast<int>(spreadToXPlus) + static_cast<int>(spreadToXMinus) + static_cast<int>(spreadToZPlus) + static_cast<int>(spreadToZMinus);
+-	EXPECT_EQ(context, 1, spreadCount);
+-
+-	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
++void TestFluidCAHeight1StepsDownOffPlatform(TestContext &context)
++{
++	VoxelWorld world = MakeFluidCATestWorld(8, 5, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::FloorGray, nullptr);
++	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid, nullptr);
++	bool reachedFloor = false;
++	for (int tick = 0; tick < 16; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, size_t{1}, CountFluid(world));
++		for (int z = 0; z < 8 && !reachedFloor; ++z) {
++			for (int x = 0; x < 8 && !reachedFloor; ++x) {
++				reachedFloor = GetVoxelMaterial(world, {x, 1, z}) == VoxelMaterial::Fluid; // y=1 rests on floor y=0
++			}
++		}
++		if (reachedFloor) {
++			break;
++		}
++	}
++	EXPECT_TRUE(context, reachedFloor);
++	EXPECT_EQ(context, 0u, UpdateFluidCA(world)); // settled on the floor, no wander
+ }
+ 
+-void TestFluidCASpreadIsDeterministic(TestContext &context)
++void TestFluidCAColumnBaseDrainsIntoSideHole(TestContext &context)
+ {
+-	auto run = [] {
+-		VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-		SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+-		SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
+-		for (int tick = 0; tick < 5; ++tick) {
+-			UpdateFluidCA(world);
++	VoxelWorld world = MakeFluidCATestWorld(8, 6, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
++	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid, nullptr);
++	SetVoxelMaterial(world, {2, 3, 2}, VoxelMaterial::Fluid, nullptr);
++	const size_t mass = CountFluid(world);
++	EXPECT_EQ(context, 3, ColumnHeightAt(world, 2, 2));
++
++	for (int tick = 0; tick < 16; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (ColumnHeightAt(world, 2, 2) < 3) {
++			break;
+ 		}
+-		return BuildFlatVoxelSnapshot(world);
+-	};
+-	const std::vector<uint8_t> first = run();
+-	const std::vector<uint8_t> second = run();
+-	EXPECT_TRUE(context, first == second);
++	}
++	EXPECT_TRUE(context, ColumnHeightAt(world, 2, 2) < 3);
+ }
+ 
+-void TestFluidCAEmptyWorldShortCircuits(TestContext &context)
++void TestFluidCANoClimbOntoNeighborTop(TestContext &context)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	EXPECT_EQ(context, 0u, world.stats.fluidVoxelCount);
+-	EXPECT_EQ(context, 0u, UpdateFluidCA(world));
+-	EXPECT_EQ(context, 0u, UpdateFluidCA(world));
+-	EXPECT_EQ(context, 0u, world.stats.fluidVoxelCount);
++	VoxelWorld world = MakeFluidCATestWorld(6, 4, 6);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
++	SetVoxelMaterial(world, {3, 1, 2}, VoxelMaterial::Fluid, nullptr); // neighbor puddle; (3,2) must stay Air
++	UpdateFluidCA(world);
++	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {3, 2, 2}));
++	EXPECT_EQ(context, size_t{2}, CountFluid(world));
+ }
+ 
+-void TestFluidCADeterministicAcrossRuns(TestContext &context)
++void TestFluidCACenterTowerDisplacesEdgeOnOpenFloor(TestContext &context)
+ {
+-	auto runScenario = [] {
+-		VoxelWorld world = MakeFluidCATestWorld(8, 12, 8);
+-		SetVoxelMaterial(world, {3, 5, 3}, VoxelMaterial::Fluid, nullptr);
+-		SetVoxelMaterial(world, {3, 6, 3}, VoxelMaterial::Fluid, nullptr);
+-		SetVoxelMaterial(world, {4, 7, 3}, VoxelMaterial::Fluid, nullptr);
+-		SetVoxelMaterial(world, {5, 8, 3}, VoxelMaterial::Fluid, nullptr);
+-		for (int x = 0; x < 8; ++x) {
+-			for (int z = 0; z < 8; ++z) {
+-				SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
+-			}
+-		}
+-		for (int tick = 0; tick < 20; ++tick) {
+-			UpdateFluidCA(world);
++	VoxelWorld world = MakeFluidCATestWorld(12, 4, 12);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int z = 4; z <= 6; ++z) {
++		for (int x = 4; x <= 6; ++x) {
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Fluid, nullptr);
+ 		}
+-		return BuildFlatVoxelSnapshot(world);
+-	};
++	}
++	SetVoxelMaterial(world, {5, 2, 5}, VoxelMaterial::Fluid, nullptr); // center tower
++	const size_t mass = CountFluid(world);
++	EXPECT_EQ(context, size_t{10}, mass);
+ 
+-	const std::vector<uint8_t> first = runScenario();
+-	const std::vector<uint8_t> second = runScenario();
+-	EXPECT_EQ(context, first.size(), second.size());
+-	EXPECT_TRUE(context, first == second);
++	for (int tick = 0; tick < 64; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (MaxFluidColumnHeight(world) == 1) {
++			break;
++		}
++	}
++	EXPECT_EQ(context, 1, MaxFluidColumnHeight(world));
++	EXPECT_EQ(context, size_t{10}, CountFluid(world));
+ }
+ 
+-void TestFluidCAStatsCountStaysConsistent(TestContext &context)
++void TestFluidCAInteriorTowerOn5x5Flattens(TestContext &context)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 16, 4);
+-	for (int y = 5; y < 10; ++y) {
+-		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
++	// Chebyshev edge distance тЙе 2: old displace-only CA deadlocked here (ascii stall).
++	VoxelWorld world = MakeFluidCATestWorld(14, 4, 14);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int z = 4; z <= 8; ++z) {
++		for (int x = 4; x <= 8; ++x) {
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Fluid, nullptr);
++		}
+ 	}
++	SetVoxelMaterial(world, {6, 2, 6}, VoxelMaterial::Fluid, nullptr);
++	const size_t mass = CountFluid(world);
++	EXPECT_EQ(context, size_t{26}, mass);
+ 
+-	for (int tick = 0; tick < 30; ++tick) {
++	bool flat = false;
++	for (int tick = 0; tick < 64; ++tick) {
+ 		UpdateFluidCA(world);
+-		const size_t actual = CountFluid(world);
+-
+-		EXPECT_EQ(context, static_cast<uint32_t>(actual), world.stats.fluidVoxelCount);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (MaxFluidColumnHeight(world) == 1) {
++			flat = true;
++			break;
++		}
+ 	}
++	EXPECT_TRUE(context, flat);
++	EXPECT_EQ(context, size_t{26}, CountFluid(world));
+ }
+ 
+-void TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb(TestContext &context)
++void TestFluidCAGapInPuddleFills(TestContext &context)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 16, 4);
+-	for (int y = 5; y < 10; ++y) {
+-		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(10, 4, 10);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int z = 3; z <= 5; ++z) {
++		for (int x = 3; x <= 5; ++x) {
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Fluid, nullptr);
++		}
+ 	}
++	SetVoxelMaterial(world, {4, 1, 4}, VoxelMaterial::Air, nullptr);   // hole in center
++	SetVoxelMaterial(world, {2, 1, 4}, VoxelMaterial::Fluid, nullptr); // spare mass outside to move in
++	const size_t mass = CountFluid(world);
+ 
+-	const Int3 initialAabbMin = world.fluidCAAabbMin;
+-	const Int3 initialAabbMaxExclusive = world.fluidCAAabbMaxExclusive;
+-
+-	for (int tick = 0; tick < 30; ++tick) {
++	bool filled = false;
++	for (int tick = 0; tick < 16; ++tick) {
+ 		UpdateFluidCA(world);
+-		const size_t actual = CountFluid(world);
+-		EXPECT_EQ(context, static_cast<uint32_t>(actual), world.stats.fluidVoxelCount);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (GetVoxelMaterial(world, {4, 1, 4}) == VoxelMaterial::Fluid) {
++			filled = true;
++			break;
++		}
+ 	}
+-
+-	EXPECT_TRUE(context, world.stats.fluidVoxelCount > 0u);
+-	const bool fluidMovedBelowInitialAabb = world.fluidCAAabbMin.y < initialAabbMin.y;
+-	EXPECT_TRUE(context, fluidMovedBelowInitialAabb);
+-	(void)initialAabbMaxExclusive;
++	EXPECT_TRUE(context, filled);
+ }
+ 
+-void TestFluidCALongColumnAtWorldFloorSpreadsOut(TestContext &context)
++void TestFluidCAOpenFloorSpreadIsBalanced(TestContext &context)
+ {
+-	constexpr int kColumnHeight = 4;
+-	VoxelWorld world = MakeFluidCATestWorld(4, 8, 4);
+-	for (int y = 0; y < kColumnHeight; ++y) {
+-		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(16, 4, 16);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int z = 6; z <= 8; ++z) {
++		for (int x = 6; x <= 8; ++x) {
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Fluid, nullptr);
++		}
+ 	}
++	SetVoxelMaterial(world, {7, 2, 7}, VoxelMaterial::Fluid, nullptr); // center tower
++	const size_t mass = CountFluid(world);
+ 
+-	for (int tick = 0; tick < 20; ++tick) {
++	for (int tick = 0; tick < 64; ++tick) {
+ 		UpdateFluidCA(world);
+-		EXPECT_EQ(
+-			context,
+-			static_cast<uint32_t>(kColumnHeight),
+-			world.stats.fluidVoxelCount);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (MaxFluidColumnHeight(world) == 1) {
++			break;
++		}
+ 	}
+-
+-	size_t y0FluidCount = 0;
+-	for (int x = 0; x < 4; ++x) {
+-		for (int z = 0; z < 4; ++z) {
+-			if (GetVoxelMaterial(world, {x, 0, z}) == VoxelMaterial::Fluid) {
+-				++y0FluidCount;
++	EXPECT_EQ(context, 1, MaxFluidColumnHeight(world));
++
++	int minX = 99;
++	int maxX = -99;
++	int minZ = 99;
++	int maxZ = -99;
++	for (int z = world.min.z; z < world.maxExclusive.z; ++z) {
++		for (int x = world.min.x; x < world.maxExclusive.x; ++x) {
++			if (GetVoxelMaterial(world, {x, 1, z}) != VoxelMaterial::Fluid) {
++				continue;
+ 			}
++			minX = std::min(minX, x);
++			maxX = std::max(maxX, x);
++			minZ = std::min(minZ, z);
++			maxZ = std::max(maxZ, z);
+ 		}
+ 	}
+-	EXPECT_TRUE(context, y0FluidCount > 0u);
++	const int spanX = maxX - minX + 1;
++	const int spanZ = maxZ - minZ + 1;
++	EXPECT_TRUE(context, (spanX > spanZ ? spanX - spanZ : spanZ - spanX) <= 2);
++	EXPECT_TRUE(context, spanX <= 6 && spanZ <= 6);
+ }
+ 
+-void TestFluidCAColumnDrainsViaSpreadPlatformStaysIntact(TestContext &context)
++void TestFluidCAElevatedSidewalkWhenFloorBlocked(TestContext &context)
+ {
+-	constexpr int kColumnHeight = 4;
+-	VoxelWorld world = MakeFluidCATestWorld(4, 12, 4);
+-	for (int x = 0; x < 4; ++x) {
+-		for (int z = 0; z < 4; ++z) {
+-			SetVoxelMaterial(world, {x, 0, z}, VoxelMaterial::FloorWhite, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(8, 5, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	// 3├Ч3 puddle at y=1 centered at (3..5, 3..5); solid walls seal floor-adjacent Air outside
++	for (int z = 3; z <= 5; ++z) {
++		for (int x = 3; x <= 5; ++x) {
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Fluid, nullptr);
+ 		}
+ 	}
+-	for (int y = 2; y < 2 + kColumnHeight; ++y) {
+-		SetVoxelMaterial(world, {2, y, 2}, VoxelMaterial::Fluid, nullptr);
++	SetVoxelMaterial(world, {4, 2, 4}, VoxelMaterial::Fluid, nullptr);
++	for (int z = 2; z <= 6; ++z) {
++		for (int x = 2; x <= 6; ++x) {
++			if (x >= 3 && x <= 5 && z >= 3 && z <= 5) {
++				continue;
++			}
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Glass, nullptr); // wall ring on floor level
++		}
+ 	}
++	const size_t mass = CountFluid(world);
++	EXPECT_EQ(context, size_t{10}, mass);
+ 
+-	for (int tick = 0; tick < 30; ++tick) {
++	for (int tick = 0; tick < 16; ++tick) {
+ 		UpdateFluidCA(world);
+-		EXPECT_EQ(context, static_cast<uint32_t>(kColumnHeight), world.stats.fluidVoxelCount);
++		EXPECT_EQ(context, mass, CountFluid(world));
+ 	}
+-
+-	EXPECT_EQ(
+-		context,
+-		VoxelMaterial::FloorWhite,
+-		GetVoxelMaterial(world, {2, 0, 2}));
+-
+-	size_t y0FloorIntact = 0;
+-	for (int x = 0; x < 4; ++x) {
+-		for (int z = 0; z < 4; ++z) {
+-			if (GetVoxelMaterial(world, {x, 0, z}) == VoxelMaterial::FloorWhite) {
+-				++y0FloorIntact;
++	// Sealed pocket: lone elevated may stay (no coalesce target); must not escape glass / lose mass
++	EXPECT_TRUE(context, MaxFluidColumnHeight(world) >= 2);
++	EXPECT_EQ(context, size_t{10}, CountFluid(world));
++	for (int z = 2; z <= 6; ++z) {
++		for (int x = 2; x <= 6; ++x) {
++			if (x >= 3 && x <= 5 && z >= 3 && z <= 5) {
++				continue;
+ 			}
++			EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {x, 2, z}));	  // no skate over walls
++			EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {x, 1, z})); // walls intact
+ 		}
+ 	}
+-	EXPECT_EQ(context, static_cast<size_t>(16), y0FloorIntact);
+ }
+ 
+-void TestFluidCAFreshWorldHasNoFluidAndStaysEmpty(TestContext &context)
++void TestFluidCACraterDepth2DrainsToFloor(TestContext &context)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	EXPECT_EQ(context, 0u, world.stats.fluidVoxelCount);
+-	const std::vector<uint8_t> snapshot = BuildFlatVoxelSnapshot(world);
+-	for (int tick = 0; tick < 20; ++tick) {
+-		EXPECT_EQ(context, 0u, UpdateFluidCA(world));
++	VoxelWorld world = MakeFluidCATestWorld(8, 6, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	// Raised rim at y=2 with pit down to y=1 / floor y=0 solid; rim Fluid steps into unsupported Air
++	for (int z = 2; z <= 5; ++z) {
++		for (int x = 2; x <= 5; ++x) {
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::FloorGray, nullptr);
++		}
+ 	}
+-	EXPECT_TRUE(context, snapshot == BuildFlatVoxelSnapshot(world));
++	SetVoxelMaterial(world, {3, 1, 3}, VoxelMaterial::Air, nullptr);
++	SetVoxelMaterial(world, {4, 1, 3}, VoxelMaterial::Air, nullptr);
++	SetVoxelMaterial(world, {3, 1, 4}, VoxelMaterial::Air, nullptr);
++	SetVoxelMaterial(world, {4, 1, 4}, VoxelMaterial::Air, nullptr);
++	SetVoxelMaterial(world, {2, 2, 3}, VoxelMaterial::Fluid, nullptr);
++	const size_t mass = CountFluid(world);
++
++	bool onBottom = false;
++	for (int tick = 0; tick < 32; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		// contract: mass reaches the bottom (rests at y=1 over floor y=0) тАФ pit or outside the rim
++		for (int z = 0; z < 8 && !onBottom; ++z) {
++			for (int x = 0; x < 8 && !onBottom; ++x) {
++				onBottom = GetVoxelMaterial(world, {x, 1, z}) == VoxelMaterial::Fluid &&
++						   GetVoxelMaterial(world, {x, 0, z}) == VoxelMaterial::FloorWhite;
++			}
++		}
++		if (onBottom) {
++			break;
++		}
++	}
++	EXPECT_TRUE(context, onBottom);
+ }
+ 
+-void TestFluidCAVoxelLabSphereFallOnGlassBreak(TestContext &context)
++void TestFluidCAUnsupportedStepRestYMinus1(TestContext &context)
+ {
+-
+-	constexpr int width = 24;
+-	constexpr int height = 17;
+-	constexpr int depth = 24;
+-	constexpr int chunkSize = 8;
+-	VoxelWorld world{};
+-	world.min = {-12, 0, -12};
+-	world.maxExclusive = {width - 12, height, depth - 12};
+-	world.width = width;
+-	world.height = height;
+-	world.depth = depth;
+-	world.chunkSize = chunkSize;
+-	world.chunkCountX = (width + chunkSize - 1) / chunkSize;
+-	world.chunkCountY = (height + chunkSize - 1) / chunkSize;
+-	world.chunkCountZ = (depth + chunkSize - 1) / chunkSize;
+-	world.sparseStorage.Reset(width, height, depth);
+-	for (int z = 0; z < depth; ++z) {
+-		for (int y = 0; y < height; ++y) {
+-			for (int x = 0; x < width; ++x) {
+-				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Air, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(6, 6, 6);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::FloorGray, nullptr);
++	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid, nullptr); // restY=2; Air at (3,1) unsupported then floor
++	const size_t mass = CountFluid(world);
++
++	bool atFloor = false;
++	for (int tick = 0; tick < 16; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (GetVoxelMaterial(world, {3, 1, 2}) == VoxelMaterial::Fluid ||
++			GetVoxelMaterial(world, {2, 1, 2}) == VoxelMaterial::Fluid) {
++			// may land on platform or step off
++		}
++		for (int z = 0; z < 6; ++z) {
++			for (int x = 0; x < 6; ++x) {
++				if (GetVoxelMaterial(world, {x, 1, z}) == VoxelMaterial::Fluid &&
++					GetVoxelMaterial(world, {x, 0, z}) == VoxelMaterial::FloorWhite) {
++					atFloor = true;
++				}
+ 			}
+ 		}
++		if (atFloor) {
++			break;
++		}
+ 	}
+-	world.chunks.assign(
+-		static_cast<size_t>(world.chunkCountX) *
+-			static_cast<size_t>(world.chunkCountY) *
+-			static_cast<size_t>(world.chunkCountZ),
+-		VoxelChunk{});
+-	for (int chunkZ = 0; chunkZ < world.chunkCountZ; ++chunkZ) {
+-		for (int chunkY = 0; chunkY < world.chunkCountY; ++chunkY) {
+-			for (int chunkX = 0; chunkX < world.chunkCountX; ++chunkX) {
+-				const size_t chunkIndex = GetVoxelChunkIndex(world, {chunkX, chunkY, chunkZ});
+-				auto &[min, maxExclusive, rebuildQueued, isStatic, nonAirVoxelCount, ticksSinceLastEdit, lodLevel, reserved0, reserved1, reserved2] = world.chunks[chunkIndex];
+-				min = {
+-					world.min.x + chunkX * world.chunkSize,
+-					world.min.y + chunkY * world.chunkSize,
+-					world.min.z + chunkZ * world.chunkSize,
+-				};
+-				maxExclusive = {
+-					std::min(min.x + world.chunkSize, world.maxExclusive.x),
+-					std::min(min.y + world.chunkSize, world.maxExclusive.y),
+-					std::min(min.z + world.chunkSize, world.maxExclusive.z),
+-				};
+-				rebuildQueued = false;
+-				nonAirVoxelCount = 0;
++	EXPECT_TRUE(context, atFloor);
++}
++
++void TestFluidCADeterministicReplay(TestContext &context)
++{
++	auto run = []() -> std::string {
++		VoxelWorld world = MakeFluidCATestWorld(10, 8, 10);
++		FillFloor(world, 0, VoxelMaterial::FloorWhite);
++		for (int z = 3; z <= 5; ++z) {
++			for (int x = 3; x <= 5; ++x) {
++				SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Fluid, nullptr);
+ 			}
+ 		}
+-	}
++		SetVoxelMaterial(world, {4, 2, 4}, VoxelMaterial::Fluid, nullptr);
++		SetVoxelMaterial(world, {4, 5, 4}, VoxelMaterial::Fluid, nullptr);
++		for (int tick = 0; tick < 40; ++tick) {
++			UpdateFluidCA(world);
++		}
++		return SnapshotMaterials(world);
++	};
++	EXPECT_TRUE(context, run() == run());
++}
+ 
+-	constexpr int centerY = 8;
+-	constexpr int radius = 6;
+-	constexpr int innerR = 5;
+-	constexpr int fluidTop = centerY - innerR + 7;
+-	for (int dz = -radius; dz <= radius; ++dz) {
+-		for (int dy = -radius; dy <= radius; ++dy) {
+-			for (int dx = -radius; dx <= radius; ++dx) {
+-				const int d2 = dx * dx + dy * dy + dz * dz;
+-				constexpr int outer2 = radius * radius;
+-				constexpr int inner2 = innerR * innerR;
+-				if (d2 > outer2) {
+-					continue;
+-				}
+-				const Int3 pos{dx, centerY + dy, dz};
+-				if (d2 > inner2) {
+-					SetVoxelMaterial(world, pos, VoxelMaterial::Glass, nullptr);
+-				} else if (pos.y <= fluidTop) {
+-					SetVoxelMaterial(world, pos, VoxelMaterial::Fluid, nullptr);
+-				}
++void TestFluidCAClosedPuddleSettles(TestContext &context)
++{
++	VoxelWorld world = MakeFluidCATestWorld(8, 4, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int z = 2; z <= 4; ++z) {
++		for (int x = 2; x <= 4; ++x) {
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Fluid, nullptr);
++		}
++	}
++	for (int z = 1; z <= 5; ++z) {
++		for (int x = 1; x <= 5; ++x) {
++			if (x >= 2 && x <= 4 && z >= 2 && z <= 4) {
++				continue;
+ 			}
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Glass, nullptr);
+ 		}
+ 	}
+-
+-	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {0, 3, 0}));
+-	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {0, 2, 0}));
+-
+-	UpdateFluidCA(world);
+-	EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {0, 2, 0}));
+-
+-	SetVoxelMaterial(world, {0, 2, 0}, VoxelMaterial::Air, nullptr);
+-
+-	const uint32_t moved = UpdateFluidCA(world);
+-	EXPECT_TRUE(context, moved > 0u);
+-	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {0, 2, 0}));
+-
+-	const uint32_t initialFluidCount = world.stats.fluidVoxelCount;
+-	for (int tick = 0; tick < 10; ++tick) {
++	for (int tick = 0; tick < 8; ++tick) {
+ 		UpdateFluidCA(world);
+-		EXPECT_TRUE(context, world.stats.fluidVoxelCount >= initialFluidCount);
+ 	}
++	EXPECT_EQ(context, 0u, UpdateFluidCA(world));
++	EXPECT_EQ(context, size_t{9}, CountFluid(world));
+ }
+ 
+-void TickFluidCA(
+-	SimulationState &simulation,
+-	VoxelWorld &world,
+-	const float frameDeltaSeconds,
+-	const int frameCount)
++void TestFluidCAWorldFloorY0StaysPut(TestContext &context)
+ {
+-	for (int frame = 0; frame < frameCount; ++frame) {
+-
+-		const bool frameStepNow = simulation.frameStepRequested;
+-		simulation.frameStepRequested = false;
+-		const bool effectivePaused = simulation.paused && !frameStepNow;
++	VoxelWorld world = MakeFluidCATestWorld(6, 4, 6);
++	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Fluid, nullptr);
++	for (int tick = 0; tick < 4; ++tick) {
++		EXPECT_EQ(context, 0u, UpdateFluidCA(world));
++		EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {2, 0, 2}));
++	}
++	EXPECT_EQ(context, size_t{1}, CountFluid(world));
++}
+ 
+-		const float scaledDelta = frameDeltaSeconds * simulation.timeScale;
+-		if (!effectivePaused && simulation.fluidTickRateHz > 0.0f) {
+-			simulation.fluidAccumulatorSeconds += scaledDelta;
+-			const float fluidInterval = 1.0f / simulation.fluidTickRateHz;
+-			while (simulation.fluidAccumulatorSeconds >= fluidInterval) {
+-				simulation.fluidAccumulatorSeconds -= fluidInterval;
+-				UpdateFluidCA(world);
++void TestFluidCADoesNotEnterOrFallThroughGlass(TestContext &context)
++{
++	VoxelWorld world = MakeFluidCATestWorld(8, 6, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	// Glass platform + glass walls around fluid; only open path is none
++	SetVoxelMaterial(world, {3, 1, 3}, VoxelMaterial::Glass, nullptr);
++	SetVoxelMaterial(world, {3, 2, 3}, VoxelMaterial::Fluid, nullptr);
++	for (int z = 2; z <= 4; ++z) {
++		for (int x = 2; x <= 4; ++x) {
++			if (x == 3 && z == 3) {
++				continue;
++			}
++			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Glass, nullptr);
++		}
++	}
++	const size_t mass = CountFluid(world);
++	for (int tick = 0; tick < 16; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {3, 1, 3}));
++		EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {3, 2, 3}));
++		for (int z = 2; z <= 4; ++z) {
++			for (int x = 2; x <= 4; ++x) {
++				if (x == 3 && z == 3) {
++					continue;
++				}
++				EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {x, 2, z}));
+ 			}
+-		} else if (effectivePaused) {
+-			simulation.fluidAccumulatorSeconds = 0.0f;
+ 		}
+ 	}
+ }
+ 
+-void TestFluidCAFluidDoesNotMoveOnPause(TestContext &context)
++void TestFluidCANoDiagonalCornerCutThroughGlass(TestContext &context)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid, nullptr);
+-
+-	SimulationState simulation{};
+-	simulation.paused = true;
+-	simulation.timeScale = 1.0f;
+-	simulation.fluidTickRateHz = 20.0f;
+-
+-	const std::vector<uint8_t> before = BuildFlatVoxelSnapshot(world);
+-	TickFluidCA(simulation, world, 1.0f / 60.0f, 60);
+-	const std::vector<uint8_t> after = BuildFlatVoxelSnapshot(world);
+-
+-	EXPECT_TRUE(context, before == after);
+-	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
++	VoxelWorld world = MakeFluidCATestWorld(8, 4, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
++	SetVoxelMaterial(world, {3, 1, 2}, VoxelMaterial::Glass, nullptr);
++	SetVoxelMaterial(world, {2, 1, 3}, VoxelMaterial::Glass, nullptr);
++	SetVoxelMaterial(world, {2, 1, 1}, VoxelMaterial::Glass, nullptr);
++	SetVoxelMaterial(world, {1, 1, 2}, VoxelMaterial::Glass, nullptr);
++	for (int tick = 0; tick < 8; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {3, 1, 3}));
++		EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {3, 1, 2}));
++		EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {2, 1, 3}));
++	}
++	EXPECT_EQ(context, size_t{1}, CountFluid(world));
++	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {2, 1, 2}));
+ }
+ 
+-void TestFluidCAFluidMovesOnUnpause(TestContext &context)
++void TestFluidCADoesNotStepUnderGlassRim(TestContext &context)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+-	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid, nullptr);
+-
+-	SimulationState simulation{};
+-	simulation.paused = false;
+-	simulation.timeScale = 1.0f;
+-	simulation.fluidTickRateHz = 20.0f;
+-
+-	TickFluidCA(simulation, world, 1.0f / 60.0f, 3);
+-
+-	EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {2, 2, 2}));
+-	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {2, 1, 2}));
+-	EXPECT_EQ(context, VoxelMaterial::FloorWhite, GetVoxelMaterial(world, {2, 0, 2}));
++	// Ascii leak: Fluid at (2,2) steps M8 to (3,1) under Glass at (3,2) тЖТ outside bowl.
++	VoxelWorld world = MakeFluidCATestWorld(8, 5, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::FloorGray, nullptr); // support under fluid
++	SetVoxelMaterial(world, {3, 2, 2}, VoxelMaterial::Glass, nullptr);	   // rim
++	SetVoxelMaterial(world, {2, 2, 2}, VoxelMaterial::Fluid, nullptr);	   // inside
++	// Seal cardinal same-level exits
++	SetVoxelMaterial(world, {2, 2, 1}, VoxelMaterial::Glass, nullptr);
++	SetVoxelMaterial(world, {2, 2, 3}, VoxelMaterial::Glass, nullptr);
++	SetVoxelMaterial(world, {1, 2, 2}, VoxelMaterial::Glass, nullptr);
++	const size_t mass = CountFluid(world);
++	for (int tick = 0; tick < 8; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {3, 1, 2}));
++		EXPECT_EQ(context, VoxelMaterial::Glass, GetVoxelMaterial(world, {3, 2, 2}));
++	}
++	EXPECT_EQ(context, VoxelMaterial::Fluid, GetVoxelMaterial(world, {2, 2, 2}));
+ }
+ 
+-void TestFluidCAFluidRateRespectsTimeScale(TestContext &context)
++void TestFluidCAStrictLayeredDrain(TestContext &context) // N1: per-column тАФ only the top of each column may leave (bottom-first + settle)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::Fluid, nullptr);
+-
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
+-
+-	SimulationState simulation{};
+-	simulation.paused = false;
+-	simulation.timeScale = 0.5f;
+-	simulation.fluidTickRateHz = 20.0f;
+-
+-	uint32_t totalMoves = 0u;
+-	for (int frame = 0; frame < 60; ++frame) {
+-		const uint32_t before = world.stats.fluidVoxelCount;
+-		TickFluidCA(simulation, world, 1.0f / 60.0f, 1);
+-		const uint32_t after = world.stats.fluidVoxelCount;
+-		(void)before;
+-		(void)after;
++	VoxelWorld world = MakeFluidCATestWorld(12, 8, 12);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int y = 1; y <= 3; ++y) {
++		for (int z = 4; z <= 6; ++z) {
++			for (int x = 4; x <= 6; ++x) {
++				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Fluid, nullptr);
++			}
++		}
+ 	}
+-
+-	totalMoves = 0u;
+-	(void)totalMoves;
+-	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
++	const size_t mass = CountFluid(world);
++	for (int tick = 0; tick < 200; ++tick) {
++		const std::vector<Int3> before = CollectFluidCells(world);
++		const uint32_t moved = UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (moved == 0u) {
++			break;
++		}
++		const std::vector<Int3> after = CollectFluidCells(world);
++		// Per (x,z): fluid may only be removed from the top of the column (settle/drain); lower cells stay put or receive settle
++		for (int z = 0; z < 12; ++z) {
++			for (int x = 0; x < 12; ++x) {
++				std::vector<int> ysBefore;
++				std::vector<int> ysAfter;
++				for (const Int3 c : before) {
++					if (c.x == x && c.z == z) {
++						ysBefore.push_back(c.y);
++					}
++				}
++				for (const Int3 c : after) {
++					if (c.x == x && c.z == z) {
++						ysAfter.push_back(c.y);
++					}
++				}
++				std::sort(ysBefore.begin(), ysBefore.end());
++				std::sort(ysAfter.begin(), ysAfter.end());
++				if (ysBefore.empty()) {
++					continue;
++				}
++				// Remaining cells in the column must be a bottom prefix of the previous set (top may shrink)
++				EXPECT_TRUE(context, ysAfter.size() <= ysBefore.size());
++				for (size_t i = 0; i < ysAfter.size(); ++i) {
++					EXPECT_EQ(context, ysBefore[i], ysAfter[i]);
++				}
++			}
++		}
++	}
++	EXPECT_EQ(context, 1, MaxFluidColumnHeight(world)); // 27 cells over an open floor flatten to one layer
+ }
+ 
+-void TestFluidCAFluidRateAboveBase(TestContext &context)
++void TestFluidCAContinuityNoTeleport(TestContext &context) // N2: growth is 6-adjacent to the body, тЙд K cells per tick
+ {
+-
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
+-	for (int x = 0; x < 4; ++x) {
+-		for (int z = 0; z < 4; ++z) {
+-			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(12, 8, 12);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int y = 1; y <= 3; ++y) {
++		for (int z = 4; z <= 6; ++z) {
++			for (int x = 4; x <= 6; ++x) {
++				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Fluid, nullptr);
++			}
+ 		}
+ 	}
+-
+-	SimulationState simulation{};
+-	simulation.paused = false;
+-	simulation.timeScale = 2.0f;
+-	simulation.fluidTickRateHz = 20.0f;
+-
+-	constexpr float kFrameDelta = 1.0f / 60.0f;
+-	constexpr int kFrameCount = 60;
+-	int tickCount = 0;
+-	for (int frame = 0; frame < kFrameCount; ++frame) {
+-		const float scaledDelta = kFrameDelta * simulation.timeScale;
+-		simulation.fluidAccumulatorSeconds += scaledDelta;
+-		const float fluidInterval = 1.0f / simulation.fluidTickRateHz;
+-		while (simulation.fluidAccumulatorSeconds >= fluidInterval) {
+-			simulation.fluidAccumulatorSeconds -= fluidInterval;
+-			UpdateFluidCA(world);
+-			++tickCount;
++	for (int tick = 0; tick < 200; ++tick) {
++		const std::vector<Int3> before = CollectFluidCells(world);
++		int exits = 0; // active outflow points before the tick (unsupported Air adjacent to the body)
++		{
++			std::vector<Int3> seenExits;
++			for (const Int3 c : before) {
++				constexpr int dirs[5][3] = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -1, 0}};
++				for (const auto &d : dirs) {
++					const Int3 n{c.x + d[0], c.y + d[1], c.z + d[2]};
++					if (n.y <= 0 || GetVoxelMaterial(world, n) != VoxelMaterial::Air ||
++						GetVoxelMaterial(world, {n.x, n.y - 1, n.z}) != VoxelMaterial::Air || ContainsCell(seenExits, n)) {
++						continue;
++					}
++					seenExits.push_back(n);
++					++exits;
++				}
++			}
++		}
++		const uint32_t moved = UpdateFluidCA(world);
++		if (moved == 0u) {
++			break;
+ 		}
++		const std::vector<Int3> after = CollectFluidCells(world);
++		int added = 0;
++		for (const Int3 c : after) {
++			if (!ContainsCell(before, c)) {
++				++added;
++				EXPECT_TRUE(context, HasSixNeighbourInSet(before, c)); // no teleport: grown from the body surface
++			}
++		}
++		EXPECT_TRUE(context, added <= 8 + exits); // K spread-chains + one emission per outflow point
+ 	}
+-
+-	EXPECT_TRUE(context, tickCount >= 38 && tickCount <= 42);
+ }
+ 
+-void TestFluidCAFluidRateAtDefault(TestContext &context)
++void TestFluidCAStreamContinuity(TestContext &context) // N3: the drain stream never splits into separated drops
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
+-	for (int x = 0; x < 4; ++x) {
+-		for (int z = 0; z < 4; ++z) {
+-			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(8, 10, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int y = 2; y <= 6; ++y) { // glass tube ring around column (4,4)
++		for (int z = 3; z <= 5; ++z) {
++			for (int x = 3; x <= 5; ++x) {
++				if (x == 4 && z == 4) {
++					continue;
++				}
++				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Glass, nullptr);
++			}
+ 		}
+ 	}
+-
+-	SimulationState simulation{};
+-	simulation.paused = false;
+-	simulation.timeScale = 1.0f;
+-	simulation.fluidTickRateHz = 20.0f;
+-
+-	constexpr float kFrameDelta = 1.0f / 60.0f;
+-	constexpr int kFrameCount = 60;
+-	int tickCount = 0;
+-	for (int frame = 0; frame < kFrameCount; ++frame) {
+-		const float scaledDelta = kFrameDelta * simulation.timeScale;
+-		simulation.fluidAccumulatorSeconds += scaledDelta;
+-		const float fluidInterval = 1.0f / simulation.fluidTickRateHz;
+-		while (simulation.fluidAccumulatorSeconds >= fluidInterval) {
+-			simulation.fluidAccumulatorSeconds -= fluidInterval;
+-			UpdateFluidCA(world);
+-			++tickCount;
++	for (int y = 3; y <= 6; ++y) {
++		SetVoxelMaterial(world, {4, y, 4}, VoxelMaterial::Fluid, nullptr);
++	}
++	const size_t mass = CountFluid(world);
++	bool drained = false;
++	for (int tick = 0; tick < 64; ++tick) {
++		const uint32_t moved = UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		int lowestFluid = 99; // no Air gap between the lowest and highest Fluid in column (4,4)
++		int highestFluid = -1;
++		for (int y = 1; y <= 7; ++y) {
++			if (GetVoxelMaterial(world, {4, y, 4}) == VoxelMaterial::Fluid) {
++				lowestFluid = std::min(lowestFluid, y);
++				highestFluid = std::max(highestFluid, y);
++			}
+ 		}
++		for (int y = lowestFluid; y <= highestFluid && lowestFluid <= highestFluid; ++y) {
++			EXPECT_TRUE(context, GetVoxelMaterial(world, {4, y, 4}) == VoxelMaterial::Fluid);
++		}
++		if (moved == 0u) {
++			drained = true;
++			break;
++		}
++	}
++	EXPECT_TRUE(context, drained);
++	for (int y = 3; y <= 6; ++y) { // tube empty above the mouth
++		EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {4, y, 4}));
+ 	}
+-	EXPECT_TRUE(context, tickCount >= 18 && tickCount <= 22);
+ }
+ 
+-void TestFluidCAFluidTimeScaleZeroStops(TestContext &context)
++void TestFluidCASphereBreakEndToEnd(TestContext &context) // N4: side-broken sphere drains to the hole rim, settles, no hover
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+-	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
+-	for (int x = 0; x < 4; ++x) {
+-		for (int z = 0; z < 4; ++z) {
+-			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(16, 16, 16);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	const Int3 center{8, 10, 8};
++	constexpr int radius = 4;
++	for (int z = 0; z < 16; ++z) {
++		for (int y = 0; y < 16; ++y) {
++			for (int x = 0; x < 16; ++x) {
++				const int dx = x - center.x;
++				const int dy = y - center.y;
++				const int dz = z - center.z;
++				const int dist2 = dx * dx + dy * dy + dz * dz;
++				if (dist2 >= radius * radius && dist2 <= radius * radius + radius) { // shell band
++					SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Glass, nullptr);
++				} else if (dist2 < radius * radius) {
++					SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Fluid, nullptr);
++				}
++			}
+ 		}
+ 	}
+-
+-	SimulationState simulation{};
+-	simulation.paused = false;
+-	simulation.timeScale = 0.0f;
+-	simulation.fluidTickRateHz = 20.0f;
+-
+-	const std::vector<uint8_t> before = BuildFlatVoxelSnapshot(world);
+-	constexpr float kFrameDelta = 1.0f / 60.0f;
+-	for (int frame = 0; frame < 60; ++frame) {
+-		const float scaledDelta = kFrameDelta * simulation.timeScale;
+-		simulation.fluidAccumulatorSeconds += scaledDelta;
+-
+-		EXPECT_EQ(context, 0.0f, simulation.fluidAccumulatorSeconds);
++	const int holeBottomY = center.y; // side hole at the +x equator
++	for (int y = holeBottomY; y <= holeBottomY + 1; ++y) {
++		SetVoxelMaterial(world, {center.x + radius, y, center.z}, VoxelMaterial::Air, nullptr);
++		SetVoxelMaterial(world, {center.x + radius, y, center.z + 1}, VoxelMaterial::Air, nullptr);
++	}
++	const size_t mass = CountFluid(world);
++	bool settled = false;
++	for (int tick = 0; tick < 600; ++tick) {
++		const uint32_t moved = UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (moved == 0u) {
++			settled = true;
++			break;
++		}
++	}
++	EXPECT_TRUE(context, settled);
++	for (int z = 0; z < 16; ++z) { // no hovering Fluid anywhere after settle
++		for (int y = 1; y < 16; ++y) {
++			for (int x = 0; x < 16; ++x) {
++				if (GetVoxelMaterial(world, {x, y, z}) == VoxelMaterial::Fluid) {
++					EXPECT_TRUE(context, GetVoxelMaterial(world, {x, y - 1, z}) != VoxelMaterial::Air);
++				}
++			}
++		}
++	}
++	for (int z = 0; z < 16; ++z) { // interior above the hole rim is empty
++		for (int y = holeBottomY + 1; y < 16; ++y) {
++			for (int x = 0; x < 16; ++x) {
++				const int dx = x - center.x;
++				const int dy = y - center.y;
++				const int dz = z - center.z;
++				if (dx * dx + dy * dy + dz * dz < radius * radius) {
++					EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {x, y, z}));
++				}
++			}
++		}
+ 	}
+-	const std::vector<uint8_t> after = BuildFlatVoxelSnapshot(world);
+-	EXPECT_TRUE(context, before == after);
+ }
+ 
+-void TestFluidCAFluidFrameStepWithTimeScaleZero(TestContext &context)
++void TestFluidCAIdleFastPath(TestContext &context)
+ {
+-	VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-	SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(8, 4, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
+ 	SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
+-	for (int x = 0; x < 4; ++x) {
+-		for (int z = 0; z < 4; ++z) {
+-			SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
++	EXPECT_EQ(context, 0u, UpdateFluidCA(world)); // lone cell settles immediately
++	const uint64_t serial = world.fluidEditSerial;
++	EXPECT_EQ(context, 0u, UpdateFluidCA(world)); // early-out: nothing changed since the no-move tick
++	EXPECT_EQ(context, serial, world.fluidEditSerial);
++	SetVoxelMaterial(world, {4, 1, 4}, VoxelMaterial::Fluid, nullptr); // external edit wakes the CA
++	EXPECT_TRUE(context, world.fluidEditSerial != serial);
++	UpdateFluidCA(world);
++	EXPECT_EQ(context, size_t{2}, CountFluid(world));
++}
++
++void TestFluidCAGlassEditWakesCa(TestContext &context)
++{
++	VoxelWorld world = MakeFluidCATestWorld(8, 6, 8);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int z = 3; z <= 5; ++z) { // glass ring around the pool cell (4,1,4)
++		for (int x = 3; x <= 5; ++x) {
++			if (x == 4 && z == 4) {
++				continue;
++			}
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Glass, nullptr);
+ 		}
+ 	}
+-
+-	SimulationState simulation{};
+-	simulation.paused = true;
+-	simulation.timeScale = 0.0f;
+-	simulation.fluidTickRateHz = 20.0f;
+-	simulation.frameStepRequested = true;
+-
+-	const std::vector<uint8_t> before = BuildFlatVoxelSnapshot(world);
+-
+-	TickFluidCA(simulation, world, 1.0f / 60.0f, 1);
+-	const std::vector<uint8_t> after = BuildFlatVoxelSnapshot(world);
+-
+-	EXPECT_TRUE(context, !simulation.frameStepRequested);
+-	EXPECT_TRUE(context, before == after);
+-	EXPECT_EQ(context, 1u, world.stats.fluidVoxelCount);
++	SetVoxelMaterial(world, {4, 1, 4}, VoxelMaterial::Fluid, nullptr);
++	SetVoxelMaterial(world, {4, 2, 4}, VoxelMaterial::Fluid, nullptr);
++	for (int tick = 0; tick < 4; ++tick) { // sealed pool settles
++		UpdateFluidCA(world);
++	}
++	EXPECT_EQ(context, 0u, UpdateFluidCA(world));
++	const uint64_t serialBefore = world.fluidEditSerial;
++	SetVoxelMaterial(world, {3, 1, 4}, VoxelMaterial::Air, nullptr); // break the glass wall тАФ no AirтЖФFluid transition
++	EXPECT_TRUE(context, world.fluidEditSerial != serialBefore);	 // CA must wake on any material change
++	bool escaped = false;
++	for (int tick = 0; tick < 16; ++tick) {
++		UpdateFluidCA(world);
++		EXPECT_EQ(context, size_t{2}, CountFluid(world));
++		if (GetVoxelMaterial(world, {3, 1, 4}) == VoxelMaterial::Fluid) {
++			escaped = true;
++			break;
++		}
++	}
++	EXPECT_TRUE(context, escaped); // water drained through the broken wall
+ }
+ 
+-void TestFluidCAFluidRateConfigurable(TestContext &context)
++void TestFluidCAOverflowSpreadsAroundPlatform(TestContext &context)
+ {
+-	auto runRate = [](const float hz) {
+-		VoxelWorld world = MakeFluidCATestWorld(4, 4, 4);
+-		SetVoxelMaterial(world, {2, 0, 2}, VoxelMaterial::FloorWhite, nullptr);
+-		SetVoxelMaterial(world, {2, 1, 2}, VoxelMaterial::Fluid, nullptr);
+-		for (int x = 0; x < 4; ++x) {
+-			for (int z = 0; z < 4; ++z) {
+-				SetVoxelMaterial(world, {x, 2, z}, VoxelMaterial::Glass, nullptr);
++	VoxelWorld world = MakeFluidCATestWorld(16, 6, 16);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int z = 4; z <= 11; ++z) { // raised glass slab 8├Ч8 at y=1
++		for (int x = 4; x <= 11; ++x) {
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Glass, nullptr);
++		}
++	}
++	for (int y = 2; y <= 3; ++y) { // 5├Ч5├Ч2 water block on the slab
++		for (int z = 5; z <= 9; ++z) {
++			for (int x = 5; x <= 9; ++x) {
++				SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Fluid, nullptr);
+ 			}
+ 		}
+-		SimulationState simulation{};
+-		simulation.paused = false;
+-		simulation.timeScale = 1.0f;
+-		simulation.fluidTickRateHz = hz;
+-
+-		constexpr float kFrameDelta = 1.0f / 60.0f;
+-		int tickCount = 0;
+-		for (int frame = 0; frame < 60; ++frame) {
+-			const float scaledDelta = kFrameDelta * simulation.timeScale;
+-			simulation.fluidAccumulatorSeconds += scaledDelta;
+-			const float fluidInterval = 1.0f / simulation.fluidTickRateHz;
+-			while (simulation.fluidAccumulatorSeconds >= fluidInterval) {
+-				simulation.fluidAccumulatorSeconds -= fluidInterval;
+-				UpdateFluidCA(world);
+-				++tickCount;
++	}
++	const size_t mass = CountFluid(world);
++	bool settled = false;
++	for (int tick = 0; tick < 300; ++tick) {
++		const uint32_t moved = UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (moved == 0u) {
++			settled = true;
++			break;
++		}
++	}
++	EXPECT_TRUE(context, settled);
++	int sideN = 0; // overflow cells at y=1 beyond the slab footprint, attributed to the nearest slab side
++	int sideS = 0;
++	int sideW = 0;
++	int sideE = 0;
++	for (int z = 0; z < 16; ++z) {
++		for (int x = 0; x < 16; ++x) {
++			if (x >= 4 && x <= 11 && z >= 4 && z <= 11) {
++				continue; // on the slab
++			}
++			if (GetVoxelMaterial(world, {x, 1, z}) != VoxelMaterial::Fluid) {
++				continue;
++			}
++			if (z < 4) {
++				++sideN;
++			} else if (z > 11) {
++				++sideS;
++			} else if (x < 4) {
++				++sideW;
++			} else {
++				++sideE;
+ 			}
+ 		}
+-		return tickCount;
+-	};
+-
+-	const int at5Hz = runRate(5.0f);
+-	const int at60Hz = runRate(60.0f);
+-	EXPECT_TRUE(context, at5Hz >= 4 && at5Hz <= 6);
+-	EXPECT_TRUE(context, at60Hz >= 58 && at60Hz <= 62);
++	}
++	const int total = sideN + sideS + sideW + sideE;
++	EXPECT_TRUE(context, total > 0);
++	int sidesUsed = 0;
++	const int sides[4] = {sideN, sideS, sideW, sideE};
++	int maxSide = 0;
++	for (const int side : sides) {
++		if (side > 0) {
++			++sidesUsed;
++		}
++		maxSide = std::max(maxSide, side);
++	}
++	EXPECT_TRUE(context, sidesUsed >= 3);			 // overflow went around the slab, not one way
++	EXPECT_TRUE(context, maxSide * 10 <= total * 7); // no single direction dominates (тЙд70%)
++	int quadNW = 0;									 // overflow cells per quadrant relative to the slab center (8,8) тАФ compass-bias anchor
++	int quadNE = 0;
++	int quadSW = 0;
++	int quadSE = 0;
++	for (int z = 0; z < 16; ++z) {
++		for (int x = 0; x < 16; ++x) {
++			if (x >= 4 && x <= 11 && z >= 4 && z <= 11) {
++				continue;
++			}
++			if (GetVoxelMaterial(world, {x, 1, z}) != VoxelMaterial::Fluid) {
++				continue;
++			}
++			if (x < 8 && z < 8) {
++				++quadNW;
++			} else if (x >= 8 && z < 8) {
++				++quadNE;
++			} else if (x < 8) {
++				++quadSW;
++			} else {
++				++quadSE;
++			}
++		}
++	}
++	const int quadMax = std::max(std::max(quadNW, quadNE), std::max(quadSW, quadSE));
++	EXPECT_TRUE(context, quadMax * 10 <= total * 6); // no quadrant holds >60% of the overflow
+ }
+ 
+-void TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(TestContext &context)
++void TestFluidCABottomBreakDumpsWater(TestContext &context) // N8: bottom hole dumps the whole sphere onto the floor
+ {
+-	const std::filesystem::path replaySnapshot = std::filesystem::path("/tmp/ProjectV/InputReplay/latest.projectv.replay.snapshot.bin");
+-	std::error_code existsError;
+-	if (!std::filesystem::exists(replaySnapshot, existsError)) {
+-		std::fprintf(
+-			stderr,
+-			"[FluidCA] skipping InputReplay snapshot test: %s not present\n",
+-			replaySnapshot.string().c_str());
+-		return;
++	VoxelWorld world = MakeFluidCATestWorld(16, 16, 16);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	const Int3 center{8, 9, 8};
++	constexpr int radius = 4;
++	for (int z = 0; z < 16; ++z) {
++		for (int y = 0; y < 16; ++y) {
++			for (int x = 0; x < 16; ++x) {
++				const int dx = x - center.x;
++				const int dy = y - center.y;
++				const int dz = z - center.z;
++				const int dist2 = dx * dx + dy * dy + dz * dz;
++				if (dist2 >= radius * radius && dist2 <= radius * radius + radius) {
++					SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Glass, nullptr);
++				} else if (dist2 < radius * radius) {
++					SetVoxelMaterial(world, {x, y, z}, VoxelMaterial::Fluid, nullptr);
++				}
++			}
++		}
+ 	}
+-
+-	auto loadResult = LoadVoxelWorldSnapshot(replaySnapshot.string());
+-	EXPECT_TRUE(context, loadResult.has_value());
+-	if (!loadResult.has_value()) {
+-		return;
++	SetVoxelMaterial(world, {center.x, center.y - radius, center.z}, VoxelMaterial::Air, nullptr); // bottom pole breach
++	const size_t mass = CountFluid(world);
++	bool settled = false;
++	for (int tick = 0; tick < 600; ++tick) {
++		const uint32_t moved = UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (moved == 0u) {
++			settled = true;
++			break;
++		}
+ 	}
+-	const std::unique_ptr<VoxelWorld> world = std::move(loadResult).value();
+-
+-	std::fprintf(
+-		stderr,
+-		"[FluidCA] replay snapshot loaded: %dx%dx%d fluid=%u\n",
+-		world->width,
+-		world->height,
+-		world->depth,
+-		world->stats.fluidVoxelCount);
++	EXPECT_TRUE(context, settled);
++	for (int z = 0; z < 16; ++z) { // sphere interior is empty after the dump
++		for (int y = 0; y < 16; ++y) {
++			for (int x = 0; x < 16; ++x) {
++				const int dx = x - center.x;
++				const int dy = y - center.y;
++				const int dz = z - center.z;
++				if (dx * dx + dy * dy + dz * dz < radius * radius) {
++					EXPECT_EQ(context, VoxelMaterial::Air, GetVoxelMaterial(world, {x, y, z}));
++				}
++			}
++		}
++	}
++	for (int z = 0; z < 16; ++z) { // no hovering Fluid after settle
++		for (int y = 1; y < 16; ++y) {
++			for (int x = 0; x < 16; ++x) {
++				if (GetVoxelMaterial(world, {x, y, z}) == VoxelMaterial::Fluid) {
++					EXPECT_TRUE(context, GetVoxelMaterial(world, {x, y - 1, z}) != VoxelMaterial::Air);
++				}
++			}
++		}
++	}
++	int floorCount = 0; // dumped water rests on the floor
++	for (int z = 0; z < 16; ++z) {
++		for (int x = 0; x < 16; ++x) {
++			if (GetVoxelMaterial(world, {x, 1, z}) == VoxelMaterial::Fluid) {
++				++floorCount;
++			}
++		}
++	}
++	EXPECT_TRUE(context, floorCount > 0);
++}
+ 
+-	const auto initialSnapshot = BuildFlatVoxelSnapshot(*world);
+-	const size_t initialFluid = static_cast<size_t>(std::ranges::count(initialSnapshot,
+-																	   static_cast<uint8_t>(VoxelMaterial::Fluid)));
+-	const Int3 initialFluidAabbMin = world->fluidCAAabbMin;
+-	const Int3 initialFluidAabbMax = world->fluidCAAabbMaxExclusive;
++void TestFluidCAStrayCrawlsBackToPuddle(TestContext &context) // N9: isolated cell in the same basin rejoins the disc
++{
++	VoxelWorld world = MakeFluidCATestWorld(10, 4, 10);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int z = 2; z <= 4; ++z) {
++		for (int x = 2; x <= 4; ++x) {
++			SetVoxelMaterial(world, {x, 1, z}, VoxelMaterial::Fluid, nullptr);
++		}
++	}
++	SetVoxelMaterial(world, {8, 1, 4}, VoxelMaterial::Fluid, nullptr); // stray: isolated, same unobstructed floor
++	const size_t mass = CountFluid(world);
++	bool merged = false;
++	for (int tick = 0; tick < 40; ++tick) {
++		const uint32_t moved = UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		if (moved == 0u) {
++			merged = true;
++			break;
++		}
++	}
++	EXPECT_TRUE(context, merged);
++	const std::vector<Int3> cells = CollectFluidCells(world);
++	bool seen[10][10] = {};
++	for (const Int3 c : cells) {
++		seen[c.x][c.z] = true;
++	}
++	int reached = 0; // one 6-connected component over XZ at y=1 (single-layer disc)
++	std::vector<Int3> stack{cells.front()};
++	seen[cells.front().x][cells.front().z] = false;
++	while (!stack.empty()) {
++		const Int3 cur = stack.back();
++		stack.pop_back();
++		++reached;
++		constexpr int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
++		for (const auto &d : dirs) {
++			const int nx = cur.x + d[0];
++			const int nz = cur.z + d[1];
++			if (nx >= 0 && nx < 10 && nz >= 0 && nz < 10 && seen[nx][nz]) {
++				seen[nx][nz] = false;
++				stack.push_back({nx, 1, nz});
++			}
++		}
++	}
++	EXPECT_EQ(context, static_cast<int>(cells.size()), reached); // no strays left
++}
+ 
+-	uint32_t totalMoved = 0u;
++void TestFluidCASideBreakStreamIsContinuous(TestContext &context) // N10: side breach emits a contiguous stream, no portions
++{
++	VoxelWorld world = MakeFluidCATestWorld(12, 12, 12);
++	FillFloor(world, 0, VoxelMaterial::FloorWhite);
++	for (int y = 2; y <= 6; ++y) { // sealed glass box 5├Ч5├Ч5 filled with fluid
++		for (int z = 4; z <= 8; ++z) {
++			for (int x = 4; x <= 8; ++x) {
++				const bool shell = x == 4 || x == 8 || z == 4 || z == 8 || y == 2 || y == 6;
++				SetVoxelMaterial(world, {x, y, z}, shell ? VoxelMaterial::Glass : VoxelMaterial::Fluid, nullptr);
++			}
++		}
++	}
++	SetVoxelMaterial(world, {8, 4, 6}, VoxelMaterial::Air, nullptr); // side breach at (8,4,6)
++	const size_t mass = CountFluid(world);
++	bool settled = false;
+ 	for (int tick = 0; tick < 300; ++tick) {
+-		totalMoved += UpdateFluidCA(*world);
+-		const size_t actual = CountFluid(*world);
+-		EXPECT_EQ(context, static_cast<uint32_t>(actual), world->stats.fluidVoxelCount);
+-	}
+-
+-	const auto finalSnapshot = BuildFlatVoxelSnapshot(*world);
+-	std::fprintf(
+-		stderr,
+-		"[FluidCA] replay: 300 ticks, totalMoved=%u, fluid preserved=%zu/%zu, AABB grew: y[%d..%d) -> y[%d..%d)\n",
+-		totalMoved,
+-		initialFluid,
+-		static_cast<size_t>(std::ranges::count(finalSnapshot,
+-											   static_cast<uint8_t>(VoxelMaterial::Fluid))),
+-		initialFluidAabbMin.y,
+-		initialFluidAabbMax.y,
+-		world->fluidCAAabbMin.y,
+-		world->fluidCAAabbMaxExclusive.y);
+-
+-	std::fprintf(stderr, "[FluidCA] snapshot voxel grid around fluid AABB:\n");
+-	const int dumpMinY = std::max(world->min.y, initialFluidAabbMin.y - 2);
+-	const int dumpMaxY = std::min(world->maxExclusive.y, initialFluidAabbMax.y + 2);
+-	for (int y = dumpMaxY - 1; y >= dumpMinY; --y) {
+-		std::fprintf(stderr, "[FluidCA] y=%2d: ", y);
+-		for (int z = world->min.z; z < world->maxExclusive.z; ++z) {
+-			for (int x = world->min.x; x < world->maxExclusive.x; ++x) {
+-				const VoxelMaterial m = GetVoxelMaterial(*world, {x, y, z});
+-				char c = '.';
+-				switch (m) {
+-				case VoxelMaterial::Air:
+-					c = '.';
+-					break;
+-				case VoxelMaterial::Glass:
+-					c = 'G';
+-					break;
+-				case VoxelMaterial::Fluid:
+-					c = '~';
+-					break;
+-				case VoxelMaterial::FloorWhite:
+-					c = '#';
+-					break;
+-				case VoxelMaterial::FloorGray:
+-					c = '%';
+-					break;
+-				}
+-				std::fputc(c, stderr);
++		const uint32_t moved = UpdateFluidCA(world);
++		EXPECT_EQ(context, mass, CountFluid(world));
++		int low = 99; // no Air gap inside the falling column under the breach (exit at x=9)
++		int high = -1;
++		for (int y = 1; y <= 6; ++y) {
++			if (GetVoxelMaterial(world, {9, y, 6}) == VoxelMaterial::Fluid) {
++				low = std::min(low, y);
++				high = std::max(high, y);
+ 			}
+ 		}
+-		std::fputc('\n', stderr);
++		for (int y = low; y <= high && low <= high; ++y) {
++			EXPECT_TRUE(context, GetVoxelMaterial(world, {9, y, 6}) == VoxelMaterial::Fluid); // stream never splits
++		}
++		if (moved == 0u) {
++			settled = true;
++			break;
++		}
+ 	}
+-	EXPECT_TRUE(context, world->fluidCAAabbMin.y != INT32_MAX);
+-	EXPECT_TRUE(context, world->fluidCAAabbMaxExclusive.y != INT32_MIN);
+-	EXPECT_TRUE(context, world->fluidCAAabbMin.y >= world->min.y);
+-	EXPECT_TRUE(context, world->fluidCAAabbMaxExclusive.y <= world->maxExclusive.y);
++	EXPECT_TRUE(context, settled);
+ }
+ 
+-int main()
++int main() // NOLINT(*-exception-escape): MSVC STL allocation may throw; terminating the test process is intended.
+ {
+-	TestContext context{};
+-
++	TestContext context;
+ 	TestFluidCASingleCellFallsOneCellPerTick(context);
+-	TestFluidCAColumnPercolatesAndSpreadsOnFloor(context);
+-	TestFluidCARestingOnFloorStaysPut(context);
+-	TestFluidCAFluidOnGlassStaysPutThenFallsWhenGlassBreaks(context);
+-	TestFluidCAFluidAtY0IsStable(context);
+-	TestFluidCAFluidDoesNotFallThroughPlatform(context);
+-	TestFluidCASpreadsToCardinalNeighbour(context);
+-	TestFluidCASpreadIsDeterministic(context);
+-	TestFluidCAEmptyWorldShortCircuits(context);
+-	TestFluidCADeterministicAcrossRuns(context);
+-	TestFluidCAStatsCountStaysConsistent(context);
+-	TestFluidCAStatsCountStaysConsistentWhenFluidMovesOutsideAabb(context);
+-	TestFluidCALongColumnAtWorldFloorSpreadsOut(context);
+-	TestFluidCAColumnDrainsViaSpreadPlatformStaysIntact(context);
+-	TestFluidCAFreshWorldHasNoFluidAndStaysEmpty(context);
+-	TestFluidCAVoxelLabSphereFallOnGlassBreak(context);
+-
+-	TestFluidCAFluidDoesNotMoveOnPause(context);
+-	TestFluidCAFluidMovesOnUnpause(context);
+-	TestFluidCAFluidRateRespectsTimeScale(context);
+-	TestFluidCAFluidRateAboveBase(context);
+-	TestFluidCAFluidRateAtDefault(context);
+-	TestFluidCAFluidTimeScaleZeroStops(context);
+-	TestFluidCAFluidFrameStepWithTimeScaleZero(context);
+-	TestFluidCAFluidRateConfigurable(context);
+-
+-	TestFluidCAStatsCountStaysConsistentOnInputReplaySnapshot(context);
++	TestFluidCAMassPreservedEachTick(context);
++	TestFluidCAHeight1StaysOnFlatFloor(context);
++	TestFluidCAHeight1StepsDownOffPlatform(context);
++	TestFluidCAColumnBaseDrainsIntoSideHole(context);
++	TestFluidCANoClimbOntoNeighborTop(context);
++	TestFluidCACenterTowerDisplacesEdgeOnOpenFloor(context);
++	TestFluidCAInteriorTowerOn5x5Flattens(context);
++	TestFluidCAGapInPuddleFills(context);
++	TestFluidCAOpenFloorSpreadIsBalanced(context);
++	TestFluidCAElevatedSidewalkWhenFloorBlocked(context);
++	TestFluidCACraterDepth2DrainsToFloor(context);
++	TestFluidCAUnsupportedStepRestYMinus1(context);
++	TestFluidCADeterministicReplay(context);
++	TestFluidCAClosedPuddleSettles(context);
++	TestFluidCAWorldFloorY0StaysPut(context);
++	TestFluidCADoesNotEnterOrFallThroughGlass(context);
++	TestFluidCANoDiagonalCornerCutThroughGlass(context);
++	TestFluidCADoesNotStepUnderGlassRim(context);
++	TestFluidCAStrictLayeredDrain(context);
++	TestFluidCAContinuityNoTeleport(context);
++	TestFluidCAStreamContinuity(context);
++	TestFluidCASphereBreakEndToEnd(context);
++	TestFluidCAIdleFastPath(context);
++	TestFluidCAGlassEditWakesCa(context);
++	TestFluidCAOverflowSpreadsAroundPlatform(context);
++	TestFluidCABottomBreakDumpsWater(context);
++	TestFluidCAStrayCrawlsBackToPuddle(context);
++	TestFluidCASideBreakStreamIsContinuous(context);
+ 
+ 	if (context.failures != 0) {
+-		return EXIT_FAILURE;
++		std::fprintf(stderr, "ProjectVFluidCATests failed (%d)\n", context.failures);
++		return 1;
+ 	}
+-
+ 	std::puts("ProjectVFluidCATests passed");
+-	return EXIT_SUCCESS;
++	return 0;
+ }

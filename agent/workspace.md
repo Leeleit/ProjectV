@@ -18,6 +18,10 @@ lives in `agent/knowledge.md` + `agent/workspace.md` + `TODO.md` + `CHANGELOG.md
 
 ## 1. Now
 
+**2026-07-21 Fluid CA removed from mainline.** CPU/GPU CA, ECS fluid-tick,
+FluidCA tests deleted. `VoxelMaterial::Fluid` + ascii tick log (60 Hz sim)
+remain. Archives: `legacy/docs/archive/2026-07-*-fluid-ca-*-attempt/`.
+
 **2026-07-17 ASCII tick log:** `VoxelAsciiTickLogger` — 60 Hz sim-tick file dump
 (default ON next to exe as `voxel-ascii-tick.log`; `PROJECTV_ASCII_TICK_LOG=0` off),
 per-Y FNV dedup. Hook in `RunSimulationTickLoop`. Guide: `docs/VoxelAsciiGuide.md`.

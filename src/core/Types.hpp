@@ -354,18 +354,6 @@ struct SceneFrameResources {
 	void *visibilityCounterMappedData = nullptr;
 	VkBuffer visibilityCounterBuffer = VK_NULL_HANDLE;
 	VmaAllocation visibilityCounterAllocation = nullptr;
-	void *fluidCaSourceMappedData = nullptr;
-	VkBuffer fluidCaSourceBuffer = VK_NULL_HANDLE;
-	VmaAllocation fluidCaSourceAllocation = nullptr;
-	void *fluidCaDestinationMappedData = nullptr;
-	VkBuffer fluidCaDestinationBuffer = VK_NULL_HANDLE;
-	VmaAllocation fluidCaDestinationAllocation = nullptr;
-	void *fluidCaActiveChunkIdMappedData = nullptr;
-	VkBuffer fluidCaActiveChunkIdBuffer = VK_NULL_HANDLE;
-	VmaAllocation fluidCaActiveChunkIdAllocation = nullptr;
-	void *fluidCaStatsMappedData = nullptr;
-	VkBuffer fluidCaStatsBuffer = VK_NULL_HANDLE;
-	VmaAllocation fluidCaStatsAllocation = nullptr;
 	void *nanovdbUpperMappedData = nullptr;
 	VkBuffer nanovdbUpperBuffer = VK_NULL_HANDLE;
 	VmaAllocation nanovdbUpperAllocation = nullptr;
@@ -403,7 +391,6 @@ struct SceneFrameResources {
 	VkDescriptorSet meshShaderDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet voxelMeshingDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet hizCullingDescriptorSet = VK_NULL_HANDLE;
-	VkDescriptorSet fluidCaDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSet vctVoxelizeDescriptorSet = VK_NULL_HANDLE;
 	uint64_t uploadedSceneVersion = 0;
 	uint64_t uploadedVoxelPayloadVersion = 0;
@@ -767,14 +754,6 @@ struct RenderState { // ownership: Create*/Destroy* pair per VkBuffer+VmaAllocat
 	VkShaderModule meshClusterizeShaderModule = VK_NULL_HANDLE;
 	VkPipeline meshClusterizePipeline = VK_NULL_HANDLE;
 	VkPipelineLayout meshClusterizePipelineLayout = VK_NULL_HANDLE;
-	bool fluidCaPipelineEnabled = false;
-	uint32_t fluidCaPingPongBufferBytes = 0u;
-	uint32_t fluidCaMaxActiveChunks = 0u;
-	VkShaderModule fluidCaShaderModule = VK_NULL_HANDLE;
-	VkPipelineLayout fluidCaPipelineLayout = VK_NULL_HANDLE;
-	VkPipeline fluidCaPipeline = VK_NULL_HANDLE;
-	VkDescriptorSetLayout fluidCaDescriptorSetLayout = VK_NULL_HANDLE;
-	VkDescriptorPool fluidCaDescriptorPool = VK_NULL_HANDLE;
 
 	bool worldGenPipelineEnabled = false;
 	VkShaderModule worldGenShaderModule = VK_NULL_HANDLE;
@@ -847,9 +826,6 @@ struct SimulationState {
 	float timeScale = 1.0f;
 	bool frameStepRequested = false;
 	bool effectivePaused = false;
-	float fluidTickRateHz = 5.0f;
-	float fluidAccumulatorSeconds = 0.0f;
-	uint32_t fluidGpuTicksPending = 0u;
 };
 
 struct DebugState {

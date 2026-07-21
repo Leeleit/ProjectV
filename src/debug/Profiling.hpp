@@ -110,9 +110,6 @@ inline void ConfigureDefaultPlots()
 	ConfigurePlot("Physics Sync Full Rebuild", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Physics Sync Incremental", ProfilingPlotFormat::Number, true);
 	ConfigurePlot("Physics Sync Skipped", ProfilingPlotFormat::Number, true);
-	ConfigurePlot("Fluid CA Cells Read", ProfilingPlotFormat::Number, true);
-	ConfigurePlot("Fluid CA Cells Moved", ProfilingPlotFormat::Number, true);
-	ConfigurePlot("Fluid Edit Version Bumps Suppressed", ProfilingPlotFormat::Number, true);
 #endif
 }
 
@@ -189,4 +186,3 @@ inline void RecordFree(
 }
 
 } // namespace profiling
-

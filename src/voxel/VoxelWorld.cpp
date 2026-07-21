@@ -3,7 +3,6 @@
 #include "voxel/VoxelWorldInternal.hpp"
 
 #include "core/Types.hpp"
-#include "debug/Profiling.hpp"
 #include "physics/PhysicsWorld.hpp"
 
 #include <algorithm>
@@ -204,26 +203,10 @@ void SetVoxelMaterial(VoxelWorld &world, const Int3 position, VoxelMaterial mate
 		return;
 	}
 
-	const bool isFluidAirTransition = (previousMaterial == VoxelMaterial::Air && material == VoxelMaterial::Fluid) ||
-									  (previousMaterial == VoxelMaterial::Fluid && material == VoxelMaterial::Air);
-
 	WriteVoxelToSparseStorage(world, position, static_cast<uint8_t>(material));
-	if (!isFluidAirTransition) {
-		++world.editVersion;
-	} else {
-		profiling::PlotValue("Fluid Edit Version Bumps Suppressed", int64_t{1});
-	}
+	++world.editVersion;
 	AccumulateMaterialCount(world.stats, previousMaterial, -1);
 	AccumulateMaterialCount(world.stats, material, 1);
-
-	if (previousMaterial == VoxelMaterial::Fluid || material == VoxelMaterial::Fluid) {
-		world.fluidCAAabbMin.x = std::min(world.fluidCAAabbMin.x, position.x);
-		world.fluidCAAabbMin.y = std::min(world.fluidCAAabbMin.y, position.y);
-		world.fluidCAAabbMin.z = std::min(world.fluidCAAabbMin.z, position.z);
-		world.fluidCAAabbMaxExclusive.x = std::max(world.fluidCAAabbMaxExclusive.x, position.x + 1);
-		world.fluidCAAabbMaxExclusive.y = std::max(world.fluidCAAabbMaxExclusive.y, position.y + 1);
-		world.fluidCAAabbMaxExclusive.z = std::max(world.fluidCAAabbMaxExclusive.z, position.z + 1);
-	}
 
 	VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, GetVoxelChunkCoord(world, position))];
 	chunk.isStatic = false;
@@ -244,7 +227,7 @@ void SetVoxelMaterial(VoxelWorld &world, const Int3 position, VoxelMaterial mate
 
 	MarkChunksTouchedByVoxelEditDirty(world, position);
 
-	if (physics != nullptr && !isFluidAirTransition) {
+	if (physics != nullptr) {
 		const Int3 chunkCoord = GetVoxelChunkCoord(world, position);
 		const VoxelChunk &centerChunk = world.chunks[GetVoxelChunkIndex(world, chunkCoord)];
 		int minChunkX = chunkCoord.x;

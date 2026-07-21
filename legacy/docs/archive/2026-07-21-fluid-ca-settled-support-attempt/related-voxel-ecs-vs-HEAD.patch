@@ -1,0 +1,217 @@
+diff --git a/src/ecs/EcsWorld.cpp b/src/ecs/EcsWorld.cpp
+index fef6625b..85be6271 100644
+--- a/src/ecs/EcsWorld.cpp
++++ b/src/ecs/EcsWorld.cpp
+@@ -10,6 +10,7 @@
+ 
+ #include <SDL3/SDL.h>
+ 
++#include <algorithm>
+ #include <string>
+ #include <vector>
+ 
+@@ -209,15 +210,13 @@ bool InitializeAppEcs(AppState *state)
+ 			}
+ 			tickState.accumulatorSeconds += simulation.frameDeltaSeconds;
+ 			const float fluidInterval = 1.0f / simulation.fluidTickRateHz;
+-			const bool gpuEnabled = IsFluidCaGpuEnabled();
+-			while (tickState.accumulatorSeconds >= fluidInterval) {
++			int fluidTicksThisFrame = 0;
++			while (tickState.accumulatorSeconds >= fluidInterval && fluidTicksThisFrame < 2) { // cap catch-up: no edit storm after a hitch
+ 				tickState.accumulatorSeconds -= fluidInterval;
+-				if (gpuEnabled) {
+-					++simulation.fluidGpuTicksPending;
+-				} else {
+-					UpdateFluidCA(*voxelWorld);
+-				}
++				UpdateFluidCA(*voxelWorld); // I7: CPU equalize always; GPU fall-only must not replace
++				++fluidTicksThisFrame;
+ 			}
++			tickState.accumulatorSeconds = std::min(tickState.accumulatorSeconds, fluidInterval); // drop backlog instead of spiralling
+ 			simulation.fluidAccumulatorSeconds = tickState.accumulatorSeconds;
+ 		});
+ 
+diff --git a/src/voxel/VoxelWorld.cpp b/src/voxel/VoxelWorld.cpp
+index 05d78fcb..b8641267 100644
+--- a/src/voxel/VoxelWorld.cpp
++++ b/src/voxel/VoxelWorld.cpp
+@@ -137,6 +137,33 @@ VoxelMaterial GetVoxelMaterial(const VoxelWorld &world, const Int3 position)
+ 	return static_cast<VoxelMaterial>(ReadVoxelFromSparseStorage(world, position));
+ }
+ 
++size_t GetVoxelFluidFillFlatIndex(const VoxelWorld &world, const Int3 position)
++{
++	const size_t localX = static_cast<size_t>(position.x - world.min.x);
++	const size_t localY = static_cast<size_t>(position.y - world.min.y);
++	const size_t localZ = static_cast<size_t>(position.z - world.min.z);
++	return localX + static_cast<size_t>(world.width) * (localY + static_cast<size_t>(world.height) * localZ);
++}
++
++uint8_t GetVoxelFluidFill(const VoxelWorld &world, const Int3 position)
++{
++	if (!IsInsideVoxelWorld(world, position) || world.fluidFill.empty()) {
++		return kVoxelFluidFillEmpty;
++	}
++	return world.fluidFill[GetVoxelFluidFillFlatIndex(world, position)];
++}
++
++void SetVoxelFluidFill(VoxelWorld &world, const Int3 position, const uint8_t fill)
++{
++	if (!IsInsideVoxelWorld(world, position)) {
++		return;
++	}
++	if (world.fluidFill.empty()) {
++		world.fluidFill.assign(static_cast<size_t>(world.width) * static_cast<size_t>(world.height) * static_cast<size_t>(world.depth), kVoxelFluidFillEmpty);
++	}
++	world.fluidFill[GetVoxelFluidFillFlatIndex(world, position)] = fill;
++}
++
+ Int3 GetVoxelChunkCoord(const VoxelWorld &world, const Int3 position)
+ {
+ 	return {
+@@ -208,11 +235,13 @@ void SetVoxelMaterial(VoxelWorld &world, const Int3 position, VoxelMaterial mate
+ 									  (previousMaterial == VoxelMaterial::Fluid && material == VoxelMaterial::Air);
+ 
+ 	WriteVoxelToSparseStorage(world, position, static_cast<uint8_t>(material));
++	SetVoxelFluidFill(world, position, material == VoxelMaterial::Fluid ? kVoxelFluidFillFull : kVoxelFluidFillEmpty);
+ 	if (!isFluidAirTransition) {
+ 		++world.editVersion;
+ 	} else {
+ 		profiling::PlotValue("Fluid Edit Version Bumps Suppressed", int64_t{1});
+ 	}
++	++world.fluidEditSerial; // any material change can open or block fluid flow тАФ wake the CA
+ 	AccumulateMaterialCount(world.stats, previousMaterial, -1);
+ 	AccumulateMaterialCount(world.stats, material, 1);
+ 
+diff --git a/src/voxel/VoxelWorld.hpp b/src/voxel/VoxelWorld.hpp
+index 38df99df..23f23704 100644
+--- a/src/voxel/VoxelWorld.hpp
++++ b/src/voxel/VoxelWorld.hpp
+@@ -97,11 +97,14 @@ struct VoxelWorld {
+ 	int height = 0;
+ 	int depth = 0;
+ 	projectv::voxel::Sparse64Tree sparseStorage;
++	std::vector<uint8_t> fluidFill; // per-cell fluid fill 0..255 (255=full); indexed by flat (x + y*width + z*width*height); meaningful only where material==Fluid
+ 	int chunkSize = 0;
+ 	int chunkCountX = 0;
+ 	int chunkCountY = 0;
+ 	int chunkCountZ = 0;
+ 	uint64_t editVersion = 0;
++	uint64_t fluidEditSerial = 0;	// bumped on every AirтЖФFluid transition (CA, edits, worldgen, load)
++	uint64_t lastFluidCaSerial = 0; // last serial at which UpdateFluidCA produced no movement (idle fast-path)
+ 	std::vector<VoxelChunk> chunks;
+ 	std::vector<size_t> pendingChunkRebuildIndices;
+ 	std::vector<size_t> pendingBlasRebuildIndices;
+@@ -122,6 +125,12 @@ std::string_view VoxelScenePresetToString(VoxelScenePreset preset);
+ std::optional<VoxelScenePreset> ParseVoxelScenePreset(std::string_view text);
+ bool IsInsideVoxelWorld(const VoxelWorld &world, Int3 position);
+ VoxelMaterial GetVoxelMaterial(const VoxelWorld &world, Int3 position);
++
++inline constexpr uint8_t kVoxelFluidFillFull = 255u;
++inline constexpr uint8_t kVoxelFluidFillEmpty = 0u;
++size_t GetVoxelFluidFillFlatIndex(const VoxelWorld &world, Int3 position);
++uint8_t GetVoxelFluidFill(const VoxelWorld &world, Int3 position);
++void SetVoxelFluidFill(VoxelWorld &world, Int3 position, uint8_t fill);
+ Int3 GetVoxelChunkCoord(const VoxelWorld &world, Int3 position);
+ size_t GetVoxelChunkIndex(const VoxelWorld &world, Int3 chunkCoord);
+ void SetVoxelMaterial(VoxelWorld &world, Int3 position, VoxelMaterial material, PhysicsState *physics = nullptr);
+@@ -161,4 +170,3 @@ uint32_t CountActiveVoxelChunks(const VoxelWorld &world);
+ uint32_t CountVoxelsByMaterial(const VoxelWorld &world, VoxelMaterial material);
+ std::vector<uint8_t> BuildFlatVoxelSnapshot(const VoxelWorld &world);
+ uint32_t UpdateFluidCA(VoxelWorld &world);
+-
+diff --git a/src/voxel/VoxelWorldInternal.hpp b/src/voxel/VoxelWorldInternal.hpp
+index cfe070a1..b692df1e 100644
+--- a/src/voxel/VoxelWorldInternal.hpp
++++ b/src/voxel/VoxelWorldInternal.hpp
+@@ -31,7 +31,7 @@ static_assert(sizeof(VoxelWorldSnapshotHeader) == 80);
+ constexpr VoxelScenePreset kDefaultVoxelScenePreset = VoxelScenePreset::VoxelLab;
+ constexpr char kDefaultVoxelWorldSnapshotFilename[] = "ProjectV.snapshot.bin";
+ constexpr std::array kVoxelWorldSnapshotMagic{'P', 'V', 'S', 'N', 'A', 'P', '0', '1'};
+-constexpr uint32_t kVoxelWorldSnapshotVersion = 2u;
++constexpr uint32_t kVoxelWorldSnapshotVersion = 3u;
+ 
+ void AccumulateMaterialCount(VoxelWorldStats &stats, VoxelMaterial material, int delta);
+ uint8_t ReadVoxelFromSparseStorage(const VoxelWorld &world, Int3 position);
+diff --git a/src/voxel/VoxelWorldPreset.cpp b/src/voxel/VoxelWorldPreset.cpp
+index 8cacfa55..5015d221 100644
+--- a/src/voxel/VoxelWorldPreset.cpp
++++ b/src/voxel/VoxelWorldPreset.cpp
+@@ -492,6 +492,7 @@ std::unique_ptr<VoxelWorld> CreateEmptyVoxelWorld(
+ 	world->height = height;
+ 	world->depth = depth;
+ 	world->sparseStorage.Reset(width, height, depth);
++	world->fluidFill.assign(static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(depth), kVoxelFluidFillEmpty);
+ 
+ 	world->chunkCountX = chunkCountX;
+ 	world->chunkCountY = chunkCountY;
+@@ -552,6 +553,11 @@ void RebuildVoxelWorldDerivedState(VoxelWorld &world)
+ 	world.fluidCAAabbMin = {INT32_MAX, INT32_MAX, INT32_MAX};
+ 	world.fluidCAAabbMaxExclusive = {INT32_MIN, INT32_MIN, INT32_MIN};
+ 
++	const size_t expectedFluidFillSize = static_cast<size_t>(world.width) * static_cast<size_t>(world.height) * static_cast<size_t>(world.depth);
++	if (world.fluidFill.size() != expectedFluidFillSize) {
++		world.fluidFill.assign(expectedFluidFillSize, kVoxelFluidFillEmpty);
++	}
++
+ 	for (VoxelChunk &chunk : world.chunks) {
+ 		chunk.nonAirVoxelCount = 0;
+ 	}
+@@ -570,6 +576,9 @@ void RebuildVoxelWorldDerivedState(VoxelWorld &world)
+ 				VoxelChunk &chunk = world.chunks[GetVoxelChunkIndex(world, GetVoxelChunkCoord(world, {x, y, z}))];
+ 				++chunk.nonAirVoxelCount;
+ 				if (material == VoxelMaterial::Fluid) {
++					if (world.fluidFill[voxelIndex] == kVoxelFluidFillEmpty) {
++						world.fluidFill[voxelIndex] = kVoxelFluidFillFull; // uninitialized (e.g. material set without fill) -> full
++					}
+ 					world.fluidCAAabbMin.x = std::min(world.fluidCAAabbMin.x, x);
+ 					world.fluidCAAabbMin.y = std::min(world.fluidCAAabbMin.y, y);
+ 					world.fluidCAAabbMin.z = std::min(world.fluidCAAabbMin.z, z);
+@@ -587,4 +596,6 @@ void RebuildVoxelWorldDerivedState(VoxelWorld &world)
+ 			++world.stats.activeChunkCount;
+ 		}
+ 	}
++
++	++world.fluidEditSerial; // rebuilt state must be re-evaluated by the CA once (load / preset switch)
+ }
+diff --git a/src/voxel/VoxelWorldSnapshot.cpp b/src/voxel/VoxelWorldSnapshot.cpp
+index 011f9a42..2a42158a 100644
+--- a/src/voxel/VoxelWorldSnapshot.cpp
++++ b/src/voxel/VoxelWorldSnapshot.cpp
+@@ -117,6 +117,12 @@ std::expected<bool, projectv::voxel::VoxelSnapshotError> SaveVoxelWorldSnapshot(
+ 		file.write(reinterpret_cast<const char *>(&node), sizeof(node));
+ 	}
+ 
++	const uint64_t fluidFillCount = world.fluidFill.size();
++	file.write(reinterpret_cast<const char *>(&fluidFillCount), sizeof(fluidFillCount));
++	if (fluidFillCount > 0u) {
++		file.write(reinterpret_cast<const char *>(world.fluidFill.data()), static_cast<std::streamsize>(fluidFillCount));
++	}
++
+ 	if (!file.good()) {
+ 		return fail(projectv::voxel::VoxelSnapshotError::WriteFailed,
+ 					"SaveVoxelWorldSnapshot.Write", "failed to write snapshot file: " + resolvedPath.string());
+@@ -217,6 +223,23 @@ std::expected<std::unique_ptr<VoxelWorld>, projectv::voxel::VoxelSnapshotError>
+ 
+ 	world->sparseStorage.RestoreFrom(rootSlotU32, std::move(nodes));
+ 
++	uint64_t fluidFillCount = 0u;
++	if (!file.read(reinterpret_cast<char *>(&fluidFillCount), sizeof(fluidFillCount))) {
++		return fail(projectv::voxel::VoxelSnapshotError::ReadPayloadFailed,
++					"LoadVoxelWorldSnapshot.ReadFluidFillCount", "failed to read fluid fill count");
++	}
++	const size_t expectedFluidFillCount = static_cast<size_t>(world->width) * static_cast<size_t>(world->height) * static_cast<size_t>(world->depth);
++	if (fluidFillCount != 0u && fluidFillCount != expectedFluidFillCount) {
++		return fail(projectv::voxel::VoxelSnapshotError::ReadPayloadFailed,
++					"LoadVoxelWorldSnapshot.ReadFluidFillCount", "fluid fill count does not match world dimensions");
++	}
++	world->fluidFill.assign(expectedFluidFillCount, kVoxelFluidFillEmpty);
++	if (fluidFillCount > 0u &&
++		!file.read(reinterpret_cast<char *>(world->fluidFill.data()), static_cast<std::streamsize>(fluidFillCount))) {
++		return fail(projectv::voxel::VoxelSnapshotError::ReadPayloadFailed,
++					"LoadVoxelWorldSnapshot.ReadFluidFill", "failed to read fluid fill payload");
++	}
++
+ 	world->editVersion = header.editVersion;
+ 
+ 	RebuildVoxelWorldDerivedState(*world);

@@ -1,7 +1,6 @@
 #include "physics/PhysicsWorld.hpp"
 #include "voxel/VoxelWorld.hpp"
 
-#include <chrono>
 #include <cstdio>
 #include <string_view>
 #include <vector>
@@ -183,25 +182,25 @@ void TestSyncPhysicsWorldNullWorldClearsState(TestContext &context)
 	context.Pass();
 }
 
-void TestFluidAirTransitionDoesNotBumpEditVersion(TestContext &context)
+void TestFluidAirTransitionBumpsEditVersion(TestContext &context)
 {
 	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
 	const uint64_t versionBefore = world->editVersion;
 	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Fluid, nullptr);
-	if (world->editVersion != versionBefore) {
+	if (world->editVersion != versionBefore + 1u) {
 		std::fprintf(stderr, "editVersion before=%llu after=%llu\n",
 					 static_cast<unsigned long long>(versionBefore),
 					 static_cast<unsigned long long>(world->editVersion));
-		context.Fail(__LINE__, "Air->Fluid transition must NOT bump editVersion");
+		context.Fail(__LINE__, "Air->Fluid transition must bump editVersion");
 	}
 
 	const uint64_t versionAfterPlace = world->editVersion;
 	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Air, nullptr);
-	if (world->editVersion != versionAfterPlace) {
+	if (world->editVersion != versionAfterPlace + 1u) {
 		std::fprintf(stderr, "editVersion before=%llu after=%llu\n",
 					 static_cast<unsigned long long>(versionAfterPlace),
 					 static_cast<unsigned long long>(world->editVersion));
-		context.Fail(__LINE__, "Fluid->Air transition must NOT bump editVersion");
+		context.Fail(__LINE__, "Fluid->Air transition must bump editVersion");
 	}
 	context.Pass();
 }
@@ -217,7 +216,7 @@ void TestSolidEditBumpsEditVersion(TestContext &context)
 	context.Pass();
 }
 
-void TestFluidAirTransitionDoesNotQueuePhysicsRebuild(TestContext &context)
+void TestFluidAirTransitionQueuesPhysicsRebuild(TestContext &context)
 {
 	PhysicsState *physics = CreatePhysicsState();
 	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
@@ -229,9 +228,9 @@ void TestFluidAirTransitionDoesNotQueuePhysicsRebuild(TestContext &context)
 	const uint32_t pendingBefore = GetPendingChunkRebuildCount(physics);
 	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Fluid, physics);
 	const uint32_t pendingAfter = GetPendingChunkRebuildCount(physics);
-	if (pendingAfter != pendingBefore) {
+	if (pendingAfter <= pendingBefore) {
 		std::fprintf(stderr, "pending before=%u after=%u\n", pendingBefore, pendingAfter);
-		context.Fail(__LINE__, "Air->Fluid with physics must NOT enqueue physics chunk rebuild");
+		context.Fail(__LINE__, "Air->Fluid with physics must enqueue a physics chunk rebuild");
 	}
 	DestroyPhysicsState(physics);
 	context.Pass();
@@ -311,33 +310,6 @@ void TestSyncPhysicsWorldFlatBenchSizedWorldFitsInCapacity(TestContext &context)
 	context.Pass();
 }
 
-void TestFluidCABumpOnSmallFlatWorldStaysFast(TestContext &context)
-{
-	PhysicsState *physics = CreatePhysicsState();
-	const std::unique_ptr<VoxelWorld> world = MakeSmallFlatWorld();
-	if (!SyncPhysicsWorld(physics, world.get())) {
-		context.Fail(__LINE__, "Initial sync must succeed");
-		DestroyPhysicsState(physics);
-		return;
-	}
-
-	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Fluid, physics);
-	QueueChunkRebuildRequest(physics, GetVoxelChunkIndex(*world, GetVoxelChunkCoord(*world, {0, 1, 0})));
-
-	constexpr uint32_t kTickCount = 10u;
-	const auto t0 = std::chrono::steady_clock::now();
-	for (uint32_t i = 0; i < kTickCount; ++i) {
-		UpdateFluidCA(*world);
-		SyncPhysicsWorld(physics, world.get());
-	}
-	const auto t1 = std::chrono::steady_clock::now();
-	const double totalMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
-	std::printf("TestFluidCABumpOnSmallFlatWorldStaysFast: %u ticks in %.2f ms (%.3f ms/tick)\n",
-				kTickCount, totalMs, totalMs / static_cast<double>(kTickCount));
-	DestroyPhysicsState(physics);
-	context.Pass();
-}
-
 void TestGetPhysicsBroadphaseStatsNullReturnsZeroed(TestContext &context)
 {
 	const auto [totalBodies, maxBodies, staticBodies, dynamicBodies, activeDynamicBodies,
@@ -380,47 +352,21 @@ void TestGetPhysicsBroadphaseStatsAfterSync(TestContext &context)
 	context.Pass();
 }
 
-void TestFluidCAPerTickCostOnFlatBenchSizedWorld(TestContext &context)
-{
-	const std::unique_ptr<VoxelWorld> world = MakeFlatBenchSizedWorld();
-	SetVoxelMaterial(*world, {0, 1, 0}, VoxelMaterial::Fluid, nullptr);
-	const uint64_t editVersionBefore = world->editVersion;
-	std::printf("TestFluidCAPerTickCostOnFlatBenchSizedWorld: chunks=%zu editVersionBefore=%llu fluidVoxels=%u\n",
-				world->chunks.size(),
-				static_cast<unsigned long long>(editVersionBefore),
-				world->stats.fluidVoxelCount);
-
-	constexpr uint32_t kTickCount = 20u;
-	double totalMs = 0.0;
-	for (uint32_t i = 0; i < kTickCount; ++i) {
-		const auto t0 = std::chrono::steady_clock::now();
-		UpdateFluidCA(*world);
-		const auto t1 = std::chrono::steady_clock::now();
-		const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-		totalMs += ms;
-	}
-	std::printf("TestFluidCAPerTickCostOnFlatBenchSizedWorld: %u ticks in %.2f ms (%.3f ms/tick avg) -- simulates ~1 sec @ 20Hz\n",
-				kTickCount, totalMs, totalMs / static_cast<double>(kTickCount));
-	context.Pass();
-}
-
 } // namespace
 
-int main()
+int main() // NOLINT(*-exception-escape): MSVC STL vector resize may throw; terminating the test process is intended.
 {
 	TestContext context{};
 	TestSyncPhysicsWorldInitialLoadBuildsFullBody(context);
 	TestSyncPhysicsWorldNoOpOnSameVersion(context);
 	TestSyncPhysicsWorldIncrementalAfterSmallEdit(context);
 	TestSyncPhysicsWorldNullWorldClearsState(context);
-	TestFluidAirTransitionDoesNotBumpEditVersion(context);
+	TestFluidAirTransitionBumpsEditVersion(context);
 	TestSolidEditBumpsEditVersion(context);
-	TestFluidAirTransitionDoesNotQueuePhysicsRebuild(context);
+	TestFluidAirTransitionQueuesPhysicsRebuild(context);
 	TestRebuildStaticWorldBodyFromChunkShapesAfterEdit(context);
 	TestSyncPhysicsWorldFlatBenchSizedWorldFitsInCapacity(context);
 	TestPhysicsSyncBoundaryEditTriggersMultiChunkRebuild(context);
-	TestFluidCABumpOnSmallFlatWorldStaysFast(context);
-	TestFluidCAPerTickCostOnFlatBenchSizedWorld(context);
 	TestGetPhysicsBroadphaseStatsNullReturnsZeroed(context);
 	TestGetPhysicsBroadphaseStatsAfterSync(context);
 
